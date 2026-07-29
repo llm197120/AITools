@@ -105,8 +105,53 @@
 | 九宫格图标 | 点击跳转到对应功能模块 |
 | "更多"按钮 | 预留入口，点击展开常用工具/设置页（后续模块扩展时使用） |
 | 今日计划 | 点击跳转到计划模块首页 |
-| 首次进入 | 自动调用 `wx.login()` 静默登录 |
+| 首次进入 | 自动调用 `uni.login()` 静默登录 |
 | 首次使用 | 弹出"用户须知"弹窗 → 功能简介 + 隐私说明 → 点击"知道了"关闭 |
+
+---
+
+## 二、个人中心（user-profile.vue）
+> **功能入口说明**：「退出家庭」和个人信息编辑同时在个人中心（`user-profile.vue`）和家庭管理（`family/index.vue`）提供入口。
+> - **个人中心**：作为用户专属设置页，提供「退出家庭」「修改手机号」「编辑家庭角色」入口
+> - **家庭管理**：作为家庭级操作页，提供「编辑家庭名称」「成员管理」「邀请成员」「解散家庭」「转让管理员」入口
+> - 两者均指向同一后端接口，用户可根据习惯从任一路径操作
+
+```
+ ┌──────────────────────────────┐
+ │  < 返回    个人中心            │
+ ├──────────────────────────────┤
+ │                              │
+ │       ┌──────────┐            │
+ │       │  👩       │            │ ← 用户头像（可点击更换）
+ │       └──────────┘            │
+ │         妈妈                  │ ← 微信昵称
+ │                              │
+ │  ┌────────────────────────┐  │
+ │  │ 📱 手机号    138****8888 │  │ ← 可编辑（失焦时校验合法手机号格式）
+ │  ├────────────────────────┤  │
+ │  │ 👪 家庭角色    妈妈 ▼   │  │ ← 可选下拉
+ │  ├────────────────────────┤  │
+ │  │ 🏠 所属家庭  幸福小家  ›  │  │ ← 点击跳转家庭管理
+ │  │    成员：4人            │  │
+ │  └────────────────────────┘  │
+ │                              │
+ │  📊 使用统计                  │
+ │  ┌────────────────────────┐  │
+ │  │ 💬 对话次数      128 次  │  │
+ │  │ 📁 文件数        56 个   │  │
+ │  │ 💰 账单数        32 条   │  │
+ │  │ 📋 计划完成率     78%    │  │
+ │  └────────────────────────┘  │
+ │                              │
+ │  ┌────────────────────────┐  │
+ │  │ 🚪 退出家庭           │  │ ← 退出确认弹窗 + 条件检查
+ │  ├────────────────────────┤  │
+ │  │ 🔁 转让管理员         │  │ ← 仅管理员可见，将身份转给其他成员
+ │  ├────────────────────────┤  │
+ │  │ 🗑️ 注销账号           │  │ ← 弹出二次确认：「注销后所有个人数据将匿名化，不可恢复」
+ │  └────────────────────────┘  │
+ └──────────────────────────────┘
+```
 
 ---
 
@@ -134,13 +179,17 @@
  │  └──┘ └──┘ └──┘ └──┘      │
  │                              │
  │  ┌────────────────────────┐  │
- │  │ ✏️ 修改家庭名称          │  │ ← 编辑名称（仅创建者）
+ │  │ ✏️ 修改家庭名称          │  │ ← 编辑名称（仅管理员）
+ │  ├────────────────────────┤  │
+ │  │ 🔁 转让管理员          │  │ ← 仅管理员可见，选择一位普通成员作为新管理员（需对方确认）
  │  ├────────────────────────┤  │
  │  │ 📋 生成邀请码          │  │ ← 生成6位邀请码（24h有效）
  │  ├────────────────────────┤  │
  │  │ 🚪 退出家庭            │  │ ← 点击弹出确认弹窗：「退出后无法查看家庭共享数据」
  │  ├────────────────────────┤  │
- │  │ 🗑️ 解散家庭（仅创建者）  │  │ ← 点击弹出确认弹窗：「解散将删除所有家庭数据，不可撤销」
+ │  │ 🗑️ 解散家庭（仅管理员）  │  │ ← 点击弹出二次确认弹窗（需输入"确认解散"）：
+ │  │                        │  │  「解散家庭将删除所有家庭共享数据，不可撤销。
+ │  │                        │  │   所有家庭成员将恢复为无家庭状态。」
  │  └────────────────────────┘  │
  └──────────────────────────────┘
 ```
@@ -190,6 +239,10 @@
 ---
 
 ## 二、个人中心（user-profile.vue）
+> **功能入口说明**：「退出家庭」和个人信息编辑同时在个人中心（`user-profile.vue`）和家庭管理（`family/index.vue`）提供入口。
+> - **个人中心**：作为用户专属设置页，提供「退出家庭」「修改手机号」「编辑家庭角色」入口
+> - **家庭管理**：作为家庭级操作页，提供「编辑家庭名称」「成员管理」「邀请成员」「解散家庭」「转让管理员」入口
+> - 两者均指向同一后端接口，用户可根据习惯从任一路径操作
 
 ```
  ┌──────────────────────────────┐
@@ -218,13 +271,14 @@
  │  │ 📋 计划完成率     78%    │  │
  │  └────────────────────────┘  │
  │                              │
- │  ┌────────────────────────┐  │
- │  │ 🚪 退出家庭/账号设置    │  │
- │  └────────────────────────┘  │
- └──────────────────────────────┘
-```
-
 ## 四、AI对话模块
+
+> **流式响应（SSE）说明**：AI 对话采用 Server-Sent Events (SSE) 流式传输。
+> - 前端通过 uni-app 的 `request` 的 `enableChunked` 模式接收流式响应（注：微信小程序不支持浏览器 `EventSource` API）
+> - 响应以打字机效果逐字展示在对话气泡中
+> - 流式接收期间显示「⏹ 停止生成」按钮（调用 `POST /homeai/ai/conversations/{id}/stop`）
+> - 连接中断时保留已接收内容，显示「连接中断，点击继续」按钮；连续3次重连失败后提示用户重新发送
+> - 页面加载时使用骨架屏展示对话历史列表
 
 ### 4.1 对话列表页（ai-conversations.vue）
 
@@ -661,7 +715,7 @@ Office处理子菜单（点击展开）：
  │        └────────────┘        │
  │                              │
  ├──────────────────────────────┤
- │  📥 下载  ⭐ 收藏  📤 转发  │
+ │  📥 下载  ✏️ 重命名  ⭐ 收藏  📤 转发  │ ← 新增重命名按钮
  └──────────────────────────────┘
 
 视频预览（内置播放器，支持全屏/倍速）：
@@ -676,7 +730,7 @@ Office处理子菜单（点击展开）：
  │  └────────────────────────┘  │
  │                              │
  ├──────────────────────────────┤
- │  📥 下载  ⭐ 收藏  📤 转发  │
+ │  📥 下载  ✏️ 重命名  ⭐ 收藏  📤 转发  │ ← 新增重命名按钮
  └──────────────────────────────┘
 
 PDF预览（基于微信内置PDF阅读器）：
@@ -688,7 +742,7 @@ PDF预览（基于微信内置PDF阅读器）：
  │        (跳转/嵌入)            │
  │                              │
  ├──────────────────────────────┤
- │  📥 下载  ⭐ 收藏  📤 转发  │
+ │  📥 下载  ✏️ 重命名  ⭐ 收藏  📤 转发  │ ← 新增重命名按钮
  └──────────────────────────────┘
 
 文档预览（Word/Excel/PPT → 服务端转PDF后预览）：
@@ -701,7 +755,7 @@ PDF预览（基于微信内置PDF阅读器）：
  │   转换完成后展示PDF预览        │
  │                              │
  ├──────────────────────────────┤
- │  📥 下载  ⭐ 收藏  📤 转发  │
+ │  📥 下载  ✏️ 重命名  ⭐ 收藏  📤 转发  │ ← 新增重命名按钮
  └──────────────────────────────┘
 
 压缩包内容预览（列出内部文件清单）：
@@ -801,9 +855,9 @@ PDF预览（基于微信内置PDF阅读器）：
  │  └──┘ └──┘ └──┘ └──┘      │
  │                              │
  │  支付方式                     │
- │  ┌──┐ ┌──┐ ┌──┐ ┌──┐      │
- │  │💳 │ │💰 │ │🏦 │ │💵│ │📱│      │
- │  │微信│ │现金│ │银行卡│ │其他│ │支付宝│      │
+│  ┌──┐ ┌──┐ ┌──┐ ┌──┐ ┌──┐ │
+│  │💳 │ │💰 │ │🏦 │ │💵│ │📱│ │
+│  │微信│ │现金│ │银行卡│ │其他│ │支付宝│ │
  │  └──┘ └──┘ └──┘ └──┘      │
  │                              │
  │  日期  [2026-07-29  今天]  ▼ │
@@ -884,6 +938,11 @@ PDF预览（基于微信内置PDF阅读器）：
  └──────────────────────────────┘
 ```
 
+**快捷操作**：
+- 左滑单条账单显示「编辑」「删除」按钮
+- 删除后底部出现 3 秒撤销提示条「已删除1条账单 × 撤销」
+- 批量模式下勾选多条后，底部工具栏显示「批量删除」「批量导出」
+
 ### 6.3.1 编辑账单（bill-edit.vue）
 
 点击账单列表中的某条记录，弹出编辑页面：
@@ -959,9 +1018,10 @@ PDF预览（基于微信内置PDF阅读器）：
  │  └────────────────────────┘  │
  │                              │
  │  ┌──────────────────────┐    │
- │  │    📊 导出图表分享     │    │
- │  └──────────────────────┘    │
- └──────────────────────────────┘
+│  │    📊 导出图表分享     │    │
+│  │    📥 导出账单数据     │    │
+│  └──────────────────────┘    │
+└──────────────────────────────┘
 ```
 
 ### 6.5 账单导入页（bill-import.vue）
@@ -1738,23 +1798,71 @@ PDF/文档/表格/演示查看：
 ---
 
 
+
+**全部功能页** (`pages/all-functions/all-functions.vue`)
+
+> 本页作为首页"更多"按钮的目标页面，以列表形式展示所有可用模块入口。
+
+```
+ ┌──────────────────────────────┐
+ │  < 返回    全部功能            │
+ ├──────────────────────────────┤
+ │  功能模块列表                  │
+ │                              │
+ │  💬 AI对话           ›       │
+ │  ☁️ 资料存储（含Office） ›    │
+ │  💰 账单管理          ›       │
+ │  📋 日常计划          ›       │
+ │  🍳 烹饪指南          ›       │
+ │  📚 学习模块          ›       │
+ │  👪 家庭管理          ›       │
+ │  👤 个人中心          ›       │
+ │                              │
+ │  ———— 快捷操作 ————          │
+ │  📷 拍照识别         立即使用 │
+ │  📄 导入账单         立即使用 │
+ └──────────────────────────────┘
+```
+
+
+
+## 通用表单校验规则
+
+以下为全系统统一的表单校验规则，各页面不再逐一说明：
+
+| 规则类型 | 校验条件 | 错误提示 |
+|---------|---------|---------|
+| 必填 | 非空 | 「[字段名]不能为空」 |
+| 金额 | > 0，最多2位小数 | 「金额必须大于0」 |
+| 手机号 | 11位数字，1开头 | 「请输入正确的手机号」 |
+| 时间范围 | 结束时间 ≥ 开始时间 | 「结束时间不能早于开始时间」 |
+| 标题长度 | ≤ 50字符 | 「标题不能超过50个字」 |
+| 备注长度 | ≤ 500字符 | 「备注不能超过500个字」 |
+| 文件大小 | 按模块上限校验 | 「文件大小超过限制（上限XXMB）」 |
+| 文件类型 | 白名单校验 | 「不支持该文件格式」 |
+| 标签 | ≤ 5个 | 「最多添加5个标签」 |
+| 分类 | 必选 | 「请选择分类」 |
+
+> 以上校验规则在前端（form validation）和后端（JSR-303 Bean Validation + 自定义校验）双重实施。
 ## 十一、分包与路由规划
 
 ```
-分包一: pages-homeai-core/      (约1.2MB - AI对话核心功能)
-  ├── index.vue                  →  /pages-homeai/index
-  ├── profile.vue                →  /pages-homeai/profile          （个人中心）
-  ├── family/index.vue           →  /pages-homeai/family/index       （我的家庭）
-  ├── family/join.vue            →  /pages-homeai/family/join        （加入家庭）
-  ├── ai/ai-conversations        →  /pages-homeai/ai/conversations   （对话列表）
-  └── ai/ai-chat                 →  /pages-homeai/ai/chat            （对话聊天）
+主包: pages/                     (约1.2MB - 首页+个人中心+家庭管理)
+  ├── index.vue                  →  /pages/index                   （首页必须在主包-tabBar页面）
+  ├── profile.vue                →  /pages/profile                （个人中心）
+  ├── family/index.vue           →  /pages/family/index           （我的家庭）
+  ├── family/join.vue            →  /pages/family/join            （加入家庭）
 
-分包二: pages-homeai-more/      (约1.8MB - 资料存储含Office+其余模块)
+分包一: pages-homeai-ai/         (约1.2MB - AI对话核心功能)
+  ├── ai/ai-conversations.vue    →  /pages-homeai-ai/ai/conversations   （对话列表）
+  └── ai/ai-chat.vue             →  /pages-homeai-ai/ai/chat            （对话聊天）
+
+分包二: pages-homeai-more/        (约1.5MB - 资料存储含Office)
   ├── storage/index.vue          →  /pages-homeai-more/storage/index         （资料首页）
   ├── storage/files.vue          →  /pages-homeai-more/storage/files         （文件列表）
-  ├── storage/office-convert     →  /pages-homeai-more/storage/office-convert（格式转换）
-  ├── storage/office-generate    →  /pages-homeai-more/storage/office-generate（AI文件生成）
-  ├── storage/office-history     →  /pages-homeai-more/storage/office-history（Office处理历史）
+  ├── storage/office-convert.vue →  /pages-homeai-more/storage/office-convert（格式转换）
+  ├── storage/office-generate.vue→  /pages-homeai-more/storage/office-generate（AI文件生成）
+  ├── storage/office-history.vue →  /pages-homeai-more/storage/office-history（Office处理历史）
   ├── storage/search.vue         →  /pages-homeai-more/storage/search        （搜索）
   ├── bill/index.vue             →  /pages-homeai-more/bill/index            （账单首页）
   ├── bill/add.vue               →  /pages-homeai-more/bill/add              （记一笔）
@@ -1772,6 +1880,85 @@ PDF/文档/表格/演示查看：
   ├── learn/index.vue            →  /pages-homeai-more/learn/index           （学习首页）
   ├── learn/material.vue         →  /pages-homeai-more/learn/material        （资料列表）
   └── learn/record.vue           →  /pages-homeai-more/learn/record          （学习记录）
+
+
+
+> **API 端点引用说明**：线框图中各页面的后端 API 对应关系详见 [`docs/api/homeai-api-v1.md`](../api/homeai-api-v1.md)。
+> 以下列出关键页面与 API 的映射关系（供前后端联调参考）：
+>
+> | 页面 | 对应 API 端点 |
+> |------|--------------|
+> | 首页（九宫格） | 无独立端点，由各模块接口聚合 |
+> | AI对话列表 | `GET /homeai/ai/conversations` |
+> | AI对话聊天 | `POST /homeai/ai/conversations/{id}/messages`（SSE流式） |
+> | 资料文件列表 | `GET /homeai/storage/files` |
+> | 上传文件 | `POST /homeai/storage/files` |
+> | 格式转换 | `POST /homeai/storage/files/{id}/convert` |
+> | AI文件生成 | `POST /homeai/storage/files/{id}/generate` |
+> | 记一笔 | `POST /homeai/bill/entries` |
+> | 账单列表 | `GET /homeai/bill/entries` |
+> | AI导入确认 | `POST /homeai/bill/entries/import/ai-parse` + `/confirm` |
+> | 新增计划 | `POST /homeai/plans` |
+> | 新增菜谱 | `POST /homeai/recipes` |
+> | 学习资料列表 | `GET /homeai/learn/materials` |
+> | 个人中心 | `GET /homeai/user/profile` + `PUT /homeai/user/profile` |
+> | 家庭管理 | `GET /homeai/family/info` + `GET /homeai/family/members` |
+
+```
+
+> **前端开发指南 — 项目结构说明**：
+>
+> JeecgUniapp 项目采用主包+分包结构，建议在 `src` 目录下创建以下结构：
+>
+> ```
+> src/
+> ├── pages/                       # 主包页面（首页、个人中心、家庭管理）
+> ├── pages-homeai-ai/             # 分包一：AI对话
+> ├── pages-homeai-more/           # 分包二：其余模块
+> ├── components/                  # 通用组件
+> │   ├── HomeUpload.vue           # 文件上传组件（支持图片/视频/文档）
+> │   ├── HomeCalendar.vue         # 日历组件（计划、学习记录复用）
+> │   ├── HomeChart.vue            # 图表组件（账单统计、学习统计）
+> │   ├── HomeFileIcon.vue         # 文件类型图标组件
+> │   ├── HomeSkeleton.vue         # 骨架屏组件
+> │   ├── HomeEmpty.vue            # 空状态组件
+> │   ├── HomeError.vue            # 错误状态组件
+> │   └── HomeVoiceInput.vue       # 语音输入组件
+> ├── api/                         # API 接口封装
+> │   ├── request.js               # 请求封装（含 Token 注入、错误处理）
+> │   ├── user.js                  # 用户模块 API
+> │   ├── ai.js                    # AI对话模块 API
+> │   ├── storage.js               # 资料存储模块 API
+> │   ├── bill.js                  # 账单模块 API
+> │   ├── plan.js                  # 计划模块 API
+> │   ├── recipe.js                # 烹饪模块 API
+> │   └── learn.js                 # 学习模块 API
+> ├── stores/                      # Pinia 状态管理
+> │   ├── user.js                  # 用户信息
+> │   ├── family.js                # 家庭信息
+> │   └── app.js                   # 全局状态
+> ├── static/                      # 静态资源（tabBar图标、应用图标、骨架屏占位图等）
+> │   ├── tabbar/                  # 底部导航图标
+> │   └── images/                  # 通用图片资源
+> ├── utils/                       # 工具函数
+> │   ├── auth.js                  # Token 管理
+> │   ├── network.js               # 网络状态监听
+> │   └── cache.js                 # 本地缓存
+> ├── uni_modules/                 # 插件市场组件（wot-design-uni、z-paging 等）
+> └── App.vue                      # 全局逻辑（登录、网络监听、更新检测）
+> ```
+>
+> > **前端开发指南 — 分包优化策略**：
+> >
+> > 基于上述分包规划，建议在 JeecgUniapp 中采用以下优化措施：
+> >
+> > - **预加载**：使用 `uni.preloadPage()` 在首页 onLoad 时预加载 AI对话分包的首屏页面，减少页面切换白屏时间
+> > - **组件共享**：分包间通用组件放入主包 `src/components/`，避免重复打包；各分包独有的组件留在分包内
+> > - **首页图片优化**：九宫格图标使用 webp 格式，单图不超过 50KB；骨架屏占位图使用 base64 内联
+> > - **分包预算**：AI对话分包控制在 1.5MB 以内，其余模块分包控制在 1.8MB 以内
+> > - **按需加载**：非首屏功能（如 Office 转换、AI 文件生成、账单导入确认页）可使用 `uni.loadSubPackage()` 按需加载
+> > - **Tree Shaking**：`pages.json` 中仅注册实际使用的页面，避免未使用的页面被打入分包
+
 ```
 
 ---
@@ -1905,6 +2092,82 @@ PDF/文档/表格/演示查看：
 | 骨架屏 | 1.5s 循环 | 渐变扫光 shimmer（HomeSkeleton） |
 
 ---
+
+> **前端开发指南 — 通用组件使用指南**：
+>
+> 以下列出各通用组件与 wot-design-uni 的对应关系及使用场景：
+>
+> | 组件 | wot-design-uni 对应 | 使用场景 |
+> |------|-------------------|---------|
+> | HomeUpload | wd-upload | 文件上传（图片/视频/文档），含白名单校验、进度条 |
+> | HomeCalendar | wd-calendar-view（或 uni-calendar） | 计划首页月历视图、学习记录日历。注：wd-calendar 是日期选择器，月历视图请使用 wd-calendar-view（若 wot-design-uni 未提供则使用 uni-calendar 或自行封装） |
+> | HomeChart | uCharts | 账单统计（饼图/折线图/柱状图）、学习统计 |
+> | HomeSkeleton | wd-skeleton | 各列表页/概览卡片加载骨架屏 |
+> | HomeEmpty | wd-empty | 所有列表页无数据时的空状态引导 |
+> | HomeFileIcon | 自定义组件 | 文件列表按扩展名展示对应类型图标 |
+> | HomeVoiceInput | wd-recorder + uni-app 语音识别 API | 语音输入按钮，通过 wd-recorder 录音后调用微信语音识别 API（`uni.startRecord` + 服务端转写）转为文本（后续扩展） |
+>
+> > **前端开发指南 — API 请求封装规范**：
+> >
+> > 基于 JeecgUniapp 的 `uni.$u.http`（uView Plus 的 HTTP 封装）统一管理 API 请求：
+> >
+> > ```javascript
+> > // request.js 核心配置
+> > const request = uni.$u.http.create({
+> >     baseURL: '/v1/homeai',
+> >     header: {
+> >         'X-Access-Token': getToken(),
+> >         'Content-Type': 'application/json'
+> >     }
+> > });
+> >
+> > // 响应拦截：统一处理 401（跳转登录）、429（限流提示）、500（服务异常）
+> > request.interceptors.response.use(response => {
+> >     // 401 — Token 过期或无效，清除本地 Token 并跳转登录页
+> >     // 429 — 请求过于频繁，提示「操作太频繁，请稍后再试」
+> >     // 500 — 服务端异常，提示「服务异常，请稍后重试」
+> >     return response.data;
+> > });
+> > ```
+> >
+> > 各模块 API 文件（`api/user.js`、`api/ai.js` 等）统一导出请求函数：
+> >
+> > ```javascript
+> > // api/ai.js 示例
+> > import request from './request';
+> >
+> > export const getConversations = (params) => request.get('/ai/conversations', { params });
+> > export const sendMessage = (id, data) => request.post(`/ai/conversations/${id}/messages`, data);
+> > ```
+> >
+> > > **前端开发指南 — 页面生命周期约定**：
+> > >
+> > > 各页面按以下生命周期钩子规范编写：
+> > >
+> > > | 生命周期 | 用途 | 说明 |
+> > > |---------|------|------|
+> > > | `onLoad` | 获取页面参数 | 从 `options` 中读取路由参数，初始化页面数据 |
+> > > | `onShow` | 刷新数据 | 列表页在 `onShow` 中刷新，确保从子页面返回时数据最新 |
+> > > | `onReachBottom` | 滚动加载更多 | 列表页触底时加载下一页数据（分页 + 1） |
+> > > | `onPullDownRefresh` | 下拉刷新 | 列表页下拉触发数据刷新，配合 `uni.stopPullDownRefresh()` 结束 |
+> > > | `onUnload` | 页面卸载清理 | 取消未完成的请求、清除定时器，防止内存泄漏 |
+> > >
+> > > ```javascript
+> > > // 页面生命周期示例（ai-conversations.vue）
+> > > import { onLoad, onShow, onReachBottom, onPullDownRefresh, onUnload } from '@dcloudio/uni-app';
+> > >
+> > > onLoad((options) => {
+> > >   // 读取参数、初始化
+> > > });
+> > >
+> > > onShow(() => {
+> > >   // 列表页刷新数据
+> > > });
+> > >
+> > > onReachBottom(() => {
+> > >   // 加载更多
+> > > });
+> > > ```
 
 > **设计注意事项**（Agent团队审查补充）
 >

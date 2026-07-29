@@ -11,13 +11,18 @@ docs/                          # 文档根目录
 │
 ├── design/                    # 设计文档
 │   ├── README.md              # 设计文档索引
-│   └── architecture-design.md # 架构设计方案（核心设计文档）
+│   ├── architecture-overview.md # 架构总览与路线图
+│   ├── module-details.md        # 模块功能详细设计
+│   ├── ai-security.md           # AI能力与安全设计
+│   ├── database-flows.md        # 流程图与数据库设计
+│   └── ui-miniapp-v1.md         # 小程序线框图
 │
 ├── requirements/              # 需求文档
 │   └── README.md              # 需求文档索引
 │
 ├── api/                       # 接口文档
-│   └── README.md              # 接口文档索引
+│   ├── README.md              # 接口文档索引
+│   └── homeai-api-v1.md       # 家庭AI小工具完整API接口定义
 │
 ├── review/                    # 审查记录
 │   └── README.md              # 审查记录索引
@@ -39,8 +44,12 @@ docs/                          # 文档根目录
 
 | 文档 | 路径 | 说明 |
 |------|------|------|
-| architecture-design.md | `docs/design/architecture-design.md` | 系统架构、功能细化、API 定义、开发路线图 |
+| architecture-overview.md | `docs/design/architecture-overview.md` | 架构总览、家庭模型、模块结构、开发路线图 |
+| module-details.md | `docs/design/module-details.md` | 模块功能详细说明、接口概览、权限体系 |
+| ai-security.md | `docs/design/ai-security.md` | AI能力集成、安全设计、微信消息提醒 |
+| database-flows.md | `docs/design/database-flows.md` | 系统流程图、数据库DDL与ER图 |
 | ui-miniapp-v1.md | `docs/design/ui-miniapp-v1.md` | 小程序全部模块线框图（含目录） |
+| homeai-api-v1.md | `docs/api/homeai-api-v1.md` | 完整API接口定义（从架构文档分离） |
 
 ## 文档维护规范
 
@@ -51,4 +60,8 @@ docs/                          # 文档根目录
 
 ## 快速导航
 
-- [架构设计方案](./design/architecture-design.md) - 阅读完整的系统设计
+- [架构总览与路线图](./design/architecture-overview.md) - 阅读架构总览
+- [模块功能详细设计](./design/module-details.md) - 查看模块功能说明
+- [AI能力与安全设计](./design/ai-security.md) - 查看AI与安全设计
+- [流程图与数据库设计](./design/database-flows.md) - 查看流程图与数据库设计
+- [API 接口文档](./api/homeai-api-v1.md) - 查看所有接口定义
