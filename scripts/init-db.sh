@@ -27,11 +27,11 @@ DB_NAME="${DB_NAME:-jeecg}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 BASE_SQL="$PROJECT_ROOT/JeecgBoot/jeecg-boot/db/jeecgboot-mysql-5.7.sql"
+HOMEAI_SQL_DIR="$PROJECT_ROOT/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/sql"
 HOMEAI_TABLES="$PROJECT_ROOT/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/sql/init_homeai_tables.sql"
 HOMEAI_MENUS="$PROJECT_ROOT/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/sql/init_homeai_menus.sql"
-HOMEAI_ALTER_COMPONENT="$PROJECT_ROOT/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/sql/alter_homeai_menus_fix_component.sql"
-HOMEAI_ALTER_LAYOUT="$PROJECT_ROOT/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/sql/alter_homeai_menus_fix_layout.sql"
-HOMEAI_ALTER_MENUTYPE="$PROJECT_ROOT/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/sql/alter_homeai_menus_fix_menutype.sql"
+HOMEAI_RECIPE_CAT="$HOMEAI_SQL_DIR/init_homeai_recipe_category.sql"
+HOMEAI_USER_QUOTA="$HOMEAI_SQL_DIR/init_homeai_user_quota.sql"
 
 # ---------- Redis 配置 ----------
 REDIS_HOST="${REDIS_HOST:-127.0.0.1}"
@@ -54,7 +54,10 @@ if [ -z "$DB_PASSWORD" ]; then
 fi
 
 # ---------- MySQL 命令 ----------
-MYSQL_CMD="mysql -h$DB_HOST -P$DB_PORT -u$DB_USER -p$DB_PASSWORD"
+# 通过 MYSQL_PWD 传递密码（只输入一次、全部命令复用，且避免特殊字符转义问题）
+# 密码为空时（MySQL 无密码）不加 -p，避免 mysql 对每条命令重新提示输入
+export MYSQL_PWD="$DB_PASSWORD"
+MYSQL_CMD="mysql -h$DB_HOST -P$DB_PORT -u$DB_USER"
 
 # ---------- 检查 MySQL 连接 ----------
 echo "[1/7] 检查 MySQL 连接..."
@@ -85,12 +88,15 @@ fi
 
 # ---------- 导入 HomeAI 业务表 ----------
 echo ""
-echo "[4/7] 导入 HomeAI 业务表..."
-if [ ! -f "$HOMEAI_TABLES" ]; then
-    echo "[失败] 文件不存在: $HOMEAI_TABLES"
-    exit 1
-fi
-$MYSQL_CMD "$DB_NAME" < "$HOMEAI_TABLES"
+echo "[4/7] 导入 HomeAI 初始化脚本..."
+for init_sql in "$HOMEAI_TABLES" "$HOMEAI_RECIPE_CAT" "$HOMEAI_USER_QUOTA"; do
+    if [ -f "$init_sql" ]; then
+        echo "  - $(basename "$init_sql")"
+        $MYSQL_CMD "$DB_NAME" < "$init_sql" || echo "    [警告] 执行出现错误，继续..."
+    else
+        echo "  [跳过] 文件不存在: $init_sql"
+    fi
+done
 echo "[成功] HomeAI 业务表导入完成"
 
 # ---------- 导入 HomeAI 菜单权限 ----------
@@ -100,7 +106,7 @@ if [ ! -f "$HOMEAI_MENUS" ]; then
     echo "[失败] 文件不存在: $HOMEAI_MENUS"
     exit 1
 fi
-$MYSQL_CMD "$DB_NAME" < "$HOMEAI_MENUS"
+$MYSQL_CMD "$DB_NAME" < "$HOMEAI_MENUS" || echo "[警告] 菜单导入出现错误，继续..."
 echo "[成功] 菜单权限导入完成"
 
 # 验证菜单是否导入成功
@@ -118,18 +124,12 @@ echo "[成功] 菜单权限已验证（${MENU_COUNT} 条一级菜单）"
 # ---------- 执行增量修改脚本 ----------
 echo ""
 echo "[6/7] 执行增量修改脚本..."
-if [ -f "$HOMEAI_ALTER_COMPONENT" ]; then
-    echo "  - alter_homeai_menus_fix_component.sql"
-    $MYSQL_CMD "$DB_NAME" < "$HOMEAI_ALTER_COMPONENT" || echo "    [警告] 执行出现错误，继续..."
-fi
-if [ -f "$HOMEAI_ALTER_LAYOUT" ]; then
-    echo "  - alter_homeai_menus_fix_layout.sql"
-    $MYSQL_CMD "$DB_NAME" < "$HOMEAI_ALTER_LAYOUT" || echo "    [警告] 执行出现错误，继续..."
-fi
-if [ -f "$HOMEAI_ALTER_MENUTYPE" ]; then
-    echo "  - alter_homeai_menus_fix_menutype.sql"
-    $MYSQL_CMD "$DB_NAME" < "$HOMEAI_ALTER_MENUTYPE" || echo "    [警告] 执行出现错误，继续..."
-fi
+for alter_sql in "$HOMEAI_SQL_DIR"/alter_homeai_*.sql; do
+    if [ -f "$alter_sql" ]; then
+        echo "  - $(basename "$alter_sql")"
+        $MYSQL_CMD "$DB_NAME" < "$alter_sql" || echo "    [警告] 执行出现错误，继续..."
+    fi
+done
 echo "[成功] 增量修改脚本执行完成"
 
 # ---------- 清空 Redis ----------

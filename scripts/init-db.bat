@@ -15,11 +15,11 @@ set DB_NAME=jeecg
 set SCRIPT_DIR=%~dp0
 set PROJECT_ROOT=%SCRIPT_DIR%..
 set BASE_SQL=%PROJECT_ROOT%\JeecgBoot\jeecg-boot\db\jeecgboot-mysql-5.7.sql
+set HOMEAI_SQL_DIR=%PROJECT_ROOT%\JeecgBoot\jeecg-boot\jeecg-boot-module\jeecg-boot-module-homeai\sql
 set HOMEAI_TABLES=%PROJECT_ROOT%\JeecgBoot\jeecg-boot\jeecg-boot-module\jeecg-boot-module-homeai\sql\init_homeai_tables.sql
 set HOMEAI_MENUS=%PROJECT_ROOT%\JeecgBoot\jeecg-boot\jeecg-boot-module\jeecg-boot-module-homeai\sql\init_homeai_menus.sql
-set HOMEAI_ALTER_MENUS=%PROJECT_ROOT%\JeecgBoot\jeecg-boot\jeecg-boot-module\jeecg-boot-module-homeai\sql\alter_homeai_menus_fix_component.sql
-set HOMEAI_ALTER_LAYOUT=%PROJECT_ROOT%\JeecgBoot\jeecg-boot\jeecg-boot-module\jeecg-boot-module-homeai\sql\alter_homeai_menus_fix_layout.sql
-set HOMEAI_ALTER_MENUTYPE=%PROJECT_ROOT%\JeecgBoot\jeecg-boot\jeecg-boot-module\jeecg-boot-module-homeai\sql\alter_homeai_menus_fix_menutype.sql
+set HOMEAI_RECIPE_CAT=%HOMEAI_SQL_DIR%\init_homeai_recipe_category.sql
+set HOMEAI_USER_QUOTA=%HOMEAI_SQL_DIR%\init_homeai_user_quota.sql
 
 set REDIS_HOST=127.0.0.1
 set REDIS_PORT=6379
@@ -39,7 +39,9 @@ if "%DB_PASSWORD%"=="" (
     set /p DB_PASSWORD=
     echo.
 )
-set "MYSQL_CMD=mysql --default-character-set=utf8mb4 -h%DB_HOST% -P%DB_PORT% -u%DB_USER% -p%DB_PASSWORD%"
+:: 通过 MYSQL_PWD 传递密码（只输入一次、全部命令复用，且避免特殊字符转义问题）
+set "MYSQL_PWD=%DB_PASSWORD%"
+set "MYSQL_CMD=mysql --default-character-set=utf8mb4 -h%DB_HOST% -P%DB_PORT% -u%DB_USER%"
 
 :: ==================== Step 1: Check MySQL ====================
 echo [1/7] Check MySQL connection...
@@ -121,41 +123,26 @@ echo [OK] Base tables imported and verified
 echo.
 
 :: ==================== Step 4: Import HomeAI Tables ====================
-echo [4/7] Import HomeAI business tables...
-if not exist "%HOMEAI_TABLES%" (
-    echo [FAIL] File not found: %HOMEAI_TABLES%
-    pause
-    exit /b 1
-)
-%MYSQL_CMD% --force %DB_NAME% < "%HOMEAI_TABLES%" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo [FAIL] Import failed! Running again with full error output for diagnosis:
-    %MYSQL_CMD% --force %DB_NAME% < "%HOMEAI_TABLES%"
-    echo.
-    echo [FAIL] Above are the MySQL errors. Please fix them and re-run this script.
-    echo If tables already exist, you can ignore this error and continue manually:
-    echo   Skip step 4 and run step 5 onwards.
-    echo.
-    pause
-    exit /b 1
+echo [4/7] Import HomeAI init scripts...
+for %%F in ("%HOMEAI_TABLES%" "%HOMEAI_RECIPE_CAT%" "%HOMEAI_USER_QUOTA%") do (
+    if exist "%%~F" (
+        echo   - %%~nxF
+        %MYSQL_CMD% --force %DB_NAME% < "%%~F" >nul 2>&1
+        if !errorlevel! neq 0 echo     [WARN] had errors, continuing...
+    ) else (
+        echo   [SKIP] not found: %%~F
+    )
 )
 echo [OK] HomeAI business tables imported
 echo.
 
 :: ==================== Step 5: Import HomeAI Menus ====================
 echo [5/7] Import HomeAI menu permissions...
-if not exist "%HOMEAI_MENUS%" (
+if exist "%HOMEAI_MENUS%" (
+    %MYSQL_CMD% --force %DB_NAME% < "%HOMEAI_MENUS%" >nul 2>&1
+    if !errorlevel! neq 0 echo     [WARN] had errors, continuing...
+) else (
     echo [FAIL] File not found: %HOMEAI_MENUS%
-    pause
-    exit /b 1
-)
-%MYSQL_CMD% --force %DB_NAME% < "%HOMEAI_MENUS%" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo [FAIL] Import failed! Running again with full error output:
-    %MYSQL_CMD% --force %DB_NAME% < "%HOMEAI_MENUS%"
-    echo.
-    echo [FAIL] See MySQL errors above.
-    echo.
     pause
     exit /b 1
 )
@@ -177,25 +164,15 @@ echo.
 
 :: ==================== Step 6: Incremental Scripts ====================
 echo [6/7] Run incremental scripts...
-
-if exist "%HOMEAI_ALTER_MENUS%" (
-    echo   - alter_homeai_menus_fix_component.sql
-    %MYSQL_CMD% %DB_NAME% < "%HOMEAI_ALTER_MENUS%" >nul 2>&1
-    if !errorlevel! neq 0 echo     [WARN] had errors, continuing...
+if exist "%HOMEAI_SQL_DIR%\alter_homeai_*.sql" (
+    for /f %%F in ('dir /b "%HOMEAI_SQL_DIR%\alter_homeai_*.sql" 2^>nul') do (
+        echo   - %%F
+        %MYSQL_CMD% --force %DB_NAME% < "%HOMEAI_SQL_DIR%\%%F" >nul 2>&1
+        if !errorlevel! neq 0 echo     [WARN] had errors, continuing...
+    )
+) else (
+    echo   [SKIP] no alter scripts found
 )
-
-if exist "%HOMEAI_ALTER_LAYOUT%" (
-    echo   - alter_homeai_menus_fix_layout.sql
-    %MYSQL_CMD% %DB_NAME% < "%HOMEAI_ALTER_LAYOUT%" >nul 2>&1
-    if !errorlevel! neq 0 echo     [WARN] had errors, continuing...
-)
-
-if exist "%HOMEAI_ALTER_MENUTYPE%" (
-    echo   - alter_homeai_menus_fix_menutype.sql
-    %MYSQL_CMD% %DB_NAME% < "%HOMEAI_ALTER_MENUTYPE%" >nul 2>&1
-    if !errorlevel! neq 0 echo     [WARN] had errors, continuing...
-)
-
 echo [OK] Incremental scripts completed
 echo.
 
