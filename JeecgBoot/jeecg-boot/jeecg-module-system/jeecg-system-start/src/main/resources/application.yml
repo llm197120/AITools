@@ -3,5 +3,10 @@ spring:
     name: jeecg-system
   config:
     import: optional:classpath:config/application-liteflow.yml
+  cloud:
+    nacos:
+      config:
+        import-check:
+          enabled: false
   profiles:
     active: '@profile.name@'

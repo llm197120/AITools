@@ -1,0 +1,168 @@
+-- author:homeai---date:20260729--for: 【Phase3】AI对话模块实体层（对话/消息/密钥/配额） ---
+涉及的文件：
+  jeecg-boot-module-homeai/.../ai/entity/AiConversation.java
+  jeecg-boot-module-homeai/.../ai/entity/AiMessage.java
+  jeecg-boot-module-homeai/.../ai/entity/AiKeyConfig.java
+  jeecg-boot-module-homeai/.../ai/entity/AiQuotaLog.java
+  jeecg-boot-module-homeai/.../ai/mapper/AiConversationMapper.java
+  jeecg-boot-module-homeai/.../ai/mapper/AiMessageMapper.java
+  jeecg-boot-module-homeai/.../ai/mapper/AiKeyConfigMapper.java
+  jeecg-boot-module-homeai/.../ai/mapper/AiQuotaLogMapper.java
+  jeecg-boot-module-homeai/.../ai/mapper/xml/AiConversationMapper.xml
+  jeecg-boot-module-homeai/.../ai/mapper/xml/AiMessageMapper.xml
+  jeecg-boot-module-homeai/.../ai/mapper/xml/AiKeyConfigMapper.xml
+  jeecg-boot-module-homeai/.../ai/mapper/xml/AiQuotaLogMapper.xml
+-- author:homeai---date:20260729--for: 【Phase3】AI对话模块Service层 ---
+涉及的文件：
+  jeecg-boot-module-homeai/.../ai/service/IAiConversationService.java
+  jeecg-boot-module-homeai/.../ai/service/IAiMessageService.java
+  jeecg-boot-module-homeai/.../ai/service/IAiKeyConfigService.java
+  jeecg-boot-module-homeai/.../ai/service/IAiQuotaService.java
+  jeecg-boot-module-homeai/.../ai/service/IHomeaiChatService.java
+  jeecg-boot-module-homeai/.../ai/service/impl/AiConversationServiceImpl.java
+  jeecg-boot-module-homeai/.../ai/service/impl/AiMessageServiceImpl.java
+  jeecg-boot-module-homeai/.../ai/service/impl/AiKeyConfigServiceImpl.java（AES-256-GCM 加密）
+  jeecg-boot-module-homeai/.../ai/service/impl/AiQuotaServiceImpl.java（Redis原子计数+DB持久化）
+  jeecg-boot-module-homeai/.../ai/service/impl/HomeaiChatServiceImpl.java（复用airag SSE流式）
+-- author:homeai---date:20260729--for: 【Phase3】AI对话模块Controller层 ---
+涉及的文件：
+  jeecg-boot-module-homeai/.../ai/controller/AiConversationController.java（对话管理CRUD）
+  jeecg-boot-module-homeai/.../ai/controller/AiKeyConfigController.java（密钥管理+配额默认值）
+  jeecg-boot-module-homeai/.../ai/controller/HomeaiChatController.java（SSE流式对话/配额检查/停止生成）
+-- author:homeai---date:20260729--for: 【Phase3】管理端Vue3页面（密钥配置+Token额度） ---
+涉及的文件：
+  jeecgboot-vue3/src/views/homeai/ai/keyConfig.vue（密钥列表页）
+  jeecgboot-vue3/src/views/homeai/ai/KeyConfigDrawer.vue（密钥编辑弹窗）
+  jeecgboot-vue3/src/views/homeai/ai/quota.vue（Token额度概览）
+  jeecgboot-vue3/src/router/routes/modules/homeai/ai.ts（路由注册）
+-- author:homeai---date:20260729--for: 【Phase3】小程序AI对话页面（SSE流式+Markdown+附件上传） ---
+涉及的文件：
+  JeecgUniapp/src/pages-homeai-ai/ai/conversations.vue（对话列表+空态引导）
+  JeecgUniapp/src/pages-homeai-ai/ai/chat.vue（聊天页+SSE流式+附件+停止+配额预检）
+  JeecgUniapp/src/pages-homeai-ai/pages.config.ts（分包路由）
+-- author:homeai---date:20260729--for: 【Phase3】更新DDL+菜单SQL ---
+涉及的文件：
+  sql/init_homeai_tables.sql（AI表已存在，未修改）
+  sql/init_homeai_menus.sql（添加Token额度菜单+密钥管理按钮权限）
+-- author:homeai---date:20260729--for: 【Phase3】AIFlow编排 ---
+注：jeecg-aiflow 脚本需连接运行中的 JeecgBoot 管理后台，当前服务未启动。
+HomeaiChatServiceImpl 已直接复用 IAiragChatService.send() 实现 SSE 流式对话。
+待服务启动后可通过 aiflow 脚本创建自定义编排流程。
+-- author:homeai---date:20260729--for: 【Phase4】资料存储模块实体层（5个实体） ---
+涉及的文件：
+  jeecg-boot-module-homeai/.../storage/entity/StorageFolder.java
+  jeecg-boot-module-homeai/.../storage/entity/StorageFile.java
+  jeecg-boot-module-homeai/.../storage/entity/StorageConvertTask.java
+  jeecg-boot-module-homeai/.../storage/entity/OfficeTemplate.java
+  jeecg-boot-module-homeai/.../storage/entity/ConvertRule.java
+  jeecg-boot-module-homeai/.../storage/mapper/StorageFolderMapper.java
+  jeecg-boot-module-homeai/.../storage/mapper/StorageFileMapper.java
+  jeecg-boot-module-homeai/.../storage/mapper/StorageConvertTaskMapper.java
+  jeecg-boot-module-homeai/.../storage/mapper/OfficeTemplateMapper.java
+  jeecg-boot-module-homeai/.../storage/mapper/ConvertRuleMapper.java
+  jeecg-boot-module-homeai/.../storage/mapper/xml/ (5个XML文件)
+-- author:homeai---date:20260729--for: 【Phase4】资料存储模块Service层 ---
+涉及的文件：
+  jeecg-boot-module-homeai/.../storage/service/IStorageFolderService.java
+  jeecg-boot-module-homeai/.../storage/service/IStorageFileService.java
+  jeecg-boot-module-homeai/.../storage/service/IStorageConvertTaskService.java
+  jeecg-boot-module-homeai/.../storage/service/IOfficeTemplateService.java
+  jeecg-boot-module-homeai/.../storage/service/IConvertRuleService.java
+  jeecg-boot-module-homeai/.../storage/service/impl/ (5个实现类)
+-- author:homeai---date:20260729--for: 【Phase4】资料存储模块Controller层 ---
+涉及的文件：
+  jeecg-boot-module-homeai/.../storage/controller/StorageController.java（文件夹树/文件上传/搜索/收藏/CRUD）
+  jeecg-boot-module-homeai/.../storage/controller/StorageOfficeController.java（格式转换/AI生成/任务状态查询/历史）
+  jeecg-boot-module-homeai/.../storage/controller/OfficeTemplateController.java（模板管理CRUD+默认）
+  jeecg-boot-module-homeai/.../storage/controller/ConvertRuleController.java（转换规则管理+启用停用）
+-- author:homeai---date:20260729--for: 【Phase4】管理端Vue3页面（4个） ---
+涉及的文件：
+  jeecgboot-vue3/src/views/homeai/storage/fileList.vue（文件管理）
+  jeecgboot-vue3/src/views/homeai/storage/officeTemplate.vue（文档模板）
+  jeecgboot-vue3/src/views/homeai/storage/convertRule.vue（转换规则）
+  jeecgboot-vue3/src/views/homeai/storage/officeHistory.vue（处理记录）
+  jeecgboot-vue3/src/router/routes/modules/homeai/storage.ts（路由注册）
+-- author:homeai---date:20260729--for: 【Phase4】小程序资料存储页面（6个） ---
+涉及的文件：
+  JeecgUniapp/src/pages-homeai-more/storage/index.vue（文件夹树+新建+上传）
+  JeecgUniapp/src/pages-homeai-more/storage/files.vue（文件列表+收藏+长按操作+空态）
+  JeecgUniapp/src/pages-homeai-more/storage/office-convert.vue（格式转换选择）
+  JeecgUniapp/src/pages-homeai-more/storage/office-generate.vue（AI文件生成）
+  JeecgUniapp/src/pages-homeai-more/storage/office-history.vue（处理历史记录）
+  JeecgUniapp/src/pages-homeai-more/storage/search.vue（文件搜索）
+  JeecgUniapp/src/pages.json（新增5个storage页面路由）
+-- author:homeai---date:20260729--for: 【Phase4】更新菜单SQL ---
+涉及的文件：
+  sql/init_homeai_menus.sql（添加资料存储管理菜单+4个子菜单）
+-- author:homeai---date:20260729--for: 【Phase5】账单模块 ---
+涉及的文件：
+  jeecg-boot-module-homeai/.../bill/entity/BillEntry.java
+  jeecg-boot-module-homeai/.../bill/entity/BillCategory.java
+  jeecg-boot-module-homeai/.../bill/entity/BillImportRecord.java
+  jeecg-boot-module-homeai/.../bill/mapper/ (3个Mapper)
+  jeecg-boot-module-homeai/.../bill/mapper/xml/ (3个XML)
+  jeecg-boot-module-homeai/.../bill/service/IBillEntryService.java + IBillCategoryService.java
+  jeecg-boot-module-homeai/.../bill/service/impl/BillEntryServiceImpl.java + BillCategoryServiceImpl.java
+  jeecg-boot-module-homeai/.../bill/controller/BillController.java（记账/列表/统计/分类管理）
+  jeecgboot-vue3/src/views/homeai/bill/billList.vue（管理端账单列表）
+  jeecgboot-vue3/src/views/homeai/bill/billCategory.vue（管理端消费分类）
+  jeecgboot-vue3/src/router/routes/modules/homeai/bill.ts
+  JeecgUniapp/src/pages-homeai-more/bill/index.vue（小程序账单首页概览+快捷记一笔）
+  JeecgUniapp/src/pages-homeai-more/bill/add.vue（小程序记一笔页面）
+  JeecgUniapp/src/pages-homeai-more/bill/statistics.vue（小程序月度统计分析）
+-- author:homeai---date:20260729--for: 【Phase6】日常计划模块 ---
+涉及的文件：
+  jeecg-boot-module-homeai/.../plan/entity/PlanMaster.java
+  jeecg-boot-module-homeai/.../plan/entity/PlanInstance.java
+  jeecg-boot-module-homeai/.../plan/mapper/ (2个Mapper + XML)
+  jeecg-boot-module-homeai/.../plan/service/IPlanService.java
+  jeecg-boot-module-homeai/.../plan/service/impl/PlanServiceImpl.java（日历查询+实例生成+状态切换）
+  jeecg-boot-module-homeai/.../plan/controller/PlanController.java
+  jeecgboot-vue3/src/views/homeai/plan/planList.vue（管理端计划列表）
+  jeecgboot-vue3/src/router/routes/modules/homeai/plan.ts
+  JeecgUniapp/src/pages-homeai-more/plan/index.vue（小程序日历视图+计划列表+快速创建）
+-- author:homeai---date:20260729--for: 【Phase7】烹饪指南+学习模块 ---
+涉及的文件：
+  jeecg-boot-module-homeai/.../recipe/entity/Recipe.java + RecipeIngredient.java + RecipeStep.java
+  jeecg-boot-module-homeai/.../recipe/entity/LearnMaterial.java + LearnRecord.java
+  jeecg-boot-module-homeai/.../recipe/mapper/ (5个Mapper+XML)
+  jeecg-boot-module-homeai/.../recipe/service/IRecipeService.java + ILearnService.java
+  jeecg-boot-module-homeai/.../recipe/service/impl/RecipeServiceImpl.java + LearnServiceImpl.java
+  jeecg-boot-module-homeai/.../recipe/controller/RecipeController.java（列表/详情/CRUD/搜索）
+  jeecg-boot-module-homeai/.../learn/controller/LearnController.java（资料管理/开始学习/停止/记录）
+  jeecgboot-vue3/src/views/homeai/recipe/recipeList.vue（管理端菜谱列表）
+  jeecgboot-vue3/src/views/homeai/learn/learnList.vue（管理端学习资料）
+  jeecgboot-vue3/src/router/routes/modules/homeai/recipe.ts
+  jeecgboot-vue3/src/router/routes/modules/homeai/learn.ts
+  JeecgUniapp/src/pages-homeai-more/recipe/index.vue（小程序菜谱列表+搜索+热门推荐）
+  JeecgUniapp/src/pages-homeai-more/recipe/detail.vue（小程序菜谱详情+食材+步骤）
+  JeecgUniapp/src/pages-homeai-more/recipe/add.vue（小程序新增菜谱/食材/步骤表单）
+  JeecgUniapp/src/pages-homeai-more/learn/index.vue（小程序学习统计+资料列表+快捷创建）
+-- author:homeai---date:20260729--for: 【Phase5-7】更新菜单SQL+路由+分包+页面配置 ---
+涉及的文件：
+  sql/init_homeai_menus.sql（账单管理/计划管理/菜谱管理/学习管理 4个一级菜单+4个子页面）
+  jeecgboot-vue3/src/router/routes/modules/homeai/bill.ts + plan.ts + recipe.ts + learn.ts（4个路由模块）
+  JeecgUniapp/src/pages.json（新增 bill/statistics 页面路由）
+-- author:admin---date:20260730--for: 【功能优化】6个模块后端新增导入/导出/回收站接口 ---
+涉及的文件：
+  jeecg-boot-module-homeai/.../user/controller/WxUserController.java（新增:add/exportXls/importExcel/recycleBin/moveToRecycleBin/restore/deletePermanently）
+  jeecg-boot-module-homeai/.../family/controller/FamilyController.java（新增:add/exportXls/importExcel/recycleBin/moveToRecycleBin/restore/deletePermanently）
+  jeecg-boot-module-homeai/.../bill/controller/BillController.java（新增:addEntry/exportXls/importExcel/recycleBin/moveToRecycleBin/restore/deletePermanently）
+  jeecg-boot-module-homeai/.../plan/controller/PlanController.java（新增:add/edit/exportXls/importExcel/recycleBin/moveToRecycleBin/restore/deletePermanently）
+  jeecg-boot-module-homeai/.../recipe/controller/RecipeController.java（新增:add/exportXls/importExcel/recycleBin/moveToRecycleBin/restore/deletePermanently）
+  jeecg-boot-module-homeai/.../learn/controller/LearnController.java（新增:addMaterial/exportXls/importExcel/recycleBin/moveToRecycleBin/restore/deletePermanently）
+-- author:admin---date:20260730--for: 【功能优化】6个模块前端新增/导入/导出/回收站按钮+回收站标签页 ---
+涉及的文件：
+  jeecgboot-vue3/src/views/homeai/user/index.vue（新增按钮:新增/导入/导出/移入回收站 + 回收站标签页）
+  jeecgboot-vue3/src/views/homeai/family/index.vue（新增按钮:新增/导入/导出/移入回收站 + 回收站标签页）
+  jeecgboot-vue3/src/views/homeai/bill/billList.vue（新增按钮:新增/导入/导出/移入回收站 + 回收站标签页）
+  jeecgboot-vue3/src/views/homeai/plan/planList.vue（新增按钮:新增/导入/导出/移入回收站 + 回收站标签页）
+  jeecgboot-vue3/src/views/homeai/recipe/recipeList.vue（新增按钮:新增/导入/导出/移入回收站 + 回收站标签页）
+  jeecgboot-vue3/src/views/homeai/learn/learnList.vue（新增按钮:新增/导入/导出/移入回收站 + 回收站标签页）
+  jeecgboot-vue3/src/api/homeai/index.ts（新增billApi/planApi/recipeApi/learnApi/storageApi + 扩充userApi/familyApi）
+-- author:admin---date:20260730--for: 【功能优化】资料存储管理新增文件夹按钮+文件列表/文件夹视图切换 ---
+涉及的文件：
+  jeecgboot-vue3/src/views/homeai/storage/fileList.vue（重构:新增文件夹按钮+文件列表/文件夹视图切换+文件夹树+选中文件夹查看文件）
+-- author:admin---date:20260730--for: 【功能优化】菜单权限SQL-新增/导入/导出/回收站/文件夹按钮权限 ---
+涉及的文件：
+  sql/alter_homeai_menus_buttons.sql（新增:用户/家庭/账单/计划/菜谱/学习6个模块的34个按钮权限 + 存储新增文件夹权限）

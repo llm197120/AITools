@@ -25,14 +25,15 @@ export const http = <T>(options: CustomRequestOptions) => {
       // #ifndef MP-WEIXIN
       responseType: 'json',
       // #endif
+      ...options,
       header: {
+        ...options.header,
         'X-Access-Token': userStore.userInfo.token,
         'X-Tenant-Id': userStore.userInfo.tenantId,
         'X-Sign': sign,
         'V-Sign': vSign,
         'X-TIMESTAMP': signMd5Utils.getTimestamp(),
       },
-      ...options,
       // 响应成功
       success(res) {
         // 状态码 2xx，参考 axios 的设计

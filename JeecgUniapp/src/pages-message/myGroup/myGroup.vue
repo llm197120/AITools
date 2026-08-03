@@ -109,7 +109,7 @@ import SelectUserModal from '@/components/SelectUser/components/SelectUserModal.
 defineOptions({
   name: 'myGroup',
   options: {
-    styleIsolation: '‌shared‌',
+    styleIsolation: 'shared',
   },
 })
 const api = {

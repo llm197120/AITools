@@ -39,6 +39,10 @@ function findMenuPath<T = Recordable>(treeData: T[], path: string, matchHide: bo
 function joinParentPath(menus: Menu[], parentPath = '') {
   for (let index = 0; index < menus.length; index++) {
     const menu = menus[index];
+    // 跳过 path 为 null/undefined 的菜单项（如按钮权限等非路由菜单项）
+    if (!menu.path) {
+      continue;
+    }
     // https://next.router.vuejs.org/guide/essentials/nested-routes.html
     // Note that nested paths that start with / will be treated as a root path.
     // 请注意，以 / 开头的嵌套路径将被视为根路径。
@@ -114,6 +118,11 @@ const menuParamRegex = /(?::)([\s\S]+?)((?=\/)|$)/g;
 export function configureDynamicParamsMenu(menu: Menu, params: RouteParams) {
   const { path, paramPath } = toRaw(menu);
   let realPath = paramPath ? paramPath : path;
+  // 跳过 path 为 null/undefined 的菜单项（如按钮权限等非路由菜单项）
+  if (!realPath) {
+    menu.children?.forEach((item) => configureDynamicParamsMenu(item, params));
+    return;
+  }
   const matchArr = realPath.match(menuParamRegex);
 
   matchArr?.forEach((it) => {

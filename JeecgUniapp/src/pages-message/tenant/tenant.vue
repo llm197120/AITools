@@ -57,9 +57,9 @@ import rightConditionFilter from '@/components/RightConditionFilter/RightConditi
 defineOptions({
   name: 'tenant',
   options: {
-    // apply-shared‌：当前页面样式会影响到子组件样式.(小程序)
-    // shared‌：当前页面样式影响到子组件，子组件样式也会影响到当前页面.(小程序)
-    styleIsolation: '‌shared‌',
+    // apply-shared：当前页面样式会影响到子组件样式.(小程序)
+    // shared：当前页面样式影响到子组件，子组件样式也会影响到当前页面.(小程序)
+    styleIsolation: 'shared',
   },
 })
 const reloadKey = ref(1)

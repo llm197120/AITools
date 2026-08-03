@@ -14,7 +14,7 @@
 
 <script setup>
 import { ref, watch, onMounted } from 'vue';
-import { isArray, isString } from 'lodash';
+import { isArray, isString } from 'lodash-es';
 import {http} from "@/utils/http"; // 假设使用 lodash 来判断类型
 
 // 定义 props

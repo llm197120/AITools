@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Encoding">
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-boot-base-core/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-boot-base-core/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-airag/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-airag/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-module-demo/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-module-demo/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-boot-module/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-boot-module/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-module-system/jeecg-system-api/jeecg-system-cloud-api/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-module-system/jeecg-system-api/jeecg-system-cloud-api/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-module-system/jeecg-system-api/jeecg-system-local-api/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-module-system/jeecg-system-api/jeecg-system-local-api/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-module-system/jeecg-system-api/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-module-system/jeecg-system-api/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-module-system/jeecg-system-biz/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-module-system/jeecg-system-biz/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-module-system/jeecg-system-start/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-module-system/jeecg-system-start/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-module-system/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-module-system/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-cloud-gateway/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-cloud-gateway/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-cloud-nacos/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-demo-cloud-start/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-demo-cloud-start/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-system-cloud-start/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-system-cloud-start/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-monitor/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-monitor/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-sentinel/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-more/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-more/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-rabbitmq/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-rabbitmq/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-rocketmq/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-rocketmq/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-seata/jeecg-cloud-test-seata-account/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-seata/jeecg-cloud-test-seata-account/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-seata/jeecg-cloud-test-seata-order/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-seata/jeecg-cloud-test-seata-order/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-seata/jeecg-cloud-test-seata-product/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-seata/jeecg-cloud-test-seata-product/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-seata/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-seata/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-shardingsphere/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/jeecg-cloud-test-shardingsphere/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-test/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-xxljob/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/jeecg-cloud-xxljob/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/jeecg-visual/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/jeecg-server-cloud/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JeecgBoot/jeecg-boot/src/main/resources" charset="UTF-8" />
+  </component>
+</project>

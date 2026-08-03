@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile default="true" name="Default" enabled="true" />
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="jeecg-boot-module-airag" />
+        <module name="jeecg-cloud-gateway" />
+        <module name="jeecg-cloud-test-seata-product" />
+        <module name="jeecg-cloud-test-more" />
+        <module name="jeecg-system-cloud-api" />
+        <module name="jeecg-cloud-test-shardingsphere" />
+        <module name="jeecg-cloud-monitor" />
+        <module name="jeecg-cloud-test-seata-account" />
+        <module name="jeecg-boot-base-core" />
+        <module name="jeecg-boot-module-homeai" />
+        <module name="jeecg-cloud-test-rabbitmq" />
+        <module name="jeecg-cloud-sentinel" />
+        <module name="jeecg-system-cloud-start" />
+        <module name="jeecg-system-start" />
+        <module name="jeecg-cloud-xxljob" />
+        <module name="jeecg-system-local-api" />
+        <module name="jeecg-module-demo" />
+        <module name="jeecg-cloud-test-rocketmq" />
+        <module name="jeecg-cloud-test-seata-order" />
+        <module name="jeecg-demo-cloud-start" />
+        <module name="jeecg-system-biz" />
+        <module name="jeecg-cloud-nacos" />
+      </profile>
+    </annotationProcessing>
+  </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="jeecg-boot-base-core" options="-parameters" />
+      <module name="jeecg-boot-module" options="-parameters" />
+      <module name="jeecg-boot-module-airag" options="-parameters" />
+      <module name="jeecg-boot-module-homeai" options="-parameters" />
+      <module name="jeecg-boot-parent" options="-parameters" />
+      <module name="jeecg-cloud-gateway" options="-parameters" />
+      <module name="jeecg-cloud-monitor" options="-parameters" />
+      <module name="jeecg-cloud-nacos" options="-parameters" />
+      <module name="jeecg-cloud-sentinel" options="-parameters" />
+      <module name="jeecg-cloud-test" options="-parameters" />
+      <module name="jeecg-cloud-test-more" options="-parameters" />
+      <module name="jeecg-cloud-test-rabbitmq" options="-parameters" />
+      <module name="jeecg-cloud-test-rocketmq" options="-parameters" />
+      <module name="jeecg-cloud-test-seata" options="-parameters" />
+      <module name="jeecg-cloud-test-seata-account" options="-parameters" />
+      <module name="jeecg-cloud-test-seata-order" options="-parameters" />
+      <module name="jeecg-cloud-test-seata-product" options="-parameters" />
+      <module name="jeecg-cloud-test-shardingsphere" options="-parameters" />
+      <module name="jeecg-cloud-xxljob" options="-parameters" />
+      <module name="jeecg-demo-cloud-start" options="-parameters" />
+      <module name="jeecg-module-demo" options="-parameters" />
+      <module name="jeecg-module-system" options="-parameters" />
+      <module name="jeecg-server-cloud" options="-parameters" />
+      <module name="jeecg-system-api" options="-parameters" />
+      <module name="jeecg-system-biz" options="-parameters" />
+      <module name="jeecg-system-cloud-api" options="-parameters" />
+      <module name="jeecg-system-cloud-start" options="-parameters" />
+      <module name="jeecg-system-local-api" options="-parameters" />
+      <module name="jeecg-system-start" options="-parameters" />
+      <module name="jeecg-visual" options="-parameters" />
+    </option>
+  </component>
+</project>

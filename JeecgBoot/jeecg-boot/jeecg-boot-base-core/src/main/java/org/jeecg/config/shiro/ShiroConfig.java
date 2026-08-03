@@ -48,7 +48,7 @@ public class ShiroConfig {
 
     @Resource
     private LettuceConnectionFactory lettuceConnectionFactory;
-    @Autowired
+    @Resource
     private Environment env;
     @Resource
     private JeecgBaseConfig jeecgBaseConfig;
@@ -190,6 +190,9 @@ public class ShiroConfig {
 
         filterChainDefinitionMap.put("/openapi/call/**", "anon");
 
+        // HomeAI 模块使用独立 JWT 认证体系(基于 openid)，绕过 Shiro JWT 过滤器
+        filterChainDefinitionMap.put("/homeai/**", "anon");
+
         // 添加自己的过滤器并且取名为jwt
         Map<String, Filter> filterMap = new HashMap<String, Filter>(1);
         //如果cloudServer为空 则说明是单体 需要加载跨域配置【微服务跨域切换】
@@ -240,6 +243,8 @@ public class ShiroConfig {
         registration.addUrlPatterns("/drag/page/aiDiscussScreenSse");
         registration.addUrlPatterns("/jmreport/ai/assistant/*");
         registration.addUrlPatterns("/jimu/chat2bi/table-meta/syncTables");
+        // homeai 模块 SSE 异步支持
+        registration.addUrlPatterns("/homeai/ai/chat/send");
         //支持异步
         registration.setAsyncSupported(true);
         registration.setDispatcherTypes(DispatcherType.REQUEST, DispatcherType.ASYNC);
@@ -263,6 +268,8 @@ public class ShiroConfig {
         securityManager.setSubjectDAO(subjectDAO);
         //自定义缓存实现,使用redis
         securityManager.setCacheManager(redisCacheManager());
+        // JWT无状态模式下禁用RememberMe，避免浏览器残留的rememberMe Cookie导致解密异常
+        securityManager.setRememberMeManager(null);
         return securityManager;
     }
 

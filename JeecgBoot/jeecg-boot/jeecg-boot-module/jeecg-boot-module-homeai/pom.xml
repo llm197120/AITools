@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.jeecgframework.boot3</groupId>
+        <artifactId>jeecg-boot-module</artifactId>
+        <version>3.9.3</version>
+    </parent>
+
+    <artifactId>jeecg-boot-module-homeai</artifactId>
+
+    <dependencies>
+        <!-- 系统核心模块 -->
+        <dependency>
+            <groupId>org.jeecgframework.boot3</groupId>
+            <artifactId>jeecg-system-biz</artifactId>
+            <version>${jeecgboot.version}</version>
+        </dependency>
+
+        <!-- 对象存储 -->
+        <dependency>
+            <groupId>org.jeecgframework.boot3</groupId>
+            <artifactId>jeecg-boot-starter-cloud</artifactId>
+            <version>${jeecgboot.version}</version>
+        </dependency>
+
+        <!-- AI 编排能力（LangChain4j + LiteFlow） -->
+        <dependency>
+            <groupId>org.jeecgframework.boot3</groupId>
+            <artifactId>jeecg-boot-starter-ai</artifactId>
+            <version>${jeecgboot.version}</version>
+        </dependency>
+
+        <!-- AI RAG 知识库 -->
+        <dependency>
+            <groupId>org.jeecgframework.boot3</groupId>
+            <artifactId>jeecg-boot-module-airag</artifactId>
+            <version>${jeecgboot.version}</version>
+        </dependency>
+    </dependencies>
+</project>

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { onLaunch, onShow, onHide, onLoad, onReady } from '@dcloudio/uni-app'
 import 'abortcontroller-polyfill/dist/abortcontroller-polyfill-only'
-import { beforEach } from '@/router/index'
+import { useUserStore } from '@/store/user'
  // #ifdef APP-PLUS
 import appUpdate from "@/common/appUpdate";
 // #endif
@@ -13,26 +13,28 @@ export default {
     // 检测升级
     appUpdate()
     // #endif
+    // 首次启动时检查登录态，未登录则跳转登录页
+    const userStore = useUserStore()
+    if (!userStore.isLogined) {
+      uni.reLaunch({ url: '/pages/login/login' })
+    }
   },
   onShow: function (options) {
     console.log('App Show')
     console.log('应用启动路径：', options.path)
-    // 首次进入页面时路由拦截
-    setTimeout(() => {
-      const currentPage = options.path
-      beforEach({ path: '/' }, { path: currentPage, fullPath: currentPage }, (data) => {
-        if (data?.path) {
-          uni.redirectTo({ url: data.path })
-        }
-      })
-    }, 100)
+    // 从后台切回前台时，再次检查登录态
+    const userStore = useUserStore()
+    const currentPage = options.path || ''
+    if (!userStore.isLogined && !currentPage.includes('login')) {
+      uni.reLaunch({ url: '/pages/login/login' })
+    }
   },
   onHide: function () {
     console.log('App Hide')
   },
   // 全局变量
   globalData: {
-    isLocalConfig: true,
+    isLocalConfig: false,
     systemInfo: uni.getSystemInfoSync(),
     // 导航的高度
     navHeight: 44,

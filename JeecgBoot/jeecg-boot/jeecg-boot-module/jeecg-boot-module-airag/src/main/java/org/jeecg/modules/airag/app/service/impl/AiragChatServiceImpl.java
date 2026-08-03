@@ -139,6 +139,11 @@ public class AiragChatServiceImpl implements IAiragChatService {
 
     @Override
     public SseEmitter send(ChatSendParams chatSendParams) {
+        return send(chatSendParams, null);
+    }
+
+    @Override
+    public SseEmitter send(ChatSendParams chatSendParams, SseEmitter externalEmitter) {
         AssertUtils.assertNotEmpty("参数异常", chatSendParams);
         String userMessage = chatSendParams.getContent();
         AssertUtils.assertNotEmpty("至少发送一条消息", userMessage);
@@ -172,7 +177,7 @@ public class AiragChatServiceImpl implements IAiragChatService {
         // 保存变量
         saveVariables(app);
         // 发送消息
-        return doChat(chatConversation, topicId, chatSendParams);
+        return doChat(chatConversation, topicId, chatSendParams, externalEmitter);
     }
 
     @Override
@@ -970,13 +975,20 @@ public class AiragChatServiceImpl implements IAiragChatService {
      */
     @NotNull
     private SseEmitter doChat(ChatConversation chatConversation, String topicId, ChatSendParams sendParams) {
+        return doChat(chatConversation, topicId, sendParams, null);
+    }
+
+    @NotNull
+    private SseEmitter doChat(ChatConversation chatConversation, String topicId, ChatSendParams sendParams,
+                              SseEmitter externalEmitter) {
         // 从历史消息中组装本次的消息列表
         List<ChatMessage> messages = collateMessage(chatConversation, topicId);
 
         AiragApp aiApp = chatConversation.getApp();
         // 每次会话都生成一个新的,用来缓存emitter
         String requestId = UUIDGenerator.generate();
-        SseEmitter emitter = createSSE(requestId);
+        // 支持外部传入 emitter（如 HomeAI 模块用于捕获流式内容），为空时使用内部默认实现
+        SseEmitter emitter = externalEmitter != null ? externalEmitter : createSSE(requestId);
         // 缓存emitter
         AiragLocalCache.put(AiragConsts.CACHE_TYPE_SSE, requestId, emitter);
         // 缓存开始发送时间

@@ -107,16 +107,19 @@ function asyncImportRoute(routes: AppRouteRecordRaw[] | undefined) {
 
 function dynamicImport(dynamicViewsModules: Record<string, () => Promise<Recordable>>, component: string) {
   const keys = Object.keys(dynamicViewsModules);
+  // 组件路径去掉 /views 前缀，与 glob 键的 normalize 结果保持一致
+  // 后端菜单返回 /views/xxx，glob 键 ../views/xxx 去前缀后为 /xxx
+  const cmp = component.replace(/^\/views/, '');
   const matchKeys = keys.filter((key) => {
     // update-begin--author:liaozhiyang---date:20260302---for:【QQYUN-14799】动态引入页面会生成两份及引入components下的组件文件
     // 兼容两种前缀：dynamicPages 的 ../views 与 packageViews 的 ../../views
     const k = key.replace(/^(\.\.\/)+views/, '');
     // update-end--author:liaozhiyang---date:20260302---for:【QQYUN-14799】动态引入页面会生成两份及引入components下的组件文件
-    const startFlag = component.startsWith('/');
-    const endFlag = component.endsWith('.vue') || component.endsWith('.tsx');
+    const startFlag = cmp.startsWith('/');
+    const endFlag = cmp.endsWith('.vue') || cmp.endsWith('.tsx');
     const startIndex = startFlag ? 0 : 1;
     const lastIndex = endFlag ? k.length : k.lastIndexOf('.');
-    return k.substring(startIndex, lastIndex) === component;
+    return k.substring(startIndex, lastIndex) === cmp;
   });
   if (matchKeys?.length === 1) {
     const matchKey = matchKeys[0];

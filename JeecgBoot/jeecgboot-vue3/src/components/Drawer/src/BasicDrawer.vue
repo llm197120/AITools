@@ -42,7 +42,7 @@
     inheritAttrs: false,
     props: basicProps,
     emits: ['visible-change', 'open-change', 'ok', 'close', 'register'],
-    setup(props, { emit }) {
+    setup(props, { emit, slots }) {
       const visibleRef = ref(false);
       const attrs = useAttrs();
       const propsRef = ref<Partial<Nullable<DrawerProps>>>(null);
@@ -100,7 +100,8 @@
       // Custom implementation of the bottom button,
       const getFooterHeight = computed(() => {
         const { footerHeight, showFooter } = unref(getProps);
-        if (showFooter && footerHeight) {
+        // 自定义了 footer slot 时（如保存/取消按钮），即使未显式传 showFooter 也应正常展示 footer 高度
+        if ((showFooter || !!slots.footer) && footerHeight) {
           return isNumber(footerHeight) ? `${footerHeight}px` : `${footerHeight.replace('px', '')}px`;
         }
         return `0px`;

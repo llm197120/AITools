@@ -22,6 +22,18 @@ public interface IAiragChatService {
      */
     SseEmitter send(ChatSendParams chatSendParams);
 
+    /**
+     * 发送消息（支持外部传入 SseEmitter，便于调用方拦截/捕获流式内容；
+     * 传入 null 时行为与 {@link #send(ChatSendParams)} 完全一致）
+     *
+     * @param chatSendParams 发送参数
+     * @param externalEmitter 外部 SseEmitter，可空
+     * @return 实际写入的 SseEmitter
+     */
+    default SseEmitter send(ChatSendParams chatSendParams, SseEmitter externalEmitter) {
+        return send(chatSendParams);
+    }
+
 
     /**
      * 调试应用

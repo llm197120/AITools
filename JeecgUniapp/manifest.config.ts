@@ -129,7 +129,8 @@ export default defineManifestConfig({
       es6: true,
     },
     usingComponents: true,
-    lazyCodeLoading: 'requiredComponents',
+    // lazyCodeLoading 在 uni-app 中会导致小程序空白，暂时禁用
+    // lazyCodeLoading: 'requiredComponents',
     // __usePrivacyCheck__: true,
   },
   'mp-alipay': {

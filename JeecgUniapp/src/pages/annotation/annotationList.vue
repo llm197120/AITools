@@ -99,7 +99,7 @@ setTimeout(() => {
 defineOptions({
   name: 'annotationList',
   options: {
-    styleIsolation: '‌shared‌',
+    styleIsolation: 'shared',
   },
 })
 const toast = useToast()

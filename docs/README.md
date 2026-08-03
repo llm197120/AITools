@@ -24,6 +24,10 @@ docs/                          # 文档根目录
 │   ├── README.md              # 接口文档索引
 │   └── homeai-api-v1.md       # 家庭AI小工具完整API接口定义
 │
+├── plan/                       # 实现计划与进度
+│   ├── implementation-plan.md   # 8阶段实现计划
+│   └── phase-progress.md        # 各阶段完成情况记录
+│
 ├── review/                    # 审查记录
 │   └── README.md              # 审查记录索引
 │

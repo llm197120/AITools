@@ -4,10 +4,15 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalTimeDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateSerializer;
+//update-begin---author:scott ---date:2026-07-31  for：自定义 LocalDate 反序列化器，兼容 yyyy-MM-dd HH:mm:ss 格式-----------
+import org.jeecg.config.converter.MultiFormatLocalDateDeserializer;
+//update-end---author:scott ---date:2026-07-31  for：自定义 LocalDate 反序列化器，兼容 yyyy-MM-dd HH:mm:ss 格式-----------
+//update-begin---author:scott ---date:2026-07-31  for：Jackson 3 自定义 LocalDate 反序列化器，兼容 yyyy-MM-dd HH:mm:ss 格式-----------
+import org.jeecg.config.converter.Jackson3LocalDateDeserializer;
+//update-end---author:scott ---date:2026-07-31  for：Jackson 3 自定义 LocalDate 反序列化器，兼容 yyyy-MM-dd HH:mm:ss 格式-----------
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalTimeSerializer;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
@@ -22,21 +27,26 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.core.Ordered;
 import org.springframework.http.CacheControl;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import tools.jackson.databind.module.SimpleModule;
 
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -90,9 +100,24 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
         registry.addViewController("/").setViewName("redirect:/doc.html");
     }
 
+    /**
+     * Spring MVC 级全局跨域配置。
+     * 通过 WebMvcConfigurer 标准回调生效，覆盖所有进入 DispatcherServlet 的请求（含 /homeai/** 等 anon 接口），
+     * 与 JwtFilter / CorsFilter 互为补充，避免 anon 接口缺少 CORS 头导致浏览器跨域上传失败。
+     */
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/**")
+                .allowedOriginPatterns("*")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
+                .allowedHeaders("*")
+                .allowCredentials(true)
+                .maxAge(3600);
+    }
+
     @Bean
     @Conditional(CorsFilterCondition.class)
-    public CorsFilter corsFilter() {
+    public FilterRegistrationBean<CorsFilter> corsFilter() {
         final UrlBasedCorsConfigurationSource urlBasedCorsConfigurationSource = new UrlBasedCorsConfigurationSource();
         final CorsConfiguration corsConfiguration = new CorsConfiguration();
         //是否允许请求带有验证信息
@@ -104,7 +129,14 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
         // 允许访问的方法名,GET POST等
         corsConfiguration.addAllowedMethod("*");
         urlBasedCorsConfigurationSource.registerCorsConfiguration("/**", corsConfiguration);
-        return new CorsFilter(urlBasedCorsConfigurationSource);
+        // 显式注册 CorsFilter 并设置最高优先级，确保 /homeai/** 等 anon 接口与预检请求都能获得 CORS 响应头
+        // （Spring Boot 4 下直接声明 CorsFilter Bean 可能不会被自动注册到过滤器链）
+        final FilterRegistrationBean<CorsFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new CorsFilter(urlBasedCorsConfigurationSource));
+        registration.addUrlPatterns("/*");
+        registration.setName("corsFilter");
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        return registration;
     }
 
 	//update-begin---author:scott ---date:2026-07-07  for：【Spring Boot 4 升级】移除 configureMessageConverters 重写，该方法替换默认转换器导致 /v3/api-docs 返回 Base64，且 Spring Framework 7 已标记弃用+移除，改为依赖 @Primary ObjectMapper 自动装配-----------
@@ -137,11 +169,29 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
         javaTimeModule.addSerializer(LocalDate.class, new LocalDateSerializer(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
         javaTimeModule.addSerializer(LocalTime.class, new LocalTimeSerializer(DateTimeFormatter.ofPattern("HH:mm:ss")));
         javaTimeModule.addDeserializer(LocalDateTime.class, new LocalDateTimeDeserializer(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
-        javaTimeModule.addDeserializer(LocalDate.class, new LocalDateDeserializer(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+        //update-begin---author:scott ---date:2026-07-31  for：兼容前端传入 yyyy-MM-dd HH:mm:ss 格式的 LocalDate-----------
+        javaTimeModule.addDeserializer(LocalDate.class, new MultiFormatLocalDateDeserializer());
+        //update-end---author:scott ---date:2026-07-31  for：兼容前端传入 yyyy-MM-dd HH:mm:ss 格式的 LocalDate-----------
         javaTimeModule.addDeserializer(LocalTime.class, new LocalTimeDeserializer(DateTimeFormatter.ofPattern("HH:mm:ss")));
         objectMapper.registerModule(javaTimeModule);
         return objectMapper;
     }
+
+    /**
+     * Jackson 3 自定义 LocalDate 反序列化器注册
+     * <p>Spring Boot 4 默认使用 Jackson 3（tools.jackson）的 JsonMapper 处理 HTTP JSON 消息转换，
+     * 需通过 JsonMapperBuilderCustomizer 定制自动配置的 JsonMapper 才会生效。
+     */
+    //update-begin---author:scott ---date:2026-07-31  for：Jackson 3 自定义 LocalDate 反序列化器注册，兼容前端传入 yyyy-MM-dd HH:mm:ss 格式的 LocalDate-----------
+    @Bean
+    public JsonMapperBuilderCustomizer localDateFormatJsonMapperBuilderCustomizer() {
+        return builder -> {
+            SimpleModule module = new SimpleModule();
+            module.addDeserializer(LocalDate.class, new Jackson3LocalDateDeserializer());
+            builder.addModule(module);
+        };
+    }
+    //update-end---author:scott ---date:2026-07-31  for：Jackson 3 自定义 LocalDate 反序列化器注册-----------
 
     /**
      * 在Bean初始化完成后立即配置PrometheusMeterRegistry，避免在Meter注册后才配置MeterFilter

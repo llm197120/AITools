@@ -98,16 +98,23 @@
       "ignoreVersion": true
     }
   },
+  "app-harmony": {
+    "distribute": {
+      "bundleName": "uniapp.demo.test"
+    }
+  },
+  "mp-harmony": {
+    "distribute": {}
+  },
   "quickapp": {},
   "mp-weixin": {
-    "appid": "wx8e287639924edb51",
+    "appid": "wx37efeccb267328d8",
     "setting": {
       "urlCheck": false,
       "minified": true,
       "es6": true
     },
-    "usingComponents": true,
-    "lazyCodeLoading": "requiredComponents"
+    "usingComponents": true
   },
   "mp-alipay": {
     "usingComponents": true,
@@ -130,16 +137,11 @@
     "sdkConfigs": {
       "maps": {
         "amap": {
-          "key": "???",
-          "securityJsCode": "???",
+          "key": "20854e7d231ee339bfa3b277c840070c",
+          "securityJsCode": "7a542edee4a82e56ed88fef8ef42b5a5",
           "serviceHost": ""
         }
       }
-    }
-  },
-  "app-harmony": {
-    "distribute": {
-      "bundleName": "uniapp.demo.test"
     }
   }
 }

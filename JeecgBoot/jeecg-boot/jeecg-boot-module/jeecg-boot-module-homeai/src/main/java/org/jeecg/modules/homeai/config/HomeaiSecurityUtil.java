@@ -1,0 +1,115 @@
+package org.jeecg.modules.homeai.config;
+
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
+import org.jeecg.common.api.CommonAPI;
+import org.jeecg.common.system.util.JwtUtil;
+import org.jeecg.common.system.vo.LoginUser;
+import org.jeecg.common.util.RedisUtil;
+import org.jeecg.common.util.TokenUtils;
+import org.jeecg.common.util.oConvertUtils;
+import org.jeecg.modules.homeai.user.entity.WxUser;
+import org.jeecg.modules.homeai.user.service.IWxUserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Component;
+
+/**
+ * HomeAI 模块安全工具
+ * <p>
+ * 统一处理两类认证来源：
+ * 1. 管理端：JeecgBoot 标准 JWT（X-Access-Token，username 声明）
+ * 2. 小程序端：HomeAI 独立 JWT（X-Access-Token，openid 声明）
+ * </p>
+ */
+@Slf4j
+@Component
+public class HomeaiSecurityUtil {
+
+    @Autowired
+    private IWxUserService wxUserService;
+
+    @Lazy
+    @Autowired
+    private CommonAPI commonApi;
+
+    @Autowired
+    private RedisUtil redisUtil;
+
+    /**
+     * 从请求头或参数中提取 token
+     */
+    public String getToken(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String token = request.getHeader("X-Access-Token");
+        if (oConvertUtils.isEmpty(token)) {
+            token = request.getParameter("token");
+        }
+        return token;
+    }
+
+    /**
+     * 判断当前请求是否来自管理端（JeecgBoot 标准 JWT 有效）
+     */
+    public boolean isConsoleAuthenticated(HttpServletRequest request) {
+        String token = getToken(request);
+        if (oConvertUtils.isEmpty(token)) {
+            return false;
+        }
+        try {
+            String username = JwtUtil.getUsername(token);
+            if (oConvertUtils.isEmpty(username)) {
+                return false;
+            }
+            return TokenUtils.verifyToken(token, commonApi, redisUtil);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 获取管理端登录用户（未登录返回 null）
+     */
+    public LoginUser getConsoleUser(HttpServletRequest request) {
+        if (!isConsoleAuthenticated(request)) {
+            return null;
+        }
+        try {
+            String username = JwtUtil.getUsername(getToken(request));
+            return TokenUtils.getLoginUser(username, commonApi, redisUtil);
+        } catch (Exception e) {
+            log.warn("获取管理端用户信息失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 获取小程序端微信用户（未登录返回 null）
+     */
+    public WxUser getWxUser(HttpServletRequest request) {
+        String token = getToken(request);
+        if (oConvertUtils.isEmpty(token)) {
+            return null;
+        }
+        String openid = HomeaiJwtUtil.getOpenid(token);
+        if (oConvertUtils.isEmpty(openid)) {
+            return null;
+        }
+        return wxUserService.getByOpenid(openid);
+    }
+
+    /**
+     * 获取当前操作人 ID：
+     * 管理端返回系统用户 ID，小程序端返回微信用户 ID；均未登录返回 null
+     */
+    public String getCurrentUserId(HttpServletRequest request) {
+        LoginUser loginUser = getConsoleUser(request);
+        if (loginUser != null) {
+            return loginUser.getId();
+        }
+        WxUser wxUser = getWxUser(request);
+        return wxUser != null ? wxUser.getId() : null;
+    }
+}
