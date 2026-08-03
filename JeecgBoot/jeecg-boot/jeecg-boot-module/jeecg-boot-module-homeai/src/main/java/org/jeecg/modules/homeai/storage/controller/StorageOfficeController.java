@@ -6,8 +6,11 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.jeecg.common.api.CommonAPI;
 import org.jeecg.common.api.vo.Result;
+import org.jeecg.common.aspect.annotation.AutoLog;
+import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.util.JwtUtil;
 import org.jeecg.common.system.vo.LoginUser;
@@ -139,6 +142,8 @@ public class StorageOfficeController {
      * 管理端分页列表
      */
     @GetMapping("/list")
+    @Operation(summary="Office处理-记录列表(管理端)")
+    @RequiresPermissions("homeai:storage:history:list")
     public Result<?> list(StorageConvertTask task,
                           @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
                           @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
@@ -159,5 +164,29 @@ public class StorageOfficeController {
         if (task != null && task.getResultFileUrl() != null && !task.getResultFileUrl().startsWith("http")) {
             task.setResultFileUrl(HomeaiFileUrlUtil.toAbsoluteUrl(task.getResultFileUrl()));
         }
+    }
+
+    /**
+     * 处理记录详情（管理端，含结果文件地址）
+     */
+    @GetMapping("/{id}")
+    @Operation(summary="Office处理-记录详情(管理端)")
+    @RequiresPermissions("homeai:storage:history:list")
+    public Result<?> detail(@PathVariable String id) {
+        StorageConvertTask task = taskService.getById(id);
+        resolveResultUrl(task);
+        return Result.OK(task);
+    }
+
+    /**
+     * 删除处理记录（管理端）
+     */
+    @DeleteMapping("/{id}")
+    @AutoLog(value="Office处理-删除记录")
+    @Operation(summary="Office处理-删除记录(管理端)")
+    @RequiresPermissions("homeai:storage:history:delete")
+    public Result<?> delete(@PathVariable String id) {
+        taskService.removeById(id);
+        return Result.OK("删除成功");
     }
 }

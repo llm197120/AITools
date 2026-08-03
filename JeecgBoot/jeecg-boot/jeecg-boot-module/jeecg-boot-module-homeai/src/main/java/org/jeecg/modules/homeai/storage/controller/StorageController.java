@@ -1,14 +1,17 @@
 package org.jeecg.modules.homeai.storage.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.jeecg.common.api.CommonAPI;
 import org.jeecg.common.api.vo.Result;
+import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.util.JwtUtil;
 import org.jeecg.common.system.vo.LoginUser;
@@ -265,6 +268,8 @@ public class StorageController {
      * 文件夹列表（管理端分页）
      */
     @GetMapping("/folder-list")
+    @Operation(summary="资料存储-文件夹列表(管理端)")
+    @RequiresPermissions("homeai:storage:file:list")
     public Result<?> listFolders(StorageFolder folder,
                                  @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
                                  @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
@@ -279,6 +284,8 @@ public class StorageController {
      * 文件列表（管理端分页）
      */
     @GetMapping("/file-list")
+    @Operation(summary="资料存储-文件列表(管理端)")
+    @RequiresPermissions("homeai:storage:file:list")
     public Result<?> listFiles(StorageFile file,
                                @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
                                @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
@@ -288,6 +295,41 @@ public class StorageController {
         IPage<StorageFile> pageList = fileService.page(page, queryWrapper);
         resolveFileUrls(pageList.getRecords());
         return Result.OK(pageList);
+    }
+
+    /**
+     * 空间使用统计（管理端）
+     */
+    @GetMapping("/stats")
+    @Operation(summary="资料存储-空间统计(管理端)")
+    @RequiresPermissions("homeai:storage:file:list")
+    public Result<?> stats() {
+        List<StorageFile> files = fileService.list(
+                new LambdaQueryWrapper<StorageFile>().eq(StorageFile::getDelFlag, 0));
+        long totalSize = 0;
+        java.util.Map<String, Long> sizeByUser = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Long> countByUser = new java.util.LinkedHashMap<>();
+        for (StorageFile f : files) {
+            long size = f.getFileSize() != null ? f.getFileSize() : 0;
+            totalSize += size;
+            if (f.getUserId() != null) {
+                sizeByUser.merge(f.getUserId(), size, Long::sum);
+                countByUser.merge(f.getUserId(), 1L, Long::sum);
+            }
+        }
+        java.util.List<java.util.Map<String, Object>> perUser = new java.util.ArrayList<>();
+        for (String uid : sizeByUser.keySet()) {
+            java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("userId", uid);
+            row.put("fileCount", countByUser.getOrDefault(uid, 0L));
+            row.put("totalSize", sizeByUser.get(uid));
+            perUser.add(row);
+        }
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("totalFiles", files.size());
+        result.put("totalSize", totalSize);
+        result.put("perUser", perUser);
+        return Result.OK(result);
     }
 
     /**

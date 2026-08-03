@@ -1,13 +1,18 @@
 package org.jeecg.modules.homeai.ai.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.util.RedisUtil;
+import org.jeecg.modules.homeai.ai.entity.AiUserQuota;
 import org.jeecg.modules.homeai.ai.entity.AiQuotaLog;
+import org.jeecg.modules.homeai.ai.mapper.AiUserQuotaMapper;
 import org.jeecg.modules.homeai.ai.mapper.AiQuotaLogMapper;
 import org.jeecg.modules.homeai.ai.service.IAiQuotaService;
 import org.jeecg.modules.homeai.ai.vo.AiQuotaUsageVO;
+import org.jeecg.modules.homeai.user.entity.WxUser;
+import org.jeecg.modules.homeai.user.service.IWxUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +22,8 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -42,23 +49,32 @@ public class AiQuotaServiceImpl implements IAiQuotaService {
     @Autowired
     private RedisUtil redisUtil;
 
+    @Autowired
+    private AiUserQuotaMapper userQuotaMapper;
+
+    @Autowired
+    private IWxUserService wxUserService;
+
     @Override
     public Map<String, Object> checkQuota(String userId, int estimatedInputTokens, int estimatedOutputTokens) {
+        AiUserQuota quota = getOrCreateUserQuota(userId);
+        int dailyLimit = quota.getDailyLimit() != null ? quota.getDailyLimit() : DEFAULT_DAILY_LIMIT;
+        int monthlyLimit = quota.getMonthlyLimit() != null ? quota.getMonthlyLimit() : DEFAULT_MONTHLY_LIMIT;
         int dailyConsumed = getDailyConsumed(userId);
         int monthlyConsumed = getMonthlyConsumed(userId);
         int estimatedTotal = estimatedInputTokens + estimatedOutputTokens;
 
         Map<String, Object> result = new HashMap<>();
-        result.put("remainingDaily", Math.max(0, DEFAULT_DAILY_LIMIT - dailyConsumed));
-        result.put("remainingMonthly", Math.max(0, DEFAULT_MONTHLY_LIMIT - monthlyConsumed));
+        result.put("remainingDaily", Math.max(0, dailyLimit - dailyConsumed));
+        result.put("remainingMonthly", Math.max(0, monthlyLimit - monthlyConsumed));
 
         // 预检：预估消耗 + 已消耗 是否超过限额
-        if (dailyConsumed + estimatedTotal > DEFAULT_DAILY_LIMIT + 1000) { // 允许透支1000
+        if (dailyConsumed + estimatedTotal > dailyLimit + 1000) { // 允许透支1000
             result.put("allowed", false);
             result.put("message", "今日Token额度即将用完，请缩短消息或等待额度重置");
             return result;
         }
-        if (monthlyConsumed + estimatedTotal > DEFAULT_MONTHLY_LIMIT) {
+        if (monthlyConsumed + estimatedTotal > monthlyLimit) {
             result.put("allowed", false);
             result.put("message", "本月Token额度已用完，下月自动重置");
             return result;
@@ -162,6 +178,96 @@ public class AiQuotaServiceImpl implements IAiQuotaService {
         return quotaLogMapper.selectUsageStats(page, userId, todayStart, monthStart);
     }
     //update-end---author:admin ---date:2026-07-31  for：修复Token额度配置页未登录问题，管理端按用户分组统计Token消耗-----------
+
+    @Override
+    public AiUserQuota getOrCreateUserQuota(String userId) {
+        LambdaQueryWrapper<AiUserQuota> q = new LambdaQueryWrapper<>();
+        q.eq(AiUserQuota::getUserId, userId).last("LIMIT 1");
+        AiUserQuota quota = userQuotaMapper.selectOne(q);
+        if (quota == null) {
+            quota = new AiUserQuota();
+            quota.setUserId(userId);
+            quota.setDailyLimit(DEFAULT_DAILY_LIMIT);
+            quota.setMonthlyLimit(DEFAULT_MONTHLY_LIMIT);
+            quota.setCreateTime(new Date());
+            userQuotaMapper.insert(quota);
+        }
+        return quota;
+    }
+
+    @Override
+    public boolean updateUserQuota(String userId, Integer dailyLimit, Integer monthlyLimit, String effectiveEnd) {
+        AiUserQuota quota = getOrCreateUserQuota(userId);
+        if (dailyLimit != null) quota.setDailyLimit(dailyLimit);
+        if (monthlyLimit != null) quota.setMonthlyLimit(monthlyLimit);
+        if (effectiveEnd != null && !effectiveEnd.isEmpty()) {
+            try {
+                quota.setEffectiveEnd(java.sql.Timestamp.valueOf(effectiveEnd.replace("T", " ")));
+            } catch (Exception e) {
+                log.warn("有效期格式非法: {}", effectiveEnd);
+            }
+        }
+        quota.setUpdateTime(new Date());
+        return userQuotaMapper.updateById(quota) > 0;
+    }
+
+    @Override
+    public IPage<Map<String, Object>> getUserQuotaPage(Integer pageNo, Integer pageSize, String userId) {
+        IPage<AiQuotaUsageVO> usagePage = getUsageStats(pageNo, pageSize, userId);
+        IPage<Map<String, Object>> result = new Page<>(pageNo, pageSize, usagePage.getTotal());
+        List<Map<String, Object>> rows = new java.util.ArrayList<>();
+        for (AiQuotaUsageVO vo : usagePage.getRecords()) {
+            AiUserQuota quota = getOrCreateUserQuota(vo.getUserId());
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("userId", vo.getUserId());
+            row.put("nickname", vo.getNickname());
+            row.put("phone", vo.getPhone());
+            row.put("dailyLimit", quota.getDailyLimit() != null ? quota.getDailyLimit() : DEFAULT_DAILY_LIMIT);
+            row.put("monthlyLimit", quota.getMonthlyLimit() != null ? quota.getMonthlyLimit() : DEFAULT_MONTHLY_LIMIT);
+            row.put("dailyUsage", vo.getDailyUsage());
+            row.put("monthlyUsage", vo.getMonthlyUsage());
+            row.put("effectiveEnd", quota.getEffectiveEnd());
+            row.put("lastActiveTime", vo.getLastActiveTime());
+            rows.add(row);
+        }
+        result.setRecords(rows);
+        return result;
+    }
+
+    @Override
+    public Map<String, Object> getQuotaOverview() {
+        Map<String, Object> overview = new HashMap<>();
+        LocalDate today = LocalDate.now();
+        Date todayStart = Date.from(today.atStartOfDay(ZoneId.systemDefault()).toInstant());
+        Date monthStart = Date.from(today.withDayOfMonth(1).atStartOfDay(ZoneId.systemDefault()).toInstant());
+        // 总消耗（今日/本月）
+        int todayTotal = 0, monthTotal = 0;
+        LambdaQueryWrapper<AiQuotaLog> q = new LambdaQueryWrapper<>();
+        q.select(AiQuotaLog::getTotalTokens, AiQuotaLog::getCreateTime, AiQuotaLog::getModelName);
+        List<AiQuotaLog> logs = quotaLogMapper.selectList(q);
+        java.util.Set<String> activeUsers = new java.util.HashSet<>();
+        Map<String, Integer> modelTokens = new LinkedHashMap<>();
+        for (AiQuotaLog log : logs) {
+            int total = log.getTotalTokens() != null ? log.getTotalTokens() : 0;
+            Date t = log.getCreateTime();
+            if (t == null) continue;
+            if (!t.before(todayStart)) {
+                todayTotal += total;
+                activeUsers.add(log.getUserId());
+            }
+            if (!t.before(monthStart)) {
+                monthTotal += total;
+            }
+            if (log.getModelName() != null) {
+                modelTokens.merge(log.getModelName(), total, Integer::sum);
+            }
+        }
+        overview.put("todayTotal", todayTotal);
+        overview.put("monthTotal", monthTotal);
+        overview.put("activeUserCount", activeUsers.size());
+        overview.put("modelTokens", modelTokens);
+        return overview;
+    }
 
     /**
      * 从 DB 中统计指定时间范围内的总 Token 消耗

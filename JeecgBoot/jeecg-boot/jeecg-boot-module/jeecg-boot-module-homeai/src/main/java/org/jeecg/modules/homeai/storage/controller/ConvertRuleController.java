@@ -4,8 +4,11 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.servlet.http.HttpServletRequest;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.jeecg.common.api.vo.Result;
+import org.jeecg.common.aspect.annotation.AutoLog;
 import org.jeecg.common.system.query.QueryGenerator;
+import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.storage.entity.ConvertRule;
 import org.jeecg.modules.homeai.storage.service.IConvertRuleService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +28,8 @@ public class ConvertRuleController {
 
     /** 规则列表 */
     @GetMapping("/list")
+    @Operation(summary="转换规则-分页列表查询")
+    @RequiresPermissions("homeai:storage:rule:list")
     public Result<?> list(ConvertRule rule,
                           @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
                           @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
@@ -37,6 +42,9 @@ public class ConvertRuleController {
 
     /** 新增规则 */
     @PostMapping
+    @AutoLog(value="转换规则-新增")
+    @Operation(summary="转换规则-新增")
+    @RequiresPermissions("homeai:storage:rule:add")
     public Result<?> add(@RequestBody ConvertRule rule) {
         ruleService.save(rule);
         return Result.OK("新增成功");
@@ -44,6 +52,9 @@ public class ConvertRuleController {
 
     /** 编辑规则 */
     @PutMapping
+    @AutoLog(value="转换规则-编辑")
+    @Operation(summary="转换规则-编辑")
+    @RequiresPermissions("homeai:storage:rule:edit")
     public Result<?> edit(@RequestBody ConvertRule rule) {
         ruleService.updateById(rule);
         return Result.OK("编辑成功");
@@ -51,6 +62,9 @@ public class ConvertRuleController {
 
     /** 删除规则 */
     @DeleteMapping("/{id}")
+    @AutoLog(value="转换规则-删除")
+    @Operation(summary="转换规则-删除")
+    @RequiresPermissions("homeai:storage:rule:delete")
     public Result<?> delete(@PathVariable String id) {
         ruleService.removeById(id);
         return Result.OK("删除成功");
@@ -58,6 +72,9 @@ public class ConvertRuleController {
 
     /** 启用/停用（isEnabled 可选，未传时自动切换当前状态） */
     @PutMapping("/{id}/status")
+    @AutoLog(value="转换规则-启用/停用")
+    @Operation(summary="转换规则-启用/停用")
+    @RequiresPermissions("homeai:storage:rule:edit")
     public Result<?> toggleStatus(@PathVariable String id, @RequestParam(required = false) String isEnabled) {
         ConvertRule rule = ruleService.getById(id);
         if (rule != null) {

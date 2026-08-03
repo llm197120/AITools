@@ -5,9 +5,12 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.alibaba.fastjson.JSON;
 import jakarta.servlet.http.HttpServletRequest;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
 import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.api.vo.Result;
+import org.jeecg.common.aspect.annotation.AutoLog;
 import org.jeecg.common.system.query.QueryGenerator;
+import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.ai.entity.AiKeyConfig;
 import org.jeecg.modules.homeai.ai.service.IAiKeyConfigService;
 import org.jeecg.modules.homeai.ai.service.IAiQuotaService;
@@ -34,6 +37,8 @@ public class AiKeyConfigController {
      * 密钥列表
      */
     @GetMapping("/list")
+    @Operation(summary="AI密钥-分页列表查询")
+    @RequiresPermissions("homeai:config:key:list")
     public Result<?> list(AiKeyConfig config,
                           @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
                           @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
@@ -56,6 +61,9 @@ public class AiKeyConfigController {
      * 前端以 JSON body 发送，字段 apiKeyRaw 为明文密钥
      */
     @PostMapping
+    @AutoLog(value="AI密钥-新增")
+    @Operation(summary="AI密钥-新增")
+    @RequiresPermissions("homeai:config:key:add")
     public Result<?> add(@RequestBody Map<String, Object> body) {
         String rawApiKey = (String) body.remove("apiKeyRaw");
         if (rawApiKey == null || rawApiKey.trim().isEmpty()) {
@@ -74,6 +82,9 @@ public class AiKeyConfigController {
      * 前端传入的脱敏 apiKeyEncrypted 字段一律忽略，防止覆盖真实密文。
      */
     @PutMapping
+    @AutoLog(value="AI密钥-编辑")
+    @Operation(summary="AI密钥-编辑")
+    @RequiresPermissions("homeai:config:key:edit")
     public Result<?> edit(@RequestBody Map<String, Object> body) {
         AiKeyConfig config = JSON.parseObject(JSON.toJSONString(body), AiKeyConfig.class);
         if (config == null || config.getId() == null) {
@@ -104,6 +115,9 @@ public class AiKeyConfigController {
      * 删除密钥
      */
     @DeleteMapping("/{id}")
+    @AutoLog(value="AI密钥-删除")
+    @Operation(summary="AI密钥-删除")
+    @RequiresPermissions("homeai:config:key:delete")
     public Result<?> delete(@PathVariable String id) {
         keyConfigService.removeById(id);
         return Result.OK("删除成功");
@@ -113,6 +127,9 @@ public class AiKeyConfigController {
      * 启用/停用密钥（isEnabled 可选，未传时自动切换当前状态）
      */
     @PutMapping("/{id}/status")
+    @AutoLog(value="AI密钥-启用/停用")
+    @Operation(summary="AI密钥-启用/停用")
+    @RequiresPermissions("homeai:config:key:edit")
     public Result<?> toggleStatus(@PathVariable String id, @RequestParam(required = false) String isEnabled) {
         AiKeyConfig config = keyConfigService.getById(id);
         if (config != null) {
@@ -129,6 +146,9 @@ public class AiKeyConfigController {
      * 设为默认模型
      */
     @PutMapping("/{id}/default")
+    @AutoLog(value="AI密钥-设为默认")
+    @Operation(summary="AI密钥-设为默认")
+    @RequiresPermissions("homeai:config:key:edit")
     public Result<?> setDefault(@PathVariable String id) {
         // 清除其他默认
         AiKeyConfig oldDefault = keyConfigService.getDefaultModel();
@@ -149,6 +169,8 @@ public class AiKeyConfigController {
      * 获取默认配额配置
      */
     @GetMapping("/quota/default")
+    @Operation(summary="Token额度-默认配置查询")
+    @RequiresPermissions("homeai:quota:list")
     public Result<?> getDefaultQuota() {
         return Result.OK(quotaService.getDefaultQuota());
     }
@@ -158,10 +180,53 @@ public class AiKeyConfigController {
      * 用户Token消耗统计（管理端分页）
      */
     @GetMapping("/quota/list")
+    @Operation(summary="Token额度-用户消耗统计(管理端)")
+    @RequiresPermissions("homeai:quota:list")
     public Result<?> getQuotaUsage(@RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
                                    @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
                                    @RequestParam(name = "userId", required = false) String userId) {
         return Result.OK(quotaService.getUsageStats(pageNo, pageSize, userId));
     }
     //update-end---author:admin ---date:2026-07-31  for：修复Token额度配置页未登录问题，新增管理端用户Token消耗统计分页接口-----------
+
+    /**
+     * 用户额度+消耗列表（管理端，含每日/每月限额）
+     */
+    @GetMapping("/quota/user/list")
+    @Operation(summary="Token额度-用户额度配置列表(管理端)")
+    @RequiresPermissions("homeai:quota:list")
+    public Result<?> getUserQuotaPage(@RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
+                                      @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
+                                      @RequestParam(name = "userId", required = false) String userId) {
+        return Result.OK(quotaService.getUserQuotaPage(pageNo, pageSize, userId));
+    }
+
+    /**
+     * 更新用户额度配置
+     * body: { userId, dailyLimit?, monthlyLimit?, effectiveEnd? }
+     */
+    @PutMapping("/quota/user")
+    @Operation(summary="Token额度-更新用户额度配置(管理端)")
+    @RequiresPermissions("homeai:quota:edit")
+    public Result<?> updateUserQuota(@RequestBody Map<String, Object> body) {
+        String userId = body.get("userId") != null ? String.valueOf(body.get("userId")) : null;
+        if (userId == null || userId.isEmpty()) {
+            return Result.error("用户ID不能为空");
+        }
+        Integer dailyLimit = body.get("dailyLimit") != null ? Integer.parseInt(String.valueOf(body.get("dailyLimit"))) : null;
+        Integer monthlyLimit = body.get("monthlyLimit") != null ? Integer.parseInt(String.valueOf(body.get("monthlyLimit"))) : null;
+        String effectiveEnd = body.get("effectiveEnd") != null ? String.valueOf(body.get("effectiveEnd")) : null;
+        quotaService.updateUserQuota(userId, dailyLimit, monthlyLimit, effectiveEnd);
+        return Result.OK("更新成功");
+    }
+
+    /**
+     * 额度使用概览（管理端）
+     */
+    @GetMapping("/quota/overview")
+    @Operation(summary="Token额度-使用概览(管理端)")
+    @RequiresPermissions("homeai:quota:list")
+    public Result<?> getQuotaOverview() {
+        return Result.OK(quotaService.getQuotaOverview());
+    }
 }

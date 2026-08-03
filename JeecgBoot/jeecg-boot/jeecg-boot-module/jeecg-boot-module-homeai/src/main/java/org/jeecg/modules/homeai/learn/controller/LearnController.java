@@ -7,10 +7,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.jeecg.common.api.vo.Result;
+import org.jeecg.common.aspect.annotation.AutoLog;
 import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.oConvertUtils;
+import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.config.HomeaiFileUrlUtil;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
@@ -62,6 +65,7 @@ public class LearnController {
     }
 
     @GetMapping("/materials")
+    @Operation(summary="学习资料-分页列表查询")
     public Result<?> materials(LearnMaterial m, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "10") int pageSize, HttpServletRequest req) {
         QueryWrapper<LearnMaterial> qw = QueryGenerator.initQueryWrapper(m, req.getParameterMap());
         qw.eq("del_flag", "0").orderByDesc("create_time");
@@ -100,6 +104,57 @@ public class LearnController {
         String uid = getUserId(r);
         if (uid == null) return Result.error("未登录");
         return Result.OK(learnService.getUserRecords(uid));
+    }
+
+    /**
+     * 学习记录查看（管理端分页）
+     */
+    @GetMapping("/admin/records")
+    @Operation(summary="学习-记录查看(管理端)")
+    @RequiresPermissions("homeai:learn:material:list")
+    public Result<?> adminRecords(@RequestParam(defaultValue = "1") int pageNo,
+                                  @RequestParam(defaultValue = "10") int pageSize,
+                                  @RequestParam(required = false) String userId) {
+        return Result.OK(learnService.adminListRecords(pageNo, pageSize, userId));
+    }
+
+    /**
+     * 学习统计（管理端）
+     */
+    @GetMapping("/admin/stats")
+    @Operation(summary="学习-统计(管理端)")
+    @RequiresPermissions("homeai:learn:material:list")
+    public Result<?> adminStats() {
+        return Result.OK(learnService.adminStats());
+    }
+
+    /**
+     * 学习统计（小程序端）
+     */
+    @GetMapping("/statistics")
+    public Result<?> statistics(HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        return Result.OK(learnService.getUserStatistics(uid));
+    }
+
+    /**
+     * 手动记录学习（小程序端）
+     * body: { materialId, duration(秒), recordType }
+     */
+    @PostMapping("/record")
+    public Result<?> record(@RequestBody Map<String, Object> body, HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        String materialId = body.get("materialId") != null ? String.valueOf(body.get("materialId")) : null;
+        if (oConvertUtils.isEmpty(materialId)) {
+            return Result.error("请选择学习资料");
+        }
+        int duration = body.get("duration") != null
+                ? Integer.parseInt(String.valueOf(body.get("duration"))) : 0;
+        String recordType = body.get("recordType") != null
+                ? String.valueOf(body.get("recordType")) : "timer";
+        return Result.OK(learnService.addRecord(uid, materialId, duration, recordType));
     }
 
     @PostMapping("/material")
@@ -142,6 +197,9 @@ public class LearnController {
      * 新增学习资料（管理端）
      */
     @PostMapping("/addMaterial")
+    @AutoLog(value="学习资料-新增(管理端)")
+    @Operation(summary="学习资料-新增(管理端)")
+    @RequiresPermissions("homeai:learn:addMaterial")
     public Result<?> addMaterial(@RequestBody LearnMaterial m) {
         m.setDelFlag(0);
         learnService.save(m);
@@ -152,6 +210,8 @@ public class LearnController {
      * 导出Excel
      */
     @GetMapping("/exportXls")
+    @Operation(summary="学习资料-导出Excel")
+    @RequiresPermissions("homeai:learn:exportXls")
     public ModelAndView exportXls(HttpServletRequest request, LearnMaterial learnMaterial) {
         QueryWrapper<LearnMaterial> queryWrapper = QueryGenerator.initQueryWrapper(learnMaterial, request.getParameterMap());
         List<LearnMaterial> pageList = learnService.list(queryWrapper);
@@ -181,6 +241,9 @@ public class LearnController {
      * 导入Excel
      */
     @PostMapping("/importExcel")
+    @AutoLog(value="学习资料-导入Excel")
+    @Operation(summary="学习资料-导入Excel")
+    @RequiresPermissions("homeai:learn:importExcel")
     public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
         try {
             if (!(request instanceof MultipartHttpServletRequest)) {
@@ -227,6 +290,8 @@ public class LearnController {
      * 回收站列表
      */
     @GetMapping("/recycleBin")
+    @Operation(summary="学习资料-回收站列表")
+    @RequiresPermissions("homeai:learn:moveToRecycleBin")
     public Result<?> recycleBin(LearnMaterial m, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "10") int pageSize, HttpServletRequest req) {
         // 原生SQL分页查询回收站，避免逻辑删除自动追加 del_flag=0 导致查不到数据
         return Result.OK(learnMaterialMapper.selectRecycleBinPage(new Page<>(pageNo, pageSize), m.getTitle()));
@@ -237,6 +302,9 @@ public class LearnController {
      * 移入回收站（软删除）
      */
     @PutMapping("/moveToRecycleBin")
+    @AutoLog(value="学习资料-移入回收站")
+    @Operation(summary="学习资料-移入回收站")
+    @RequiresPermissions("homeai:learn:moveToRecycleBin")
     public Result<?> moveToRecycleBin(@RequestBody List<String> ids) {
         for (String id : ids) {
             // @TableLogic 字段不参与 updateById，需通过 update wrapper 显式设置
@@ -251,6 +319,9 @@ public class LearnController {
      * 从回收站恢复
      */
     @PutMapping("/restore")
+    @AutoLog(value="学习资料-恢复")
+    @Operation(summary="学习资料-恢复")
+    @RequiresPermissions("homeai:learn:restore")
     public Result<?> restore(@RequestBody List<String> ids) {
         for (String id : ids) {
             // 自定义原生 SQL 恢复，绕开逻辑删除拦截器自动注入的 del_flag=0 条件
@@ -264,6 +335,9 @@ public class LearnController {
      * 彻底删除
      */
     @DeleteMapping("/deletePermanently")
+    @AutoLog(value="学习资料-彻底删除")
+    @Operation(summary="学习资料-彻底删除")
+    @RequiresPermissions("homeai:learn:deletePermanently")
     public Result<?> deletePermanently(@RequestBody List<String> ids) {
         learnMaterialMapper.deletePermanentlyByIds(ids);
         return Result.OK("彻底删除成功");
@@ -273,6 +347,9 @@ public class LearnController {
      * 编辑学习资料（管理端）
      */
     @PutMapping("/material/{id}")
+    @AutoLog(value="学习资料-编辑(管理端)")
+    @Operation(summary="学习资料-编辑(管理端)")
+    @RequiresPermissions("homeai:learn:edit")
     public Result<?> editMaterial(@PathVariable String id, @RequestBody LearnMaterial m) {
         m.setId(id);
         learnService.updateById(m);

@@ -1,8 +1,10 @@
 package org.jeecg.modules.homeai.ai.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import org.jeecg.modules.homeai.ai.entity.AiUserQuota;
 import org.jeecg.modules.homeai.ai.vo.AiQuotaUsageVO;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -49,4 +51,24 @@ public interface IAiQuotaService {
      */
     IPage<AiQuotaUsageVO> getUsageStats(Integer pageNo, Integer pageSize, String userId);
     //update-end---author:admin ---date:2026-07-31  for：修复Token额度配置页未登录问题，管理端按用户分组统计Token消耗-----------
+
+    /**
+     * 获取用户额度配置（不存在则按默认值创建）
+     */
+    AiUserQuota getOrCreateUserQuota(String userId);
+
+    /**
+     * 更新用户额度配置
+     */
+    boolean updateUserQuota(String userId, Integer dailyLimit, Integer monthlyLimit, String effectiveEnd);
+
+    /**
+     * 管理端：用户额度+消耗列表（合并用户信息）
+     */
+    IPage<Map<String, Object>> getUserQuotaPage(Integer pageNo, Integer pageSize, String userId);
+
+    /**
+     * 管理端：额度使用概览（总消耗、活跃用户数、各模型占比）
+     */
+    Map<String, Object> getQuotaOverview();
 }

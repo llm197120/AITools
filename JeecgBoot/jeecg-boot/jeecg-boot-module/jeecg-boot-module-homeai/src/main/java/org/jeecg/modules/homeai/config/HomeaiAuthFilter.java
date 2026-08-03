@@ -8,9 +8,11 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.shiro.SecurityUtils;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.RedisUtil;
 import org.jeecg.common.util.oConvertUtils;
+import org.jeecg.config.shiro.JwtToken;
 import org.jeecg.config.shiro.ShiroRealm;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -103,12 +105,9 @@ public class HomeaiAuthFilter implements Filter {
             "/homeai/learn/deletePermanently",
             "/homeai/ai/key-config",
             "/homeai/ai/conversations/list",
-            "/homeai/storage/rule",
-            "/homeai/storage/template",
             "/homeai/storage/folder-list",
             "/homeai/storage/file-list",
-            "/homeai/storage/office/list",
-            "/homeai/storage/office/history"
+            "/homeai/storage/office/list"
     );
 
     @Lazy
@@ -162,7 +161,7 @@ public class HomeaiAuthFilter implements Filter {
 
         // 管理端接口：必须为有效的控制台 JWT
         if (isAdminPath) {
-            if (!isConsoleTokenValid(token)) {
+            if (!isConsoleTokenValid(token) || !loginConsoleSubject(servletRequest, servletResponse, token)) {
                 writeUnauthorized(response, "无权限访问，请使用管理端账号登录");
             } else {
                 filterChain.doFilter(servletRequest, servletResponse);
@@ -188,6 +187,20 @@ public class HomeaiAuthFilter implements Filter {
             LoginUser loginUser = shiroRealm.checkUserTokenIsEffect(token);
             return loginUser != null;
         } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 将控制台用户登录到 Shiro Subject（与 JwtFilter 一致），
+     * 使 @RequiresPermissions / @AutoLog 等注解机制生效
+     */
+    private boolean loginConsoleSubject(ServletRequest request, ServletResponse response, String token) {
+        try {
+            SecurityUtils.getSubject().login(new JwtToken(token));
+            return true;
+        } catch (Exception e) {
+            log.warn("HomeAI 管理端 Subject 登录失败: {}", e.getMessage());
             return false;
         }
     }
@@ -256,6 +269,26 @@ public class HomeaiAuthFilter implements Filter {
             if (path.matches("/homeai/learn/material/[^/]+")) {
                 return true;
             }
+        }
+
+        // 存储转换规则/模板：管理端 CRUD 需控制台 token；小程序只读接口（targets/enabled）放行
+        if (path.startsWith("/homeai/storage/rule/")) {
+            String rest = path.substring("/homeai/storage/rule/".length());
+            if (!rest.equals("targets")) {
+                return true;
+            }
+        }
+        if (path.equals("/homeai/storage/rule") && ("POST".equals(m) || "PUT".equals(m))) {
+            return true;
+        }
+        if (path.startsWith("/homeai/storage/template/")) {
+            String rest = path.substring("/homeai/storage/template/".length());
+            if (!rest.equals("enabled")) {
+                return true;
+            }
+        }
+        if (path.equals("/homeai/storage/template") && ("POST".equals(m) || "PUT".equals(m))) {
+            return true;
         }
         return false;
     }

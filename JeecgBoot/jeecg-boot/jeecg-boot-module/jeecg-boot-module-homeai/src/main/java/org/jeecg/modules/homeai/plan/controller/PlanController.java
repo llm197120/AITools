@@ -7,10 +7,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.jeecg.common.api.vo.Result;
+import org.jeecg.common.aspect.annotation.AutoLog;
 import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.oConvertUtils;
+import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.plan.entity.PlanMaster;
@@ -120,6 +123,8 @@ public class PlanController {
 
     /** 管理端分页 */
     @GetMapping("/list")
+    @Operation(summary="计划-分页列表查询(管理端)")
+    @RequiresPermissions("homeai:plan:list")
     public Result<?> list(PlanMaster m, @RequestParam(defaultValue = "1") int pageNo,
                           @RequestParam(defaultValue = "10") int pageSize, HttpServletRequest req) {
         QueryWrapper<PlanMaster> qw = QueryGenerator.initQueryWrapper(m, req.getParameterMap());
@@ -127,11 +132,25 @@ public class PlanController {
         return Result.OK(planService.page(new Page<>(pageNo, pageSize), qw));
     }
 
+    /**
+     * 计划完成率统计（管理端）
+     */
+    @GetMapping("/admin/completion")
+    @Operation(summary="计划-完成率统计(管理端)")
+    @RequiresPermissions("homeai:plan:list")
+    public Result<?> completion(@RequestParam(required = false) String userId,
+                                @RequestParam(required = false) String yearMonth) {
+        return Result.OK(planService.getCompletionStats(userId, yearMonth));
+    }
+
     //update-begin---author:admin ---date:2026-07-30  for：计划管理-新增/导入/导出/回收站功能-----------
     /**
      * 新增计划（管理端）
      */
     @PostMapping("/add")
+    @AutoLog(value="计划-新增(管理端)")
+    @Operation(summary="计划-新增(管理端)")
+    @RequiresPermissions("homeai:plan:add")
     public Result<?> add(@RequestBody PlanMaster plan) {
         plan.setDelFlag(0);
         planService.save(plan);
@@ -142,6 +161,9 @@ public class PlanController {
      * 编辑计划（管理端）
      */
     @PutMapping("/{id}")
+    @AutoLog(value="计划-编辑(管理端)")
+    @Operation(summary="计划-编辑(管理端)")
+    @RequiresPermissions("homeai:plan:edit")
     public Result<?> edit(@PathVariable String id, @RequestBody PlanMaster plan) {
         plan.setId(id);
         planService.updateById(plan);
@@ -152,6 +174,8 @@ public class PlanController {
      * 导出Excel
      */
     @GetMapping("/exportXls")
+    @Operation(summary="计划-导出Excel")
+    @RequiresPermissions("homeai:plan:exportXls")
     public ModelAndView exportXls(HttpServletRequest request, PlanMaster planMaster) {
         QueryWrapper<PlanMaster> queryWrapper = QueryGenerator.initQueryWrapper(planMaster, request.getParameterMap());
         List<PlanMaster> pageList = planService.list(queryWrapper);
@@ -181,6 +205,9 @@ public class PlanController {
      * 导入Excel
      */
     @PostMapping("/importExcel")
+    @AutoLog(value="计划-导入Excel")
+    @Operation(summary="计划-导入Excel")
+    @RequiresPermissions("homeai:plan:importExcel")
     public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
         try {
             if (!(request instanceof MultipartHttpServletRequest)) {
@@ -227,6 +254,8 @@ public class PlanController {
      * 回收站列表
      */
     @GetMapping("/recycleBin")
+    @Operation(summary="计划-回收站列表")
+    @RequiresPermissions("homeai:plan:moveToRecycleBin")
     public Result<?> recycleBin(PlanMaster m, @RequestParam(defaultValue = "1") int pageNo,
                                 @RequestParam(defaultValue = "10") int pageSize, HttpServletRequest req) {
         // 原生SQL分页查询回收站，避免逻辑删除自动追加 del_flag=0 导致查不到数据
@@ -238,6 +267,9 @@ public class PlanController {
      * 移入回收站（软删除）
      */
     @PutMapping("/moveToRecycleBin")
+    @AutoLog(value="计划-移入回收站")
+    @Operation(summary="计划-移入回收站")
+    @RequiresPermissions("homeai:plan:moveToRecycleBin")
     public Result<?> moveToRecycleBin(@RequestBody List<String> ids) {
         for (String id : ids) {
             // @TableLogic 字段不参与 updateById，需通过 update wrapper 显式设置
@@ -252,6 +284,9 @@ public class PlanController {
      * 从回收站恢复
      */
     @PutMapping("/restore")
+    @AutoLog(value="计划-恢复")
+    @Operation(summary="计划-恢复")
+    @RequiresPermissions("homeai:plan:restore")
     public Result<?> restore(@RequestBody List<String> ids) {
         for (String id : ids) {
             // 自定义原生 SQL 恢复，绕开逻辑删除拦截器自动注入的 del_flag=0 条件
@@ -265,6 +300,9 @@ public class PlanController {
      * 彻底删除
      */
     @DeleteMapping("/deletePermanently")
+    @AutoLog(value="计划-彻底删除")
+    @Operation(summary="计划-彻底删除")
+    @RequiresPermissions("homeai:plan:deletePermanently")
     public Result<?> deletePermanently(@RequestBody List<String> ids) {
         planMasterMapper.deletePermanentlyByIds(ids);
         return Result.OK("彻底删除成功");

@@ -8,10 +8,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.jeecg.common.api.vo.Result;
+import org.jeecg.common.aspect.annotation.AutoLog;
+import org.jeecg.common.constant.CommonConstant;
 import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.oConvertUtils;
+import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.family.entity.Family;
 import org.jeecg.modules.homeai.family.entity.FamilyMember;
@@ -103,6 +107,8 @@ public class WxUserController {
      * 用户列表（管理端）
      */
     @GetMapping("/list")
+    @Operation(summary="微信用户-分页列表查询")
+    @RequiresPermissions("homeai:user:list")
     public Result<?> list(WxUser wxUser,
                           @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
                           @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
@@ -118,6 +124,8 @@ public class WxUserController {
      * 用户详情（管理端）
      */
     @GetMapping("/{id}")
+    @Operation(summary="微信用户-详情查询")
+    @RequiresPermissions("homeai:user:list")
     public Result<?> getById(@PathVariable String id) {
         WxUser user = wxUserService.getById(id);
         return Result.OK(user);
@@ -127,6 +135,9 @@ public class WxUserController {
      * 编辑用户信息（管理端）
      */
     @PutMapping("/{id}")
+    @AutoLog(value="微信用户-编辑")
+    @Operation(summary="微信用户-编辑")
+    @RequiresPermissions("homeai:user:edit")
     public Result<?> edit(@PathVariable String id, @RequestBody WxUser wxUser) {
         wxUser.setId(id);
         // 家庭关联不在此处处理，由专属接口 /{id}/family 维护，避免编辑其他字段时误操作
@@ -140,6 +151,9 @@ public class WxUserController {
      * body: { familyId: "xx" 或 "" 表示解除关联, role: "admin/member/restricted" 可选 }
      */
     @PutMapping("/{id}/family")
+    @AutoLog(value="微信用户-设置所属家庭")
+    @Operation(summary="微信用户-设置所属家庭")
+    @RequiresPermissions("homeai:user:edit")
     public Result<?> setFamily(@PathVariable String id, @RequestBody Map<String, String> body) {
         WxUser user = wxUserService.getById(id);
         if (user == null) {
@@ -179,6 +193,9 @@ public class WxUserController {
      * 注销用户账号（物理删除）
      */
     @DeleteMapping("/{id}")
+    @AutoLog(value="微信用户-注销")
+    @Operation(summary="微信用户-注销")
+    @RequiresPermissions("homeai:user:delete")
     public Result<?> delete(@PathVariable String id) {
         // 清理家庭关联
         String oldFamilyId = familyMemberService.removeUserFamily(id);
@@ -193,6 +210,9 @@ public class WxUserController {
      * 启用/禁用用户
      */
     @PutMapping("/{id}/status")
+    @AutoLog(value="微信用户-启用/禁用")
+    @Operation(summary="微信用户-启用/禁用")
+    @RequiresPermissions("homeai:user:edit")
     public Result<?> updateStatus(@PathVariable String id, @RequestParam String status) {
         WxUser user = wxUserService.getById(id);
         if (user != null) {
@@ -207,6 +227,9 @@ public class WxUserController {
      * 新增用户（管理端）
      */
     @PostMapping
+    @AutoLog(value="微信用户-新增")
+    @Operation(summary="微信用户-新增")
+    @RequiresPermissions("homeai:user:add")
     public Result<?> add(@RequestBody WxUser wxUser) {
         wxUser.setDelFlag(0);
         if (wxUser.getStatus() == null) {
@@ -225,6 +248,8 @@ public class WxUserController {
      * 导出Excel
      */
     @GetMapping("/exportXls")
+    @Operation(summary="微信用户-导出Excel")
+    @RequiresPermissions("homeai:user:exportXls")
     public ModelAndView exportXls(HttpServletRequest request, WxUser wxUser) {
         QueryWrapper<WxUser> queryWrapper = QueryGenerator.initQueryWrapper(wxUser, request.getParameterMap());
         List<WxUser> pageList = wxUserService.list(queryWrapper);
@@ -254,6 +279,8 @@ public class WxUserController {
      * 导出Excel模板
      */
     @GetMapping("/exportTemplate")
+    @Operation(summary="微信用户-导出导入模板")
+    @RequiresPermissions("homeai:user:exportXls")
     public ModelAndView exportTemplate() {
         ModelAndView mv = new ModelAndView(new JeecgEntityExcelView());
         mv.addObject(NormalExcelConstants.DATA_LIST, new ArrayList<WxUser>());
@@ -267,6 +294,9 @@ public class WxUserController {
      * 导入Excel
      */
     @PostMapping("/importExcel")
+    @AutoLog(value="微信用户-导入Excel")
+    @Operation(summary="微信用户-导入Excel")
+    @RequiresPermissions("homeai:user:importExcel")
     public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
         try {
             if (!(request instanceof MultipartHttpServletRequest)) {
@@ -313,6 +343,8 @@ public class WxUserController {
      * 回收站列表
      */
     @GetMapping("/recycleBin")
+    @Operation(summary="微信用户-回收站列表")
+    @RequiresPermissions("homeai:user:moveToRecycleBin")
     public Result<?> recycleBin(WxUser wxUser,
                                 @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
                                 @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
@@ -327,6 +359,9 @@ public class WxUserController {
      * 移入回收站（软删除）
      */
     @PutMapping("/moveToRecycleBin")
+    @AutoLog(value="微信用户-移入回收站")
+    @Operation(summary="微信用户-移入回收站")
+    @RequiresPermissions("homeai:user:moveToRecycleBin")
     public Result<?> moveToRecycleBin(@RequestBody List<String> ids) {
         for (String id : ids) {
             // 解除家庭关联
@@ -347,6 +382,9 @@ public class WxUserController {
      * 从回收站恢复
      */
     @PutMapping("/restore")
+    @AutoLog(value="微信用户-恢复")
+    @Operation(summary="微信用户-恢复")
+    @RequiresPermissions("homeai:user:restore")
     public Result<?> restore(@RequestBody List<String> ids) {
         for (String id : ids) {
             // 自定义原生 SQL 恢复，绕开逻辑删除拦截器自动注入的 del_flag=0 条件
@@ -360,6 +398,9 @@ public class WxUserController {
      * 彻底删除
      */
     @DeleteMapping("/deletePermanently")
+    @AutoLog(value="微信用户-彻底删除")
+    @Operation(summary="微信用户-彻底删除")
+    @RequiresPermissions("homeai:user:deletePermanently")
     public Result<?> deletePermanently(@RequestBody List<String> ids) {
         for (String id : ids) {
             // 清理家庭关联

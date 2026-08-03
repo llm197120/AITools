@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.servlet.http.HttpServletRequest;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.jeecg.common.api.vo.Result;
+import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.modules.homeai.ai.entity.AiConversation;
 import org.jeecg.modules.homeai.ai.entity.AiMessage;
@@ -46,6 +48,8 @@ public class AiConversationController {
      * 对话列表（管理端分页）
      */
     @GetMapping("/list")
+    @Operation(summary="AI对话-分页列表查询(管理端)")
+    @RequiresPermissions("homeai:ai:conversation:list")
     public Result<?> list(AiConversation conversation,
                           @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
                           @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,

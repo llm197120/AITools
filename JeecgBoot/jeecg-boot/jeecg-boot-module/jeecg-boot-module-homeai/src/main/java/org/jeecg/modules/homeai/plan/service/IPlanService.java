@@ -26,4 +26,7 @@ public interface IPlanService extends IService<PlanMaster> {
 
     /** 创建重复计划的后续实例 */
     PlanInstance createInstance(String masterId, LocalDate planDate);
+
+    /** 管理端：计划完成率统计（按用户聚合） */
+    java.util.List<java.util.Map<String, Object>> getCompletionStats(String userId, String yearMonth);
 }

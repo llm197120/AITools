@@ -1,4 +1,5 @@
 package org.jeecg.modules.homeai.recipe.controller;
+import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -7,14 +8,19 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.jeecg.common.api.vo.Result;
+import org.jeecg.common.aspect.annotation.AutoLog;
 import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.oConvertUtils;
+import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.config.HomeaiFileUrlUtil;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.recipe.entity.Recipe;
+import org.jeecg.modules.homeai.recipe.entity.RecipeIngredient;
+import org.jeecg.modules.homeai.recipe.entity.RecipeStep;
 import org.jeecg.modules.homeai.recipe.mapper.RecipeMapper;
 import org.jeecg.modules.homeai.recipe.service.IRecipeService;
 import org.jeecg.modules.homeai.user.service.IWxUserService;
@@ -62,6 +68,7 @@ public class RecipeController {
     }
 
     @GetMapping("/list")
+    @Operation(summary="菜谱-分页列表查询")
     public Result<?> list(Recipe r, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "10") int pageSize, HttpServletRequest req) {
         QueryWrapper<Recipe> qw = QueryGenerator.initQueryWrapper(r, req.getParameterMap());
         qw.eq("del_flag", "0").orderByDesc("create_time");
@@ -106,15 +113,19 @@ public class RecipeController {
     }
 
     @PostMapping
-    public Result<?> create(@RequestBody Recipe recipe, HttpServletRequest r) {
+    public Result<?> create(@RequestBody Map<String, Object> body, HttpServletRequest r) {
         String uid = getUserId(r);
         if (uid == null) return Result.error("未登录");
+        Recipe recipe = JSON.parseObject(JSON.toJSONString(body), Recipe.class);
         recipe.setUserId(uid);
-        recipeService.save(recipe);
+        List<RecipeIngredient> ingredients = JSON.parseArray(
+                JSON.toJSONString(body.get("ingredients")), RecipeIngredient.class);
+        List<RecipeStep> steps = JSON.parseArray(
+                JSON.toJSONString(body.get("steps")), RecipeStep.class);
+        recipeService.saveWithRelations(recipe, ingredients, steps);
         return Result.OK(recipe);
     }
 
-    @PutMapping public Result<?> edit(@RequestBody Recipe r) { recipeService.updateById(r); return Result.OK("OK"); }
     @PutMapping public Result<?> edit(@RequestBody Recipe r, HttpServletRequest req) {
         if (r == null || r.getId() == null) return Result.error("参数异常");
         Recipe existing = recipeService.getById(r.getId());
@@ -145,6 +156,9 @@ public class RecipeController {
      * 新增菜谱（管理端）
      */
     @PostMapping("/add")
+    @AutoLog(value="菜谱-新增(管理端)")
+    @Operation(summary="菜谱-新增(管理端)")
+    @RequiresPermissions("homeai:recipe:add")
     public Result<?> add(@RequestBody Recipe recipe) {
         recipe.setDelFlag(0);
         recipeService.save(recipe);
@@ -155,6 +169,8 @@ public class RecipeController {
      * 导出Excel
      */
     @GetMapping("/exportXls")
+    @Operation(summary="菜谱-导出Excel")
+    @RequiresPermissions("homeai:recipe:exportXls")
     public ModelAndView exportXls(HttpServletRequest request, Recipe recipe) {
         QueryWrapper<Recipe> queryWrapper = QueryGenerator.initQueryWrapper(recipe, request.getParameterMap());
         List<Recipe> pageList = recipeService.list(queryWrapper);
@@ -184,6 +200,9 @@ public class RecipeController {
      * 导入Excel
      */
     @PostMapping("/importExcel")
+    @AutoLog(value="菜谱-导入Excel")
+    @Operation(summary="菜谱-导入Excel")
+    @RequiresPermissions("homeai:recipe:importExcel")
     public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
         try {
             if (!(request instanceof MultipartHttpServletRequest)) {
@@ -230,6 +249,8 @@ public class RecipeController {
      * 回收站列表
      */
     @GetMapping("/recycleBin")
+    @Operation(summary="菜谱-回收站列表")
+    @RequiresPermissions("homeai:recipe:moveToRecycleBin")
     public Result<?> recycleBin(Recipe r, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "10") int pageSize, HttpServletRequest req) {
         // 原生SQL分页查询回收站，避免逻辑删除自动追加 del_flag=0 导致查不到数据
         return Result.OK(recipeMapper.selectRecycleBinPage(new Page<>(pageNo, pageSize), r.getName()));
@@ -240,6 +261,9 @@ public class RecipeController {
      * 移入回收站（软删除）
      */
     @PutMapping("/moveToRecycleBin")
+    @AutoLog(value="菜谱-移入回收站")
+    @Operation(summary="菜谱-移入回收站")
+    @RequiresPermissions("homeai:recipe:moveToRecycleBin")
     public Result<?> moveToRecycleBin(@RequestBody List<String> ids) {
         for (String id : ids) {
             // @TableLogic 字段不参与 updateById，需通过 update wrapper 显式设置
@@ -254,6 +278,9 @@ public class RecipeController {
      * 从回收站恢复
      */
     @PutMapping("/restore")
+    @AutoLog(value="菜谱-恢复")
+    @Operation(summary="菜谱-恢复")
+    @RequiresPermissions("homeai:recipe:restore")
     public Result<?> restore(@RequestBody List<String> ids) {
         for (String id : ids) {
             // 自定义原生 SQL 恢复，绕开逻辑删除拦截器自动注入的 del_flag=0 条件
@@ -267,6 +294,9 @@ public class RecipeController {
      * 彻底删除
      */
     @DeleteMapping("/deletePermanently")
+    @AutoLog(value="菜谱-彻底删除")
+    @Operation(summary="菜谱-彻底删除")
+    @RequiresPermissions("homeai:recipe:deletePermanently")
     public Result<?> deletePermanently(@RequestBody List<String> ids) {
         recipeMapper.deletePermanentlyByIds(ids);
         return Result.OK("彻底删除成功");
@@ -276,6 +306,9 @@ public class RecipeController {
      * 编辑菜谱（管理端）
      */
     @PutMapping("/{id}")
+    @AutoLog(value="菜谱-编辑(管理端)")
+    @Operation(summary="菜谱-编辑(管理端)")
+    @RequiresPermissions("homeai:recipe:edit")
     public Result<?> edit(@PathVariable String id, @RequestBody Recipe recipe) {
         recipe.setId(id);
         recipeService.updateById(recipe);

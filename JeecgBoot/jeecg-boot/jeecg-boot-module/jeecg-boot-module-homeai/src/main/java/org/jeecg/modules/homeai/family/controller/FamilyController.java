@@ -8,10 +8,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.jeecg.common.api.vo.Result;
+import org.jeecg.common.aspect.annotation.AutoLog;
 import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.oConvertUtils;
+import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.family.entity.Family;
 import org.jeecg.modules.homeai.family.entity.FamilyInviteCode;
@@ -376,6 +379,8 @@ public class FamilyController {
      * 家庭列表（管理端）
      */
     @GetMapping("/list")
+    @Operation(summary="家庭-分页列表查询")
+    @RequiresPermissions("homeai:family:list")
     public Result<?> list(Family family,
                           @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
                           @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
@@ -392,6 +397,8 @@ public class FamilyController {
      * @param familyId 家庭ID
      */
     @GetMapping("/admin/members")
+    @Operation(summary="家庭-成员列表(管理端)")
+    @RequiresPermissions("homeai:family:list")
     public Result<?> adminMembers(@RequestParam String familyId) {
         Family family = familyService.getById(familyId);
         if (family == null) {
@@ -420,6 +427,9 @@ public class FamilyController {
      * body: { userId: "用户ID", role: "admin/member/restricted 可选" }
      */
     @PostMapping("/admin/members")
+    @AutoLog(value="家庭-添加成员(管理端)")
+    @Operation(summary="家庭-添加成员(管理端)")
+    @RequiresPermissions("homeai:family:add")
     public Result<?> adminAddMember(@RequestBody Map<String, String> body) {
         String familyId = body.get("familyId");
         String userId = body.get("userId");
@@ -459,6 +469,9 @@ public class FamilyController {
      * 移除家庭成员（管理端）
      */
     @DeleteMapping("/admin/member/{id}")
+    @AutoLog(value="家庭-移除成员(管理端)")
+    @Operation(summary="家庭-移除成员(管理端)")
+    @RequiresPermissions("homeai:family:delete")
     public Result<?> adminRemoveMember(@PathVariable String id) {
         FamilyMember target = familyMemberService.getById(id);
         if (target == null) {
@@ -488,6 +501,9 @@ public class FamilyController {
      * body: { role: "admin/member/restricted" }
      */
     @PutMapping("/admin/member/{id}/role")
+    @AutoLog(value="家庭-修改成员角色(管理端)")
+    @Operation(summary="家庭-修改成员角色(管理端)")
+    @RequiresPermissions("homeai:family:edit")
     public Result<?> adminUpdateRole(@PathVariable String id, @RequestBody Map<String, String> body) {
         String role = body.get("role");
         if (oConvertUtils.isEmpty(role)) {
@@ -525,6 +541,9 @@ public class FamilyController {
      * 新增家庭（管理端）
      */
     @PostMapping("/add")
+    @AutoLog(value="家庭-新增(管理端)")
+    @Operation(summary="家庭-新增(管理端)")
+    @RequiresPermissions("homeai:family:add")
     public Result<?> add(@RequestBody Family family, HttpServletRequest request) {
         // 管理端新增家庭时，从 Shiro 获取当前管理员 ID 作为创建者
         if (family.getCreatorId() == null) {
@@ -556,6 +575,9 @@ public class FamilyController {
      * 编辑家庭（管理端）
      */
     @PutMapping("/{id}")
+    @AutoLog(value="家庭-编辑(管理端)")
+    @Operation(summary="家庭-编辑(管理端)")
+    @RequiresPermissions("homeai:family:edit")
     public Result<?> edit(@PathVariable String id, @RequestBody Family family) {
         Family existing = familyService.getById(id);
         if (existing == null) {
@@ -572,6 +594,8 @@ public class FamilyController {
      * 导出Excel
      */
     @GetMapping("/exportXls")
+    @Operation(summary="家庭-导出Excel")
+    @RequiresPermissions("homeai:family:exportXls")
     public ModelAndView exportXls(HttpServletRequest request, Family family) {
         QueryWrapper<Family> queryWrapper = QueryGenerator.initQueryWrapper(family, request.getParameterMap());
         List<Family> pageList = familyService.list(queryWrapper);
@@ -601,6 +625,8 @@ public class FamilyController {
      * 导出Excel模板
      */
     @GetMapping("/exportTemplate")
+    @Operation(summary="家庭-导出导入模板")
+    @RequiresPermissions("homeai:family:exportXls")
     public ModelAndView exportTemplate() {
         ModelAndView mv = new ModelAndView(new JeecgEntityExcelView());
         mv.addObject(NormalExcelConstants.DATA_LIST, new ArrayList<Family>());
@@ -614,6 +640,9 @@ public class FamilyController {
      * 导入Excel
      */
     @PostMapping("/importExcel")
+    @AutoLog(value="家庭-导入Excel")
+    @Operation(summary="家庭-导入Excel")
+    @RequiresPermissions("homeai:family:importExcel")
     public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
         try {
             if (!(request instanceof MultipartHttpServletRequest)) {
@@ -660,6 +689,8 @@ public class FamilyController {
      * 回收站列表
      */
     @GetMapping("/recycleBin")
+    @Operation(summary="家庭-回收站列表")
+    @RequiresPermissions("homeai:family:moveToRecycleBin")
     public Result<?> recycleBin(Family family,
                                 @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
                                 @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
@@ -674,6 +705,9 @@ public class FamilyController {
      * 移入回收站（软删除）
      */
     @PutMapping("/moveToRecycleBin")
+    @AutoLog(value="家庭-移入回收站")
+    @Operation(summary="家庭-移入回收站")
+    @RequiresPermissions("homeai:family:moveToRecycleBin")
     public Result<?> moveToRecycleBin(@RequestBody List<String> ids) {
         for (String id : ids) {
             // @TableLogic 字段不参与 updateById，需通过 update wrapper 显式设置
@@ -689,6 +723,9 @@ public class FamilyController {
      * 从回收站恢复
      */
     @PutMapping("/restore")
+    @AutoLog(value="家庭-恢复")
+    @Operation(summary="家庭-恢复")
+    @RequiresPermissions("homeai:family:restore")
     public Result<?> restore(@RequestBody List<String> ids) {
         for (String id : ids) {
             // 自定义原生 SQL 恢复，绕开逻辑删除拦截器自动注入的 del_flag=0 条件
@@ -702,6 +739,9 @@ public class FamilyController {
      * 彻底删除
      */
     @DeleteMapping("/deletePermanently")
+    @AutoLog(value="家庭-彻底删除")
+    @Operation(summary="家庭-彻底删除")
+    @RequiresPermissions("homeai:family:deletePermanently")
     public Result<?> deletePermanently(@RequestBody List<String> ids) {
         for (String id : ids) {
             // 清理该家庭所有成员关联

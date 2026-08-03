@@ -22,6 +22,8 @@ public class LearnMaterial implements Serializable {
     private String fileUrl;
     private String coverUrl;
     private String category;
+    /** 标签（逗号分隔） */
+    private String tags;
     private String description;
     private Integer totalDuration;
     private String createBy;

@@ -3,7 +3,9 @@ package org.jeecg.modules.homeai.storage.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
+import org.jeecg.modules.homeai.storage.entity.StorageFile;
 import org.jeecg.modules.homeai.storage.entity.StorageFolder;
+import org.jeecg.modules.homeai.storage.mapper.StorageFileMapper;
 import org.jeecg.modules.homeai.storage.mapper.StorageFolderMapper;
 import org.jeecg.modules.homeai.storage.service.IStorageFolderService;
 import org.springframework.stereotype.Service;
@@ -18,12 +20,22 @@ import java.util.stream.Collectors;
 public class StorageFolderServiceImpl extends ServiceImpl<StorageFolderMapper, StorageFolder>
         implements IStorageFolderService {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private StorageFileMapper fileMapper;
+
     @Override
     public List<StorageFolder> getUserFolderTree(String userId, String familyId) {
         LambdaQueryWrapper<StorageFolder> query = new LambdaQueryWrapper<>();
         query.eq(StorageFolder::getUserId, userId)
                 .eq(StorageFolder::getDelFlag, 0);
         List<StorageFolder> allFolders = list(query);
+        // 填充每个文件夹的文件数（用于前端展示）
+        for (StorageFolder folder : allFolders) {
+            folder.setFileCount(Math.toIntExact(fileMapper.selectCount(
+                    new LambdaQueryWrapper<StorageFile>()
+                            .eq(StorageFile::getFolderId, folder.getId())
+                            .eq(StorageFile::getDelFlag, 0))));
+        }
         return buildTree(allFolders, null);
     }
 

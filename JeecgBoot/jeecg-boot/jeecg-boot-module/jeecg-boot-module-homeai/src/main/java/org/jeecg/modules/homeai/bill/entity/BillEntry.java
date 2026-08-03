@@ -27,6 +27,9 @@ public class BillEntry implements Serializable {
     private String remark;
     private String voucherUrl;
     private String source;
+    /** 冗余展示字段：分类名称 */
+    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    private String categoryName;
     @Version
     private Integer version;
     private String createBy;
