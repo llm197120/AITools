@@ -1,4 +1,4 @@
-<route lang="json5">
+﻿<route lang="json5">
 {
   style: {
     navigationBarTitleText: 'AI对话',
@@ -9,11 +9,11 @@
 <template>
   <view class="conversations-page">
     <!-- 空状态 -->
-    <wd-empty v-if="!loading && list.length === 0" description="暂无对话">
+    <wd-status-tip v-if="!loading && list.length === 0" tip="暂无对话" image="content">
       <template #image>
         <wd-icon name="chat" size="80px" color="#ccc"></wd-icon>
       </template>
-      <template #footer>
+      <template #bottom>
         <view class="empty-actions">
           <view class="example-topic" @click="createAndGo('帮我写一份食谱')">
             <text>🍳 帮我写一份食谱</text>
@@ -26,7 +26,7 @@
           </view>
         </view>
       </template>
-    </wd-empty>
+    </wd-status-tip>
 
     <!-- 对话列表 -->
     <view v-else class="list">
@@ -52,7 +52,8 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onShow } from '@dcloudio/uni-app'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi, put as putApi, del as delApi } from '../../pages-homeai/api/request'
 
 const list = ref<any[]>([])

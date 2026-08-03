@@ -1,4 +1,4 @@
-<route lang="json5">
+﻿<route lang="json5">
 { style: { navigationBarTitleText: '菜谱详情' } }
 </route>
 
@@ -24,7 +24,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from '@dcloudio/uni-app'
+import { ref } from 'vue'
 import { get as getApi } from '../../pages-homeai/api/request'
 const recipe = ref<any>({})
 const ingredients = ref<any[]>([])

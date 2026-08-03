@@ -1,4 +1,4 @@
-<route lang="json5">
+﻿<route lang="json5">
 { style: { navigationBarTitleText: '统计分析' } }
 </route>
 
@@ -18,7 +18,8 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onShow } from '@dcloudio/uni-app'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { get as getApi } from '../../pages-homeai/api/request'
 const currentMonth = ref(new Date().toISOString().substring(0,7))
 const stats = ref({expense:'0',income:'0',count:0})

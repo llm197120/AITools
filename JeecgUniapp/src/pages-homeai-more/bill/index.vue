@@ -1,4 +1,4 @@
-<route lang="json5">
+﻿<route lang="json5">
 { style: { navigationBarTitleText: '账单' } }
 </route>
 
@@ -27,7 +27,8 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onShow } from '@dcloudio/uni-app'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi, put as putApi, del as delApi } from '../../pages-homeai/api/request'
 
 const entries = ref<any[]>([])

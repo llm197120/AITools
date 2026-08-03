@@ -104,6 +104,11 @@ const goPage = (item) => {
       msgCount.value = 0
     }
     dot.value[page] = false
+    // 家庭AI小工具（独立分包，使用 URL 跳转）
+    if (page === 'homeai') {
+      uni.navigateTo({ url: '/pages-homeai/pages/index/index' })
+      return
+    }
     if (page.indexOf('/app/online') == 0) {
       let code = page.substring(page.lastIndexOf('/') + 1)
       let real = { desformCode: code, desformName: item.title }
@@ -168,6 +173,16 @@ const homeConfig = async () => {
         itemKey: item.routeIndex,
       };
     });
+    // 后端菜单未配置时，兜底展示家庭AI小工具入口
+    const hasHomeai = usList.value.some((item) => item.routeIndex === 'homeai' || item.itemKey === 'homeai');
+    if (!hasHomeai) {
+      usList.value.unshift({
+        text: '家庭AI',
+        img: '/static/index/128/qingjia1.png',
+        routeIndex: 'homeai',
+        itemKey: 'homeai',
+      });
+    }
     middleApps.value = indexRouteList.filter((item) => item.type == 'approve').map(item=>{
       return {
         ...item,

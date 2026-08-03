@@ -1,4 +1,4 @@
-<route lang="json5">
+﻿<route lang="json5">
 {
   style: {
     navigationBarTitleText: '个人中心',
@@ -52,7 +52,8 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onShow } from '@dcloudio/uni-app'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '../../stores/user'
 
 const userStore = useUserStore()
@@ -68,7 +69,7 @@ onShow(async () => {
 })
 
 function goFamily() {
-  uni.navigateTo({ url: '/pages/homeai/pages/family/index' })
+  uni.navigateTo({ url: '/pages-homeai/pages/family/index' })
 }
 
 function showPrivacy() {

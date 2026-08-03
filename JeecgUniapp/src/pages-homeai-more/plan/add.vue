@@ -1,4 +1,4 @@
-<route lang="json5">{ style: { navigationBarTitleText: '新增计划' } }</route>
+﻿<route lang="json5">{ style: { navigationBarTitleText: '新增计划' } }</route>
 <template><view class="plan-add">
   <input class="title-input" v-model="form.title" placeholder="计划标题..." />
   <textarea class="content-input" v-model="form.content" placeholder="详细内容（可选）" />
@@ -8,7 +8,8 @@
   <wd-button size="large" type="primary" @click="save">保存</wd-button>
 </view></template>
 <script lang="ts" setup>
-import { ref } from '@dcloudio/uni-app'; import { post as postApi } from '../../pages-homeai/api/request';
+import { ref } from 'vue'
+import { post as postApi } from '../../pages-homeai/api/request';
 const form = ref({ title: '', content: '', planDate: new Date().toISOString().substring(0, 10), priority: 'normal', category: 'life', remindBefore: 15 });
 async function save() {
   if (!form.value.title) { uni.showToast({ title: '请输入标题', icon: 'none' }); return; }

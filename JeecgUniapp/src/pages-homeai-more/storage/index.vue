@@ -1,4 +1,4 @@
-<route lang="json5">
+﻿<route lang="json5">
 { style: { navigationBarTitleText: '资料存储' } }
 </route>
 
@@ -31,7 +31,8 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onShow } from '@dcloudio/uni-app'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi } from '../../pages-homeai/api/request'
 
 const folders = ref<any[]>([])

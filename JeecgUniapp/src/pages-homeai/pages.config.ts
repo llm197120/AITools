@@ -5,20 +5,20 @@
 
 const pages = [
   {
-    path: 'pages/homeai/pages/index/index',
+    path: 'pages/index/index',
     style: {
       navigationStyle: 'custom',
       navigationBarTitleText: '家庭AI小工具',
     },
   },
   {
-    path: 'pages/homeai/pages/profile/index',
+    path: 'pages/profile/index',
     style: {
       navigationBarTitleText: '个人中心',
     },
   },
   {
-    path: 'pages/homeai/pages/family/index',
+    path: 'pages/family/index',
     style: {
       navigationBarTitleText: '我的家庭',
     },

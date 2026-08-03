@@ -10,6 +10,14 @@ const icon_prefix = '/static/index/128/'
 export const us = {
   data: [
     {
+      title: '家庭AI',
+      icon: icon_prefix + 'qingjia1.png',
+      description: '家庭AI小工具',
+      useCount: 10000,
+      routeIndex: 'homeai',
+      enabled: true,
+    },
+    {
       title: 'online',
       icon: icon_prefix + 'qingjia1.png',
       description: 'online',

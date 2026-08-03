@@ -1,4 +1,4 @@
-<route lang="json5">
+﻿<route lang="json5">
 {
   style: {
     navigationBarTitleText: 'AI对话',
@@ -66,7 +66,8 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onLoad, nextTick } from '@dcloudio/uni-app'
+import { ref, nextTick } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi, del as delApi, getServerBaseUrl } from '../../pages-homeai/api/request'
 
 const conversationId = ref('')

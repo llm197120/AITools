@@ -1,4 +1,4 @@
-<route lang="json5">
+﻿<route lang="json5">
 {
   layout: 'default',
   style: {
@@ -50,7 +50,8 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onShow } from '@dcloudio/uni-app'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '../../stores/user'
 import { useFamilyStore } from '../../stores/family'
 
@@ -81,11 +82,11 @@ onShow(async () => {
 })
 
 function goProfile() {
-  uni.navigateTo({ url: '/pages/homeai/pages/profile/index' })
+  uni.navigateTo({ url: '/pages-homeai/pages/profile/index' })
 }
 
 function goFamily() {
-  uni.navigateTo({ url: '/pages/homeai/pages/family/index' })
+  uni.navigateTo({ url: '/pages-homeai/pages/family/index' })
 }
 
 function goModule(key: string) {

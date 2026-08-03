@@ -1,4 +1,4 @@
-<route lang="json5">{ style: { navigationBarTitleText: '记一笔' } }</route>
+﻿<route lang="json5">{ style: { navigationBarTitleText: '记一笔' } }</route>
 <template><view class="bill-add">
   <view class="type-switch"><view class="type-btn" :class="{ active: form.type === 'expense' }" @click="form.type='expense'">支出</view><view class="type-btn" :class="{ active: form.type === 'income' }" @click="form.type='income'">收入</view></view>
   <view class="amount-input"><text class="currency">¥</text><input class="amount" v-model="form.amount" type="digit" placeholder="0.00" /></view>
@@ -9,7 +9,8 @@
   <wd-button size="large" type="primary" @click="save">保存</wd-button>
 </view></template>
 <script lang="ts" setup>
-import { ref, onLoad } from '@dcloudio/uni-app'; import { get as getApi, post as postApi } from '../../pages-homeai/api/request';
+import { ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 const form = ref({ type: 'expense', amount: '', categoryId: '', billDate: new Date().toISOString().substring(0, 10), paymentMethod: '微信', remark: '' });
 const categories = ref<any[]>([]); const payMethods = ['微信', '支付宝', '现金', '银行卡', '其他'];
 onLoad(async () => { categories.value = await getApi('/bill/categories', { params: { type: form.value.type } }); });

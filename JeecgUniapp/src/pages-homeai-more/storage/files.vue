@@ -1,4 +1,4 @@
-<route lang="json5">
+﻿<route lang="json5">
 { style: { navigationBarTitleText: '文件列表' } }
 </route>
 
@@ -29,7 +29,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from '@dcloudio/uni-app'
+import { ref } from 'vue'
 import { get as getApi, put as putApi, del as delApi } from '../../pages-homeai/api/request'
 
 const files = ref<any[]>([])

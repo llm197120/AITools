@@ -1,4 +1,4 @@
-<route lang="json5">
+﻿<route lang="json5">
 { style: { navigationBarTitleText: '搜索文件' } }
 </route>
 
@@ -21,7 +21,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from '@dcloudio/uni-app'
+import { ref } from 'vue'
 import { get as getApi } from '../../pages-homeai/api/request'
 
 const keyword = ref('')

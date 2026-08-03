@@ -1,4 +1,4 @@
-<route lang="json5">
+﻿<route lang="json5">
 { style: { navigationBarTitleText: '日常计划' } }
 </route>
 
@@ -20,7 +20,8 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onShow } from '@dcloudio/uni-app'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi } from '../../pages-homeai/api/request'
 const today = ref(new Date().toISOString().substring(0,10))
 const plans = ref<any[]>([])

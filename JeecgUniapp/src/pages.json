@@ -521,6 +521,164 @@
           }
         }
       ]
+    },
+    {
+      "root": "pages-homeai",
+      "pages": [
+        {
+          "path": "pages/family/index",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "我的家庭"
+          }
+        },
+        {
+          "path": "pages/index/index",
+          "type": "page",
+          "layout": "default",
+          "style": {
+            "navigationStyle": "custom",
+            "navigationBarTitleText": "家庭AI小工具",
+            "disableScroll": true
+          }
+        },
+        {
+          "path": "pages/profile/index",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "个人中心"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages-homeai-ai",
+      "pages": [
+        {
+          "path": "ai/chat",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "AI对话"
+          }
+        },
+        {
+          "path": "ai/conversations",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "AI对话"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages-homeai-more",
+      "pages": [
+        {
+          "path": "bill/add",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "记一笔"
+          }
+        },
+        {
+          "path": "bill/index",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "账单"
+          }
+        },
+        {
+          "path": "bill/statistics",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "统计分析"
+          }
+        },
+        {
+          "path": "learn/index",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "学习模块"
+          }
+        },
+        {
+          "path": "plan/add",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "新增计划"
+          }
+        },
+        {
+          "path": "plan/index",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "日常计划"
+          }
+        },
+        {
+          "path": "recipe/add",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "新增菜谱"
+          }
+        },
+        {
+          "path": "recipe/detail",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "菜谱详情"
+          }
+        },
+        {
+          "path": "recipe/index",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "烹饪指南"
+          }
+        },
+        {
+          "path": "storage/files",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "文件列表"
+          }
+        },
+        {
+          "path": "storage/index",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "资料存储"
+          }
+        },
+        {
+          "path": "storage/office-convert",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "格式转换"
+          }
+        },
+        {
+          "path": "storage/office-generate",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "AI文件生成"
+          }
+        },
+        {
+          "path": "storage/office-history",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "处理历史"
+          }
+        },
+        {
+          "path": "storage/search",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "搜索文件"
+          }
+        }
+      ]
     }
   ]
 }

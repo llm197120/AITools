@@ -1,4 +1,4 @@
-<route lang="json5">
+﻿<route lang="json5">
 { style: { navigationBarTitleText: 'AI文件生成' } }
 </route>
 
@@ -29,7 +29,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from '@dcloudio/uni-app'
+import { ref } from 'vue'
 import { get as getApi, post as postApi } from '../../pages-homeai/api/request'
 
 const docType = ref('word')

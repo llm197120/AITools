@@ -1,4 +1,4 @@
-import md5 from 'md5'
+import md5 from './md5'
 import { isString } from './is'
 //签名密钥串(前后端要一致，正式发布请自行修改)
 const signatureSecret = 'dd05f1c54d63749eda95f9fa6d49v442a'

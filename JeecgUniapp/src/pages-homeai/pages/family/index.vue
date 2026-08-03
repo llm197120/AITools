@@ -1,4 +1,4 @@
-<route lang="json5">
+﻿<route lang="json5">
 {
   style: {
     navigationBarTitleText: '我的家庭',
@@ -10,11 +10,11 @@
   <view class="family-page">
     <!-- 无家庭状态 -->
     <view class="no-family" v-if="!familyStore.hasFamily">
-      <wd-empty description="您还没有加入任何家庭">
+      <wd-status-tip tip="您还没有加入任何家庭" image="content">
         <template #image>
           <wd-icon name="home" size="80px" color="#ccc"></wd-icon>
         </template>
-      </wd-empty>
+      </wd-status-tip>
       <view class="actions">
         <wd-button type="primary" size="large" @click="showCreate">创建家庭</wd-button>
         <wd-button plain size="large" @click="showJoin">加入家庭</wd-button>
@@ -62,27 +62,34 @@
     </view>
 
     <!-- 创建家庭弹窗 -->
-    <wd-dialog v-model="createVisible" title="创建家庭" :show-confirm-button="false">
-      <wd-input v-model="createName" placeholder="请输入家庭名称" />
-      <template #footer>
+    <wd-popup v-model="createVisible" position="center" custom-style="width:80%;border-radius:16rpx;overflow:hidden">
+      <view class="dialog-title">创建家庭</view>
+      <view class="dialog-body">
+        <wd-input v-model="createName" placeholder="请输入家庭名称" />
+      </view>
+      <view class="dialog-footer">
         <wd-button @click="createVisible = false">取消</wd-button>
         <wd-button type="primary" @click="createFamily">确认创建</wd-button>
-      </template>
-    </wd-dialog>
+      </view>
+    </wd-popup>
 
     <!-- 加入家庭弹窗 -->
-    <wd-dialog v-model="joinVisible" title="加入家庭" :show-confirm-button="false">
-      <wd-input v-model="inviteCode" placeholder="请输入6位邀请码" maxlength="6" />
-      <template #footer>
+    <wd-popup v-model="joinVisible" position="center" custom-style="width:80%;border-radius:16rpx;overflow:hidden">
+      <view class="dialog-title">加入家庭</view>
+      <view class="dialog-body">
+        <wd-input v-model="inviteCode" placeholder="请输入6位邀请码" maxlength="6" />
+      </view>
+      <view class="dialog-footer">
         <wd-button @click="joinVisible = false">取消</wd-button>
         <wd-button type="primary" @click="joinFamily">确认加入</wd-button>
-      </template>
-    </wd-dialog>
+      </view>
+    </wd-popup>
   </view>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onShow } from '@dcloudio/uni-app'
+import { ref, computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '../../stores/user'
 import { useFamilyStore } from '../../stores/family'
 import { get as getApi, post as postApi, del as delApi, put as putApi } from '../../api'
@@ -330,5 +337,20 @@ function confirmLeave() {
   border-radius: 16rpx;
   color: #e74c3c;
   font-size: 28rpx;
+}
+.dialog-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  text-align: center;
+  padding: 30rpx 24rpx 10rpx;
+}
+.dialog-body {
+  padding: 20rpx 30rpx;
+}
+.dialog-footer {
+  display: flex;
+  gap: 20rpx;
+  padding: 0 30rpx 30rpx;
+  justify-content: center;
 }
 </style>

@@ -1,4 +1,4 @@
-<route lang="json5">
+﻿<route lang="json5">
 { style: { navigationBarTitleText: '新增菜谱' } }
 </route>
 
@@ -38,7 +38,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive } from '@dcloudio/uni-app'
+import { ref, reactive } from 'vue'
 import { post as postApi } from '../../pages-homeai/api/request'
 const form = reactive({name:'',categoryId:'',difficulty:'medium',cookTime:30,tips:'',visibility:'family'})
 const ingredients = ref([{name:'',amount:''}])
