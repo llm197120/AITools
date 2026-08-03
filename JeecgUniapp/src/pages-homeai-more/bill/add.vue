@@ -11,6 +11,7 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
+import { get as getApi, post as postApi } from '../../pages-homeai/api/request'
 const form = ref({ type: 'expense', amount: '', categoryId: '', billDate: new Date().toISOString().substring(0, 10), paymentMethod: '微信', remark: '' });
 const categories = ref<any[]>([]); const payMethods = ['微信', '支付宝', '现金', '银行卡', '其他'];
 onLoad(async () => { categories.value = await getApi('/bill/categories', { params: { type: form.value.type } }); });

@@ -44,7 +44,8 @@ const form = reactive({name:'',categoryId:'',difficulty:'medium',cookTime:30,tip
 const ingredients = ref([{name:'',amount:''}])
 const steps = ref([{description:''}])
 async function submit() {
-  await postApi('/recipe', { data: { ...form, cookTime: parseInt(String(form.cookTime)), ingredients: ingredients.value.filter(i=>i.name), steps: steps.value.filter(s=>s.description) } })
+  const diffMap: Record<string, number> = { easy: 1, medium: 3, hard: 5 }
+  await postApi('/recipe', { data: { ...form, difficulty: diffMap[form.difficulty] || 3, cookTime: parseInt(String(form.cookTime)), ingredients: ingredients.value.filter(i=>i.name), steps: steps.value.filter(s=>s.description) } })
   uni.showToast({title:'创建成功', icon:'success'})
   setTimeout(()=>uni.navigateBack(), 1000)
 }

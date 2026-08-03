@@ -1,7 +1,6 @@
 <script lang="ts">
 import { onLaunch, onShow, onHide, onLoad, onReady } from '@dcloudio/uni-app'
 import 'abortcontroller-polyfill/dist/abortcontroller-polyfill-only'
-import { useUserStore } from '@/store/user'
  // #ifdef APP-PLUS
 import appUpdate from "@/common/appUpdate";
 // #endif
@@ -13,21 +12,18 @@ export default {
     // 检测升级
     appUpdate()
     // #endif
-    // 首次启动时检查登录态，未登录则跳转登录页
-    const userStore = useUserStore()
-    if (!userStore.isLogined) {
-      uni.reLaunch({ url: '/pages/login/login' })
-    }
+    // 家庭AI小工具：启动后直接进入家庭AI首页（见 pages/launch/launch.vue），
+    // 使用微信登录（uni.login -> code2Session），无需 JEECG 账号密码登录。
+    // 如需恢复 JEECG 登录门禁，取消下面代码注释：
+    // const userStore = useUserStore()
+    // if (!userStore.isLogined) {
+    //   uni.reLaunch({ url: '/pages/login/login' })
+    // }
   },
   onShow: function (options) {
     console.log('App Show')
     console.log('应用启动路径：', options.path)
-    // 从后台切回前台时，再次检查登录态
-    const userStore = useUserStore()
-    const currentPage = options.path || ''
-    if (!userStore.isLogined && !currentPage.includes('login')) {
-      uni.reLaunch({ url: '/pages/login/login' })
-    }
+    // 家庭AI小工具：不再强制 JEECG 登录
   },
   onHide: function () {
     console.log('App Hide')

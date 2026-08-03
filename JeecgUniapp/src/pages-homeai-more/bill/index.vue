@@ -13,7 +13,7 @@
       <view class="entry-left">
         <text class="entry-icon">{{ e.categoryId ? getIcon(e.categoryId) : '💳' }}</text>
         <view>
-          <text class="entry-name">{{ e.remark || e.categoryId }}</text>
+          <text class="entry-name">{{ e.remark || e.categoryName || e.categoryId }}</text>
           <text class="entry-date">{{ e.billDate }}</text>
         </view>
       </view>
@@ -36,9 +36,10 @@ const summary = ref({expense:'0',income:'0',balance:'0'})
 const cats = ref<any[]>([])
 
 onShow(async () => {
-  entries.value = await getApi('/bill/entries')
   const now = new Date(); const m = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')
-  summary.value = await getApi('/bill/statistics', {params:{month:m}})
+  entries.value = await getApi('/bill/entries', { params: { yearMonth: m } })
+  const sum: any = await getApi('/bill/summary', { params: { yearMonth: m } })
+  summary.value = { expense: sum.totalExpense ?? '0', income: sum.totalIncome ?? '0', balance: sum.balance ?? '0' }
   cats.value = await getApi('/bill/categories')
 })
 

@@ -1,4 +1,4 @@
-﻿<route lang="json5">
+<route lang="json5">
 {
   style: {
     navigationBarTitleText: '我的家庭',
@@ -90,9 +90,9 @@
 <script lang="ts" setup>
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { useUserStore } from '../../stores/user'
-import { useFamilyStore } from '../../stores/family'
-import { get as getApi, post as postApi, del as delApi, put as putApi } from '../../api'
+import { useUserStore } from '../../pages-homeai/stores/user'
+import { useFamilyStore } from '../../pages-homeai/stores/family'
+import { get as getApi, post as postApi, del as delApi, put as putApi } from '../../pages-homeai/api'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()

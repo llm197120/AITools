@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { get as getApi, del as delApi } from '../api/request'
+import { get as getApi, post as postApi, del as delApi } from '../api/request'
 
 export const useFamilyStore = defineStore('homeai-family', () => {
   const familyInfo = ref<any>(null)
@@ -22,7 +22,7 @@ export const useFamilyStore = defineStore('homeai-family', () => {
   }
 
   async function createFamily(name: string) {
-    const result = await getApi('/family', { name })
+    const result = await postApi('/family', { name })
     familyInfo.value = result
     hasFamily.value = true
     return result

@@ -143,6 +143,28 @@ async function sendMessage() {
     // 使用 uni.request enableChunked 接收 SSE 流式响应
     const token = uni.getStorageSync('homeai_token')
     let sseBuffer = '' // SSE 行缓冲区，处理跨 chunk 断行
+
+    // 本地图片先上传，换取服务器可访问地址
+    const imageUrls: string[] = []
+    for (const img of selectedImages.value) {
+      if (!img) continue
+      if (img.startsWith('http')) {
+        imageUrls.push(img)
+        continue
+      }
+      try {
+        const up = await uni.uploadFile({
+          url: getAppBaseUrl() + '/homeai/ai/chat/upload',
+          filePath: img,
+          name: 'file',
+          header: { 'X-Access-Token': token },
+        })
+        const d = JSON.parse(up.data)
+        if (d && d.result && d.result.url) imageUrls.push(d.result.url)
+      } catch (e) {
+        console.error('图片上传失败', e)
+      }
+    }
     
     const requestTask = uni.request({
       url: getAppBaseUrl() + '/homeai/ai/chat/send',
@@ -154,8 +176,8 @@ async function sendMessage() {
       data: {
         conversationId: conversationId.value,
         content: content,
-        images: selectedImages.value.length > 0 ? JSON.stringify(selectedImages.value) : undefined,
-        files: selectedFiles.value.length > 0 ? JSON.stringify(selectedFiles.value.map((f: any) => f.url)) : undefined,
+        images: imageUrls.length > 0 ? imageUrls : undefined,
+        files: selectedFiles.value.length > 0 ? selectedFiles.value.map((f: any) => f.url) : undefined,
       },
       enableChunked: true,
       responseType: 'text',

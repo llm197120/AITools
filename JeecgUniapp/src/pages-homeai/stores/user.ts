@@ -1,14 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { get as getApi } from '../api/request'
+import { get as getApi, post as postApi } from '../api/request'
 
 export const useUserStore = defineStore('homeai-user', () => {
   const userInfo = ref<any>(null)
-  const token = ref<string>('')
+  const token = ref<string>(uni.getStorageSync('homeai_token') || '')
   const isLogin = computed(() => !!token.value)
 
   async function login(code: string) {
-    const result = await getApi('/user/login', { code })
+    const result = await postApi('/user/login', { params: { code } })
     token.value = result.token
     userInfo.value = result.userInfo
     uni.setStorageSync('homeai_token', result.token)

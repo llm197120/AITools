@@ -3,7 +3,7 @@ import { defineUniPages } from '@uni-helper/vite-plugin-uni-pages'
 export default defineUniPages({
   globalStyle: {
     navigationStyle: 'default',
-    navigationBarTitleText: 'uniapp',
+    navigationBarTitleText: '家庭AI小工具',
     navigationBarBackgroundColor: '#f8f8f8',
     navigationBarTextStyle: 'white',
     backgroundColor: '#000000',
@@ -18,37 +18,27 @@ export default defineUniPages({
   },
   tabBar: {
     color: '#aaa',
-    selectedColor: '#39b54a',
+    selectedColor: '#667eea',
     backgroundColor: '#F8F8F8',
     borderStyle: 'black',
-    height: '50px',
-    fontSize: '11px',
-    iconWidth: '24px',
-    spacing: '3px',
     list: [
-      {
-        iconPath: 'static/tabbar/tabbar-message-2.png',
-        selectedIconPath: 'static/tabbar/tabbar-message.png',
-        pagePath: 'pages/message/message',
-        text: '消息',
-      },
       {
         iconPath: 'static/tabbar/tabbar-home-2.png',
         selectedIconPath: 'static/tabbar/tabbar-home.png',
-        pagePath: 'pages/index/index',
-        text: '协作',
+        pagePath: 'pages/homeai/index',
+        text: '首页',
       },
-	  // {
-	  //   iconPath: 'static/tabbar/tabbar-workHome-2.png',
-	  //   selectedIconPath: 'static/tabbar/tabbar-workHome.png',
-	  //   pagePath: 'pages-super/flow/flowIndex',
-	  //   text: '审批',
-	  // },
+      {
+        iconPath: 'static/tabbar/tabbar-demo-2.png',
+        selectedIconPath: 'static/tabbar/tabbar-demo.png',
+        pagePath: 'pages/homeai/family',
+        text: '家庭',
+      },
       {
         iconPath: 'static/tabbar/tabbar-user-2.png',
         selectedIconPath: 'static/tabbar/tabbar-user.png',
-        pagePath: 'pages/user/people',
-        text: '个人',
+        pagePath: 'pages/homeai/profile',
+        text: '个人中心',
       },
     ],
   },

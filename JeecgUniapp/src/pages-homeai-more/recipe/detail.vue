@@ -7,7 +7,7 @@
     <image class="cover" :src="recipe.coverUrl || '/static/default-food.png'" mode="aspectFill"/>
     <view class="header-info">
       <text class="name">{{ recipe.name }}</text>
-      <text class="meta">{{ recipe.difficulty }} · {{ recipe.cookTime }}分钟 · {{ recipe.servings }}人份</text>
+      <text class="meta">{{ diffLabel(recipe.difficulty) }} · {{ recipe.cookTime }}分钟 · {{ recipe.servings }}人份</text>
     </view>
     <view class="section"><text class="section-title">食材清单</text></view>
     <view class="ingredient" v-for="i in ingredients" :key="i.id"><text>{{ i.name }}</text><text>{{ i.amount }}</text></view>
@@ -29,6 +29,10 @@ import { get as getApi } from '../../pages-homeai/api/request'
 const recipe = ref<any>({})
 const ingredients = ref<any[]>([])
 const steps = ref<any[]>([])
+function diffLabel(d: any) {
+  const map: Record<number, string> = { 1: '简单', 2: '简单', 3: '中等', 4: '中等', 5: '困难' }
+  return map[Number(d)] || '中等'
+}
 onLoad(async (opts:any) => {
   const res = await getApi(`/recipe/${opts.id}`)
   recipe.value = res.recipe

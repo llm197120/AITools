@@ -26,8 +26,7 @@ import { get as getApi, post as postApi } from '../../pages-homeai/api/request'
 const today = ref(new Date().toISOString().substring(0,10))
 const plans = ref<any[]>([])
 onShow(async () => {
-  const cal = await getApi('/plan/calendar', {params:{month:today.value.substring(0,7)}})
-  plans.value = cal[today.value] || []
+  plans.value = await getApi(`/plan/date/${today.value}`)
 })
 function detail(p:any) { uni.showToast({title:p.title, icon:'none'}) }
 function showAdd() {

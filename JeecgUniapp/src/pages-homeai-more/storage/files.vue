@@ -30,7 +30,7 @@
 
 <script lang="ts" setup>
 import { ref } from 'vue'
-import { get as getApi, put as putApi, del as delApi } from '../../pages-homeai/api/request'
+import { get as getApi, put as putApi, del as delApi, getServerBaseUrl } from '../../pages-homeai/api/request'
 
 const files = ref<any[]>([])
 const actionShow = ref(false)
@@ -41,14 +41,15 @@ const fileActions = ref([
   { name: '删除', key: 'delete', color: '#e74c3c' },
 ])
 
-const folderId = ''
+const folderId = ref('')
 
 onLoad((options: any) => {
-  loadFiles(options?.folderId || '')
+  folderId.value = options?.folderId || ''
+  loadFiles()
 })
 
-async function loadFiles(fid: string) {
-  files.value = await getApi(`/storage/folders/${fid}/files`)
+async function loadFiles() {
+  files.value = await getApi(`/storage/folders/${folderId.value}/files`)
 }
 
 function getIcon(ext: string) {
@@ -71,21 +72,59 @@ function showUploadMenu() {
   uni.showActionSheet({
     itemList: ['拍照', '从相册选择', '选择文件'],
     success: (res) => {
-      const types: any[] = [['camera'], ['album'], ['all']]
-      uni.chooseImage({ count: 1, sourceType: types[res.tapIndex] || ['album'] })
+      if (res.tapIndex === 2) {
+        uni.chooseMessageFile({
+          count: 1,
+          type: 'all',
+          success: (r) => {
+            if (r.tempFiles && r.tempFiles[0]) upload(r.tempFiles[0].path)
+          },
+        })
+      } else {
+        const sourceType: any = res.tapIndex === 0 ? ['camera'] : ['album']
+        uni.chooseImage({
+          count: 1,
+          sourceType,
+          success: (r) => {
+            if (r.tempFilePaths && r.tempFilePaths[0]) upload(r.tempFilePaths[0])
+          },
+        })
+      }
     },
   })
+}
+
+async function upload(filePath: string) {
+  uni.showLoading({ title: '上传中...' })
+  try {
+    const token = uni.getStorageSync('homeai_token')
+    const res: any = await uni.uploadFile({
+      url: getServerBaseUrl() + '/homeai/storage/files/upload',
+      filePath,
+      name: 'file',
+      formData: { folderId: folderId.value || '', visibility: 'private' },
+      header: { 'X-Access-Token': token },
+    })
+    const data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
+    if (!data.success) throw new Error(data.message || '上传失败')
+    uni.hideLoading()
+    uni.showToast({ title: '上传成功', icon: 'success' })
+    await loadFiles()
+  } catch (e: any) {
+    uni.hideLoading()
+    uni.showToast({ title: e.message || '上传失败', icon: 'none' })
+  }
 }
 
 async function onFileAction(e: any) {
   const f = selectedFile.value
   if (!f) return
-  if (e.key === 'favorite') { await putApi(`/storage/files/${f.id}/favorite`); await loadFiles('') }
-  else if (e.key === 'convert') { uni.navigateTo({ url: `/pages/homeai-more/storage/office-convert?fileId=${f.id}&format=${f.extension}` }) }
+  if (e.key === 'favorite') { await putApi(`/storage/files/${f.id}/favorite`); await loadFiles() }
+  else if (e.key === 'convert') { uni.navigateTo({ url: `/pages-homeai-more/storage/office-convert?fileId=${f.id}&format=${f.extension}` }) }
   else if (e.key === 'delete') {
     uni.showModal({
       title: '删除文件', content: '确定删除吗？',
-      success: async (r) => { if (r.confirm) { await delApi(`/storage/files/${f.id}`); await loadFiles('') } },
+      success: async (r) => { if (r.confirm) { await delApi(`/storage/files/${f.id}`); await loadFiles() } },
     })
   }
 }

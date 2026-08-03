@@ -98,7 +98,7 @@ async function createAndGo(tip?: string) {
 }
 
 function goChat(id: string, initialMsg?: string) {
-  const url = `/pages/homeai-ai/ai/chat?id=${id}${initialMsg ? '&initial=' + encodeURIComponent(initialMsg) : ''}`
+  const url = `/pages-homeai-ai/ai/chat?id=${id}${initialMsg ? '&initial=' + encodeURIComponent(initialMsg) : ''}`
   uni.navigateTo({ url })
 }
 

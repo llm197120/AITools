@@ -11,7 +11,7 @@
         <image class="recipe-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill"/>
         <view class="recipe-info">
           <text class="recipe-name">{{ r.name }}</text>
-          <text class="recipe-meta">{{ r.difficulty }} · {{ r.cookTime }}分钟</text>
+          <text class="recipe-meta">{{ diffLabel(r.difficulty) }} · {{ r.cookTime }}分钟</text>
         </view>
       </view>
     </view>
@@ -25,10 +25,19 @@ import { onShow } from '@dcloudio/uni-app'
 import { get as getApi } from '../../pages-homeai/api/request'
 const keyword = ref('')
 const recipes = ref<any[]>([])
-onShow(async () => { const res = await getApi('/recipe/list'); recipes.value = res.records || res || [] })
-function search() { uni.showToast({title:'搜索:'+keyword.value, icon:'none'}) }
-function detail(id:string) { uni.navigateTo({url:`/pages/homeai-more/recipe/detail?id=${id}`}) }
-function goAdd() { uni.navigateTo({url:'/pages/homeai-more/recipe/add'}) }
+async function load() { const res = await getApi('/recipe/list'); recipes.value = res.records || res || [] }
+onShow(load)
+function diffLabel(d: any) {
+  const map: Record<number, string> = { 1: '简单', 2: '简单', 3: '中等', 4: '中等', 5: '困难' }
+  return map[Number(d)] || '中等'
+}
+async function search() {
+  if (!keyword.value.trim()) { await load(); return }
+  const res: any = await getApi('/recipe/search', { params: { keyword: keyword.value.trim() } })
+  recipes.value = Array.isArray(res) ? res : []
+}
+function detail(id:string) { uni.navigateTo({url:`/pages-homeai-more/recipe/detail?id=${id}`}) }
+function goAdd() { uni.navigateTo({url:'/pages-homeai-more/recipe/add'}) }
 </script>
 
 <style scoped>

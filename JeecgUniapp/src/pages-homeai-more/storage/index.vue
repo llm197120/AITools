@@ -33,7 +33,7 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { get as getApi, post as postApi } from '../../pages-homeai/api/request'
+import { get as getApi, post as postApi, getServerBaseUrl } from '../../pages-homeai/api/request'
 
 const folders = ref<any[]>([])
 const menuShow = ref(false)
@@ -49,11 +49,11 @@ async function loadFolders() {
 }
 
 function goFiles(folderId: string) {
-  uni.navigateTo({ url: `/pages/homeai-more/storage/files?folderId=${folderId}` })
+  uni.navigateTo({ url: `/pages-homeai-more/storage/files?folderId=${folderId}` })
 }
 
 function goSearch() {
-  uni.navigateTo({ url: '/pages/homeai-more/storage/search' })
+  uni.navigateTo({ url: '/pages-homeai-more/storage/search' })
 }
 
 function showMenu() { menuShow.value = true }
@@ -80,7 +80,28 @@ function showNewFolder() {
 function showUpload() {
   uni.chooseImage({
     count: 1,
-    success: (r) => { uni.showToast({ title: '文件已选择，需上传', icon: 'none' }) },
+    success: async (r) => {
+      if (!r.tempFilePaths || !r.tempFilePaths[0]) return
+      uni.showLoading({ title: '上传中...' })
+      try {
+        const token = uni.getStorageSync('homeai_token')
+        const res: any = await uni.uploadFile({
+          url: getServerBaseUrl() + '/homeai/storage/files/upload',
+          filePath: r.tempFilePaths[0],
+          name: 'file',
+          formData: { folderId: '', visibility: 'private' },
+          header: { 'X-Access-Token': token },
+        })
+        const data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
+        if (!data.success) throw new Error(data.message || '上传失败')
+        uni.hideLoading()
+        uni.showToast({ title: '上传成功', icon: 'success' })
+        await loadFolders()
+      } catch (e: any) {
+        uni.hideLoading()
+        uni.showToast({ title: e.message || '上传失败', icon: 'none' })
+      }
+    },
   })
 }
 </script>

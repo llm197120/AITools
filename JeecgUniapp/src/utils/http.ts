@@ -43,9 +43,8 @@ export const http = <T>(options: CustomRequestOptions) => {
         } else {
           switch (res.statusCode) {
             case 401:
-              // 401错误  -> 清理用户信息，跳转到登录页
+              // 401错误 -> 清理用户信息（家庭AI小工具使用微信登录，不再跳转 JEECG 登录页）
               userStore.clearUserInfo()
-              uni.navigateTo({ url: '/pages/login/login' })
               break
             // case 500:
             //   break

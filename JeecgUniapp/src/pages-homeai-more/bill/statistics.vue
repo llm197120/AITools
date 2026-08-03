@@ -24,7 +24,10 @@ import { get as getApi } from '../../pages-homeai/api/request'
 const currentMonth = ref(new Date().toISOString().substring(0,7))
 const stats = ref({expense:'0',income:'0',count:0})
 onShow(() => loadStats())
-async function loadStats() { stats.value = await getApi('/bill/statistics', {params:{month:currentMonth.value}}) }
+  async function loadStats() {
+    const sum: any = await getApi('/bill/summary', { params: { yearMonth: currentMonth.value } })
+    stats.value = { expense: sum.totalExpense ?? '0', income: sum.totalIncome ?? '0', count: sum.count ?? 0 }
+  }
 function changeMonth(d:number) {
   const [y,m] = currentMonth.value.split('-').map(Number)
   const dt = new Date(y,m-1+d); currentMonth.value = dt.toISOString().substring(0,7)

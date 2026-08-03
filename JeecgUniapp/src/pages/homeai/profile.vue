@@ -1,4 +1,4 @@
-﻿<route lang="json5">
+<route lang="json5">
 {
   style: {
     navigationBarTitleText: '个人中心',
@@ -54,7 +54,7 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { useUserStore } from '../../stores/user'
+import { useUserStore } from '../../pages-homeai/stores/user'
 
 const userStore = useUserStore()
 
@@ -69,7 +69,7 @@ onShow(async () => {
 })
 
 function goFamily() {
-  uni.navigateTo({ url: '/pages-homeai/pages/family/index' })
+  uni.switchTab({ url: '/pages/homeai/family' })
 }
 
 function showPrivacy() {
@@ -93,7 +93,7 @@ function handleLogout() {
     success: (res) => {
       if (res.confirm) {
         userStore.logout()
-        uni.reLaunch({ url: '/pages/index/index' })
+        uni.reLaunch({ url: '/pages/homeai/index' })
       }
     },
   })

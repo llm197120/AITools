@@ -1,5 +1,6 @@
 ﻿<route lang="json5">
 {
+  type: 'home',
   layout: 'default',
   style: {
     navigationStyle: 'custom',
@@ -52,8 +53,9 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { useUserStore } from '../../stores/user'
-import { useFamilyStore } from '../../stores/family'
+import { useUserStore } from '../../pages-homeai/stores/user'
+import { useFamilyStore } from '../../pages-homeai/stores/family'
+import { get as getApi } from '../../pages-homeai/api/request'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
@@ -79,24 +81,33 @@ onShow(async () => {
     }
   }
   await familyStore.fetchFamilyInfo()
+  // 今日待办数量
+  try {
+    const now = new Date()
+    const d = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const list = await getApi(`/plan/date/${d}`)
+    todayTodo.value = Array.isArray(list) ? list.length : 0
+  } catch (e) {
+    todayTodo.value = 0
+  }
 })
 
 function goProfile() {
-  uni.navigateTo({ url: '/pages-homeai/pages/profile/index' })
+  uni.switchTab({ url: '/pages/homeai/profile' })
 }
 
 function goFamily() {
-  uni.navigateTo({ url: '/pages-homeai/pages/family/index' })
+  uni.switchTab({ url: '/pages/homeai/family' })
 }
 
 function goModule(key: string) {
   const pages: Record<string, string> = {
-    ai: '/pages/homeai-ai/ai/conversations',   // 分包一
-    storage: '/pages/homeai-more/storage/index', // 分包二（待创建）
-    bill: '/pages/homeai-more/bill/index',
-    plan: '/pages/homeai-more/plan/index',
-    recipe: '/pages/homeai-more/recipe/index',
-    learn: '/pages/homeai-more/learn/index',
+    ai: '/pages-homeai-ai/ai/conversations',
+    storage: '/pages-homeai-more/storage/index',
+    bill: '/pages-homeai-more/bill/index',
+    plan: '/pages-homeai-more/plan/index',
+    recipe: '/pages-homeai-more/recipe/index',
+    learn: '/pages-homeai-more/learn/index',
   }
   const url = pages[key]
   if (url) {

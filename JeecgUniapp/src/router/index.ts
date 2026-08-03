@@ -17,8 +17,9 @@ setRouteName(routes)
 const router = createRouter({
   routes: [...routes], // 路由表信息
 })
-export const whiteList = ['/pages/login/login','/pages/login/loginOauth2']
-export const loginPage = '/pages/login/login'
+// 家庭AI小工具：使用微信登录，免 JEECG 登录；白名单覆盖全部业务页面
+export const whiteList = ['/pages/homeai/index', '/pages/homeai/family', '/pages/homeai/profile']
+export const loginPage = '/pages/homeai/index'
 interface CacheRoute {
   path: string;
   query: Record<string, string | number | boolean>;
@@ -73,7 +74,7 @@ export const beforEach = (to, from, next) => {
       }
     } else {
       // 如果当前是在OAuth2APP环境，就跳转到OAuth2登录页面
-      let path = isOAuth2AppEnv() ? '/pages/login/loginOauth2' : '/pages/login/login';
+      let path = isOAuth2AppEnv() ? '/pages/login/loginOauth2' : loginPage;
       let temp = to.path;
       if(isOAuth2AppEnv() && temp=='/pages/flow/myTaskDetail'){
         if(to.query && to.query.info){

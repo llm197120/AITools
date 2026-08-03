@@ -82,7 +82,7 @@ async function request<T = any>(options: RequestOptions): Promise<T> {
 
   return new Promise((resolve, reject) => {
     uni.request({
-      url,
+      url: getServerBaseUrl() + url,
       method: options.method || 'GET',
       data: unwrapped.data,
       header,
@@ -93,7 +93,7 @@ async function request<T = any>(options: RequestOptions): Promise<T> {
         } else if (data.code === 401) {
           // Token 过期，重定向到登录
           removeToken()
-  uni.redirectTo({ url: '/pages-homeai/pages/index/index' })
+          uni.switchTab({ url: '/pages/homeai/index' })
           reject(new Error(data.message || '登录已过期'))
         } else {
           uni.showToast({ title: data.message || '请求失败', icon: 'none' })
