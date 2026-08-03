@@ -78,6 +78,8 @@
       labelWidth: 80,
       schemas: [
         { field: 'name', label: '菜名', component: 'Input', colProps: { span: 8 } },
+        { field: 'categoryId', label: '分类', component: 'Input', colProps: { span: 8 } },
+        { field: 'userId', label: '用户ID', component: 'Input', colProps: { span: 8 } },
       ],
     },
   });

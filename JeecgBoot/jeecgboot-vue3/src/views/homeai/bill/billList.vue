@@ -64,7 +64,7 @@
     { title: '日期', dataIndex: 'billDate', width: 120 },
     { title: '用户', dataIndex: 'userId', width: 160 },
     { title: '类型', dataIndex: 'type', key: 'type', width: 70 },
-    { title: '分类', dataIndex: 'categoryId', width: 100 },
+      { title: '分类', dataIndex: 'categoryName', width: 100, customRender: ({ text, record }: any) => text || record?.categoryId || '-' },
     { title: '金额', dataIndex: 'amount', key: 'amount', width: 100 },
     { title: '支付方式', dataIndex: 'paymentMethod', width: 90 },
     { title: '备注', dataIndex: 'remark', width: 200 },
@@ -84,6 +84,8 @@
       schemas: [
         { field: 'billDate', label: '日期', component: 'DatePicker', colProps: { span: 8 } },
         { field: 'type', label: '类型', component: 'Select', colProps: { span: 8 }, componentProps: { options: [{label:'收入',value:'income'},{label:'支出',value:'expense'}] } },
+        { field: 'categoryId', label: '分类', component: 'Input', colProps: { span: 8 } },
+        { field: 'userId', label: '用户ID', component: 'Input', colProps: { span: 8 } },
       ],
     },
   });

@@ -13,6 +13,25 @@
       <a-button type="primary" preIcon="ant-design:upload-outlined" @click="handleUploadModal" style="margin-left: 8px">上传文件</a-button>
     </div>
 
+    <!-- 空间统计 -->
+    <a-row :gutter="16" style="margin: 12px 0">
+      <a-col :span="6">
+        <a-card :bordered="false"><a-statistic title="文件总数" :value="spaceStats.totalFiles || 0" suffix="个" /></a-card>
+      </a-col>
+      <a-col :span="6">
+        <a-card :bordered="false"><a-statistic title="总占用空间" :value="formatSize(spaceStats.totalSize || 0)" /></a-card>
+      </a-col>
+      <a-col :span="12">
+        <a-card :bordered="false" title="各用户占用（Top 5）">
+          <div v-for="(u, i) in topUsers" :key="u.userId" style="display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0">
+            <span>{{ u.userId }}</span>
+            <span>{{ u.fileCount }} 个 · {{ formatSize(u.totalSize) }}</span>
+          </div>
+          <span v-if="topUsers.length === 0" style="color: #999">暂无数据</span>
+        </a-card>
+      </a-col>
+    </a-row>
+
     <!-- 文件列表视图 -->
     <div v-if="viewMode === 'list'">
       <BasicTable @register="registerTable">
@@ -107,7 +126,7 @@
 </template>
 
 <script lang="ts" name="homeai-storage-file" setup>
-  import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { BasicModal, useModal } from '/@/components/Modal';
   import { defHttp } from '/@/utils/http/axios';
@@ -115,6 +134,31 @@
   import { Icon } from '/@/components/Icon';
 
   const { createMessage, createConfirm } = useMessage();
+
+  const spaceStats = ref<any>({ totalFiles: 0, totalSize: 0, perUser: [] });
+  const topUsers = computed(() =>
+    [...(spaceStats.value.perUser || [])].sort((a, b) => (b.totalSize || 0) - (a.totalSize || 0)).slice(0, 5),
+  );
+
+  async function loadSpaceStats() {
+    try {
+      spaceStats.value = (await defHttp.get({ url: '/homeai/storage/stats' })) as any;
+    } catch {
+      // 忽略
+    }
+  }
+
+  function formatSize(bytes: number): string {
+    if (!bytes) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    let size = bytes;
+    while (size >= 1024 && i < units.length - 1) {
+      size /= 1024;
+      i++;
+    }
+    return size.toFixed(1) + ' ' + units[i];
+  }
   const [registerUploadModal, { openModal: openUploadModal }] = useModal();
   const [registerFolderModal, { openModal: openFolderModal }] = useModal();
   const fileInputRef = ref<HTMLInputElement | null>(null);
@@ -303,6 +347,7 @@
 
   onMounted(() => {
     loadFolderTree();
+    loadSpaceStats();
   });
 </script>
 

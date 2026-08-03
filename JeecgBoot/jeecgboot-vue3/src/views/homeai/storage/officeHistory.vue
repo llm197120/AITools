@@ -1,6 +1,9 @@
 <template>
   <div style="padding: 16px">
     <BasicTable @register="registerTable">
+      <template #action="{ record }">
+        <TableAction :actions="getTableAction(record)" />
+      </template>
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'status'">
           <a-tag v-if="record.status === 'COMPLETED'" color="success">已完成</a-tag>
@@ -14,10 +17,12 @@
 </template>
 
 <script lang="ts" name="homeai-office-history" setup>
-  import { BasicTable, useTable } from '/@/components/Table';
+  import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { defHttp } from '/@/utils/http/axios';
+  import { useMessage } from '/@/hooks/web/useMessage';
 
-  const [registerTable] = useTable({
+  const { createMessage, createConfirm } = useMessage();
+  const [registerTable, { reload }] = useTable({
     title: 'Office处理记录',
     api: (params: any) => defHttp.get({ url: '/homeai/storage/office/list', params }),
     columns: [
@@ -33,6 +38,12 @@
     useSearchForm: true,
     showTableSetting: true,
     showIndexColumn: true,
+    actionColumn: {
+      width: 120,
+      title: '操作',
+      dataIndex: 'action',
+      slots: { customRender: 'action' },
+    },
     formConfig: {
       schemas: [
         { field: 'convertType', label: '处理类型', component: 'Select', componentProps: { options: [{ label: '格式转换', value: 'format_convert' }, { label: 'AI生成', value: 'ai_generate' }] } },
@@ -40,4 +51,33 @@
       ],
     },
   });
+
+  function getTableAction(record: any) {
+    return [
+      {
+        icon: 'ant-design:download-outlined',
+        title: '下载结果',
+        onClick: () => {
+          if (record.resultFileUrl) {
+            window.open(record.resultFileUrl, '_blank');
+          } else {
+            createMessage.warning('该记录暂无结果文件');
+          }
+        },
+      },
+      { icon: 'ant-design:delete-outlined', title: '删除', color: 'error', onClick: () => handleDelete(record) },
+    ];
+  }
+
+  function handleDelete(record: any) {
+    createConfirm({
+      title: '确认删除',
+      content: '确定删除该处理记录吗？',
+      onOk: async () => {
+        await defHttp.delete({ url: `/homeai/storage/office/${record.id}` });
+        createMessage.success('删除成功');
+        reload();
+      },
+    });
+  }
 </script>

@@ -41,13 +41,13 @@
 </template>
 
 <script lang="ts" name="homeai-user" setup>
-  import { computed, ref, watch } from 'vue';
+  import { computed, onMounted, ref, watch } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { useMethods } from '/@/hooks/system/useMethods';
   import { useUserStore } from '/@/store/modules/user';
-  import { userApi } from '/@/api/homeai';
+  import { userApi, familyApi } from '/@/api/homeai';
   import UserDrawer from './UserDrawer.vue';
 
   const { createMessage, createConfirm } = useMessage();
@@ -55,6 +55,21 @@
   const [registerDrawer, { openDrawer }] = useDrawer();
   const selectedRowKeys = ref<string[]>([]);
   const activeTab = ref('list');
+  const familyOptions = ref<any[]>([]);
+
+  // 加载家庭下拉（用于按家庭筛选）
+  async function loadFamilyOptions() {
+    try {
+      const res: any = await familyApi.list({ pageNo: 1, pageSize: 1000 });
+      familyOptions.value = (res?.records || res || []).map((f: any) => ({ label: f.name, value: f.id }));
+    } catch {
+      familyOptions.value = [];
+    }
+  }
+
+  onMounted(() => {
+    loadFamilyOptions();
+  });
 
   const rowSelection = computed(() => ({
     selectedRowKeys: selectedRowKeys.value,
@@ -65,7 +80,7 @@
 
   const columns = [
     { title: '微信昵称', dataIndex: 'nickname', width: 150 },
-    { title: 'openid', dataIndex: 'openid', width: 200 },
+      { title: 'openid', dataIndex: 'openid', width: 200, customRender: ({ text }: any) => (text ? text.substring(0, 3) + '****' + text.substring(text.length - 4) : '-') },
     { title: '手机号', dataIndex: 'phone', width: 120 },
     { title: '所属家庭', dataIndex: 'familyName', key: 'familyName', width: 150 },
     { title: '家庭角色', dataIndex: 'familyRole', width: 100 },
@@ -78,7 +93,19 @@
     title: '微信用户列表',
     api: (params: any) => activeTab.value === 'list' ? userApi.list(params) : userApi.recycleBin(params),
     columns: columns,
-    useSearchForm: false,
+    useSearchForm: true,
+    formConfig: {
+      schemas: [
+        { field: 'nickname', label: '昵称', component: 'Input' },
+        { field: 'phone', label: '手机号', component: 'Input' },
+        {
+          field: 'familyId',
+          label: '所属家庭',
+          component: 'Select',
+          componentProps: { options: familyOptions, allowClear: true },
+        },
+      ],
+    },
     showTableSetting: true,
     showIndexColumn: true,
     actionColumn: {

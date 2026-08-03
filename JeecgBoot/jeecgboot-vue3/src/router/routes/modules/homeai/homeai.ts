@@ -96,6 +96,18 @@ const homeai: AppRouteModule = {
           component: () => import('/@/views/homeai/bill/billCategory.vue'),
           meta: { title: '消费分类' },
         },
+        {
+          path: 'billStatistics',
+          name: 'HomeaiBillStatistics',
+          component: () => import('/@/views/homeai/bill/billStatistics.vue'),
+          meta: { title: '统计报表' },
+        },
+        {
+          path: 'billImport',
+          name: 'HomeaiBillImport',
+          component: () => import('/@/views/homeai/bill/billImport.vue'),
+          meta: { title: '账单导入' },
+        },
       ],
     },
     // 计划管理
@@ -126,6 +138,12 @@ const homeai: AppRouteModule = {
           component: () => import('/@/views/homeai/recipe/recipeList.vue'),
           meta: { title: '菜谱列表' },
         },
+        {
+          path: 'recipeCategory',
+          name: 'HomeaiRecipeCategory',
+          component: () => import('/@/views/homeai/recipe/recipeCategory.vue'),
+          meta: { title: '菜谱分类' },
+        },
       ],
     },
     // 学习管理
@@ -140,6 +158,12 @@ const homeai: AppRouteModule = {
           name: 'HomeaiLearnList',
           component: () => import('/@/views/homeai/learn/learnList.vue'),
           meta: { title: '学习资料' },
+        },
+        {
+          path: 'learnRecord',
+          name: 'HomeaiLearnRecord',
+          component: () => import('/@/views/homeai/learn/learnRecord.vue'),
+          meta: { title: '学习记录' },
         },
       ],
     },

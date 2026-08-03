@@ -4,6 +4,29 @@
       <a-tab-pane key="list" tab="计划列表" />
       <a-tab-pane key="recycle" tab="回收站" />
     </a-tabs>
+    <a-row v-if="activeTab === 'list'" :gutter="16" style="margin-bottom: 16px">
+      <a-col :span="12">
+        <a-card :bordered="false" title="本月完成率统计">
+          <a-table
+            :data-source="completion"
+            :columns="completionColumns"
+            :pagination="false"
+            size="small"
+            row-key="userId"
+          />
+        </a-card>
+      </a-col>
+      <a-col :span="12">
+        <a-card :bordered="false" title="完成率分布">
+          <a-progress
+            type="circle"
+            :percent="completionRate"
+            :format="(p: number) => p + '%'"
+          />
+          <span style="margin-left: 12px; color: #666">整体完成率（按已产生实例计算）</span>
+        </a-card>
+      </a-col>
+    </a-row>
     <BasicTable @register="registerTable" :rowSelection="rowSelection">
       <template #tableTitle>
         <a-button v-if="activeTab === 'list'" preIcon="ant-design:plus-outlined" type="primary" @click="handleAdd">新增</a-button>
@@ -36,19 +59,32 @@
 </template>
 
 <script lang="ts" name="homeai-plan-list" setup>
-  import { computed, ref } from 'vue';
+import { computed, ref, onMounted } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { useMethods } from '/@/hooks/system/useMethods';
-  import { planApi } from '/@/api/homeai';
+import { planApi } from '/@/api/homeai';
+import { defHttp } from '/@/utils/http/axios';
   import PlanDrawer from './PlanDrawer.vue';
 
   const { createMessage, createConfirm } = useMessage();
   const { handleExportXls, handleImportXls } = useMethods();
   const [registerDrawer, { openDrawer }] = useDrawer();
   const selectedRowKeys = ref<string[]>([]);
-  const activeTab = ref('list');
+const activeTab = ref('list');
+const completion = ref<any[]>([]);
+const completionColumns = [
+  { title: '用户ID', dataIndex: 'userId', width: 180 },
+  { title: '计划数', dataIndex: 'total', width: 80 },
+  { title: '已完成', dataIndex: 'completed', width: 80 },
+  { title: '完成率', dataIndex: 'rate', key: 'rate', width: 120, customRender: ({ text }: any) => text + '%' },
+];
+const completionRate = computed(() => {
+  const total = completion.value.reduce((s, r) => s + (r.total || 0), 0);
+  const done = completion.value.reduce((s, r) => s + (r.completed || 0), 0);
+  return total === 0 ? 0 : Math.round((done / total) * 100);
+});
 
   const rowSelection = computed(() => ({
     selectedRowKeys: selectedRowKeys.value,
@@ -78,6 +114,8 @@
       schemas: [
         { field: 'title', label: '标题', component: 'Input', colProps: { span: 8 } },
         { field: 'category', label: '分类', component: 'Input', colProps: { span: 8 } },
+        { field: 'userId', label: '用户ID', component: 'Input', colProps: { span: 8 } },
+        { field: 'planDate', label: '计划日期', component: 'DatePicker', colProps: { span: 8 } },
       ],
     },
   });
@@ -86,7 +124,20 @@
     activeTab.value = key;
     selectedRowKeys.value = [];
     reload();
+    if (key === 'list') loadCompletion();
   }
+
+  async function loadCompletion() {
+    try {
+      completion.value = (await defHttp.get({ url: '/homeai/plan/admin/completion' })) as any[] || [];
+    } catch {
+      completion.value = [];
+    }
+  }
+
+  onMounted(() => {
+    loadCompletion();
+  });
 
   function getTableAction(record: any) {
     if (activeTab.value === 'recycle') {

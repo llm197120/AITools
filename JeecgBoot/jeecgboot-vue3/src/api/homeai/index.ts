@@ -188,5 +188,11 @@ export const quotaApi = {
   getDefaultQuota: () => defHttp.get({ url: `${BASE}/ai/key-config/quota/default` }),
   /** 获取用户Token消耗统计（管理端分页） */
   logList: (params?: any) => defHttp.get({ url: `${BASE}/ai/key-config/quota/list`, params }),
+  /** 用户额度配置列表（含每日/每月限额） */
+  getUserQuotaPage: (params?: any) => defHttp.get({ url: `${BASE}/ai/key-config/quota/user/list`, params }),
+  /** 更新用户额度配置 */
+  updateUserQuota: (data: any) => defHttp.put({ url: `${BASE}/ai/key-config/quota/user`, data }),
+  /** 额度使用概览 */
+  getOverview: () => defHttp.get({ url: `${BASE}/ai/key-config/quota/overview` }),
 };
 //update-end---author:admin ---date:2026-07-31  for：AI管理API集中定义-----------
