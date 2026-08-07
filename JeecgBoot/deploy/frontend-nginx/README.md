@@ -61,19 +61,22 @@ docker compose -f docker-compose.prd.yml up -d homeai-mysql homeai-redis homeai-
 
 ### 2. 更新管理端静态
 
-从 GitHub Actions 下载 Artifact `admin-web-dist-prd`（或 `admin-web-dist-dev`）：
+在服务器（或构建机）编译管理端：
 
 ```bash
-gh run download <run_id> -n admin-web-dist-prd -D /tmp/admin-dist
-./deploy-static.sh prd /tmp/admin-dist
+cd JeecgBoot/jeecgboot-vue3
+pnpm install --frozen-lockfile
+pnpm run build:docker:prod
+cd /opt/homeai/frontend-nginx
+./deploy-static.sh prd ../jeecgboot-vue3/dist
 ```
 
 `deploy-static.sh` 会：同步 dist → `/var/www/homeai-admin`、安装 Nginx 配置、`nginx -s reload`。
 
 ## 对应 GitHub Workflow
 
-- `build-push-nginx-dev.yml` / `build-push-nginx-prd.yml`（当前启用）
-- push 对应分支后：拉取后端镜像 + 下载 Artifact 静态包
+- `build-push-dev.yml` / `build-push-prd.yml`：仅推送 `homeai-backend` 镜像
+- 管理端静态包在**服务器本机**构建（`pnpm run build:docker:prod`），不使用 GitHub Artifacts
 
 ## 访问
 

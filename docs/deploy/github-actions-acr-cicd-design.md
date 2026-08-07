@@ -23,15 +23,15 @@ registry: 阿里云容器镜像服务 - 个人版
 | 4 | 域名 | **管理端与 API 同域名**，Nginx `/jeecgboot` 反代 |
 | 5 | 分支模型 | **`main`** CI；**`dev`** / **`prd`** 构建推 ACR |
 | 6 | ACR | 命名空间 **`liulm`**；镜像 **`homeai-backend`**、**`homeai-admin-web`** |
-| 7 | 部署方式 | GitHub 仅 CI（**Nginx 方案**）；ECS 本机 `frontend-nginx/` + `build-push-nginx-*.yml` |
+| 7 | 部署方式 | GitHub 仅推后端镜像；管理端在 ECS 本机构建 + Nginx 部署 |
 
 **实施产物路径**
 
 | 文件 | 说明 |
 |------|------|
 | `.github/workflows/ci.yml` | main / PR 编译验证 |
-| `.github/workflows/build-push-nginx-dev.yml` | dev CI（当前启用） |
-| `.github/workflows/build-push-nginx-prd.yml` | prd CI（当前启用） |
+| `.github/workflows/build-push-dev.yml` | dev 后端 CI |
+| `.github/workflows/build-push-prd.yml` | prd 后端 CI |
 | `JeecgBoot/deploy/frontend-nginx/` | Nginx 管理端部署 |
 | `JeecgBoot/deploy/README.md` | 部署总览（二选一） |
 | `JeecgBoot/jeecgboot-vue3/.env.docker.prod` | 同域 API 构建配置 |
@@ -468,7 +468,7 @@ HomeAI 必填运行时配置（通过 env 或 K8s Secret 注入）：
 
 - [x] `JeecgBoot/deploy/docker-compose.dev.yml` / `docker-compose.prd.yml`
 - [x] 管理端方案分离：`frontend-docker/` 与 `frontend-nginx/`
-- [x] 采用 Nginx 方案；已删除 `build-push-docker-*.yml`
+- [x] Workflow 仅推送后端镜像；前端静态在服务器本机构建
 - [ ] 配置 GitHub Secrets：`ACR_USERNAME`、`ACR_PASSWORD`
 - [ ] ECS 首次初始化（`setup-ecs.md`）
 

@@ -1,7 +1,6 @@
 # GitHub Secrets 配置说明
 
-> GitHub Actions **仅 CI**，不在 Actions 中 SSH 部署。  
-> **切勿**将 ACR 密码写入仓库。
+> GitHub Actions **仅构建并推送后端镜像**，不在 Actions 中部署或构建前端静态包。
 
 ## 必填 Secrets（2 项）
 
@@ -10,27 +9,27 @@
 | `ACR_USERNAME` | 阿里云 ACR 登录用户名 |
 | `ACR_PASSWORD` | ACR 固定密码 |
 
-## Workflow（Nginx 方案）
+## Workflow
 
-| 分支 | Workflow | CI 产出 |
-|------|----------|---------|
-| `dev` | `build-push-nginx-dev.yml` | `homeai-backend` 镜像 + Artifact `admin-web-dist-dev` |
-| `prd` | `build-push-nginx-prd.yml` | `homeai-backend` 镜像 + Artifact `admin-web-dist-prd` |
-| `main` / PR | `ci.yml` | 编译验证 |
+| 分支 | Workflow | 产出 |
+|------|----------|------|
+| `dev` | `build-push-dev.yml` | `homeai-backend` 镜像 |
+| `prd` | `build-push-prd.yml` | `homeai-backend` 镜像 |
+| `main` / PR | `ci.yml` | 编译验证（含前端 build 检查） |
 
 ## 服务器部署
 
-目录：`JeecgBoot/deploy/frontend-nginx/`
-
 ```bash
+# 后端（从 ACR 拉取）
 ./deploy-backend.sh prd
-./deploy-static.sh prd /path/to/dist
+
+# 管理端（在服务器本机构建 dist 后部署）
+cd JeecgBoot/jeecgboot-vue3 && pnpm install && pnpm run build:docker:prod
+./deploy-static.sh prd /path/to/jeecgboot-vue3/dist
 ```
 
-ACR 账号密码配置在 `frontend-nginx/.env`（见 `env.example`）。
+ACR 账号密码配置在 `frontend-nginx/.env`。
 
 ## ACR 仓库
 
-命名空间 `liulm`：
-
-- `homeai-backend`
+命名空间 `liulm`：`homeai-backend`

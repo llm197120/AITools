@@ -1,5 +1,5 @@
-# dev — Nginx 管理端方案：推送 homeai-backend + 上传静态 dist（不推 admin 镜像）
-name: Build & Push Nginx (dev)
+# dev 分支：构建并推送后端镜像至 ACR
+name: Build & Push (dev)
 
 on:
   push:
@@ -12,7 +12,7 @@ env:
   IMAGE_BACKEND: homeai-backend
 
 concurrency:
-  group: build-push-nginx-dev
+  group: build-push-dev
   cancel-in-progress: false
 
 jobs:
@@ -30,22 +30,6 @@ jobs:
       - name: Maven package
         working-directory: JeecgBoot/jeecg-boot
         run: mvn -B clean package -Pdocker -pl jeecg-module-system/jeecg-system-start -am -DskipTests
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: pnpm
-          cache-dependency-path: JeecgBoot/jeecgboot-vue3/pnpm-lock.yaml
-
-      - name: Build admin web (静态包)
-        working-directory: JeecgBoot/jeecgboot-vue3
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm run build:docker:prod
 
       - name: Docker meta
         id: meta
@@ -66,16 +50,8 @@ jobs:
             ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.IMAGE_BACKEND }}:${{ steps.meta.outputs.image_tag }}
             ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.IMAGE_BACKEND }}:dev-latest
 
-      - name: Upload admin dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: admin-web-dist-dev
-          path: JeecgBoot/jeecgboot-vue3/dist/
-          retention-days: 30
-
       - name: Summary
         run: |
-          echo "### Nginx 方案 dev 构建完成" >> "$GITHUB_STEP_SUMMARY"
-          echo "- 部署目录: \`JeecgBoot/deploy/frontend-nginx/\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- 后端: \`./deploy-backend.sh dev\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- 静态: 下载 Artifact \`admin-web-dist-dev\` → \`./deploy-static.sh dev /path/to/dist\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "### dev 后端构建完成" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 镜像: \`${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.IMAGE_BACKEND }}:${{ steps.meta.outputs.image_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 服务器: \`JeecgBoot/deploy/frontend-nginx/deploy-backend.sh dev\`" >> "$GITHUB_STEP_SUMMARY"

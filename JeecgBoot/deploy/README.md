@@ -1,13 +1,13 @@
 # HomeAI 部署总览
 
-GitHub Actions **仅 CI + 推 ACR**；**ECS 本机**使用 **Nginx 静态方案**部署管理端。
+# GitHub Actions **仅 CI + 推后端 ACR**；管理端在 ECS 本机构建并 Nginx 部署。
 
 ## 当前方案：frontend-nginx
 
 | 组件 | 方式 |
 |------|------|
 | 后端 | Docker 镜像 `homeai-backend` |
-| 管理端 | 宿主机 Nginx + 静态 dist（GitHub Artifacts） |
+| 管理端 | 服务器本机 `pnpm build` + Nginx 静态部署 |
 | MySQL / Redis | Docker |
 
 → 详细步骤：[frontend-nginx/README.md](./frontend-nginx/README.md)
@@ -16,8 +16,8 @@ GitHub Actions **仅 CI + 推 ACR**；**ECS 本机**使用 **Nginx 静态方案*
 
 | 分支 | Workflow | 产出 |
 |------|----------|------|
-| `dev` | `build-push-nginx-dev.yml` | 后端镜像 + `admin-web-dist-dev` |
-| `prd` | `build-push-nginx-prd.yml` | 后端镜像 + `admin-web-dist-prd` |
+| `dev` | `build-push-dev.yml` | `homeai-backend` 镜像 |
+| `prd` | `build-push-prd.yml` | `homeai-backend` 镜像 |
 | `main` / PR | `ci.yml` | 编译验证 |
 
 ## 服务器发布
