@@ -72,9 +72,8 @@ gh run download <run_id> -n admin-web-dist-prd -D /tmp/admin-dist
 
 ## 对应 GitHub Workflow
 
-使用 **`.github/workflows/build-push-nginx-*.yml`**（推送 `homeai-backend`，上传 `admin-web-dist-*` Artifact，**不**构建管理端 Docker 镜像）。
-
-若采用 Docker 管理端方案，请删除 `build-push-nginx-*.yml`，改用 `build-push-docker-*.yml`。
+- `build-push-nginx-dev.yml` / `build-push-nginx-prd.yml`（当前启用）
+- push 对应分支后：拉取后端镜像 + 下载 Artifact 静态包
 
 ## 访问
 

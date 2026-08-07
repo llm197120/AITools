@@ -1,6 +1,7 @@
-# 管理端 Docker 部署方案
+# 管理端 Docker 部署方案（备选，当前未启用 CI）
 
-管理端以 **Docker 容器**（内置 Nginx）运行，与后端、MySQL、Redis 同一套 `docker compose` 编排。
+> **当前项目使用 [frontend-nginx](../frontend-nginx/) 方案。**  
+> 本目录仅作全 Docker 参考，GitHub Actions 未配置对应 workflow。
 
 ## 目录说明
 
@@ -49,11 +50,9 @@ GitHub push `prd` / `dev` 后，ACR 会更新镜像。在 ECS 执行：
 ./deploy.sh dev
 ```
 
-## 对应 GitHub Workflow
+## CI（未启用）
 
-使用 **`.github/workflows/build-push-docker-*.yml`**（构建并推送 `homeai-backend` + `homeai-admin-web`）。
-
-若采用 Nginx 静态方案，请删除 `build-push-docker-*.yml`，改用 `build-push-nginx-*.yml`。
+需在本地自行 `pnpm build` + `docker build` 推送 ACR，或恢复 `build-push-docker-*.yml` workflow。
 
 ## 访问
 

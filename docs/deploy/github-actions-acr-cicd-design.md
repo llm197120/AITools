@@ -23,19 +23,16 @@ registry: 阿里云容器镜像服务 - 个人版
 | 4 | 域名 | **管理端与 API 同域名**，Nginx `/jeecgboot` 反代 |
 | 5 | 分支模型 | **`main`** CI；**`dev`** / **`prd`** 构建推 ACR |
 | 6 | ACR | 命名空间 **`liulm`**；镜像 **`homeai-backend`**、**`homeai-admin-web`** |
-| 7 | 部署方式 | GitHub 仅 CI；ECS 本机 Docker。**管理端二选一**：`frontend-docker` 或 `frontend-nginx`（各自独立 compose / 脚本 / workflow） |
+| 7 | 部署方式 | GitHub 仅 CI（**Nginx 方案**）；ECS 本机 `frontend-nginx/` + `build-push-nginx-*.yml` |
 
 **实施产物路径**
 
 | 文件 | 说明 |
 |------|------|
 | `.github/workflows/ci.yml` | main / PR 编译验证 |
-| `.github/workflows/build-push-docker-dev.yml` | Docker 方案 dev CI |
-| `.github/workflows/build-push-docker-prd.yml` | Docker 方案 prd CI |
-| `.github/workflows/build-push-nginx-dev.yml` | Nginx 方案 dev CI |
-| `.github/workflows/build-push-nginx-prd.yml` | Nginx 方案 prd CI |
-| `JeecgBoot/deploy/frontend-docker/` | Docker 管理端：compose + `deploy.sh` |
-| `JeecgBoot/deploy/frontend-nginx/` | Nginx 管理端：compose + `deploy-backend.sh` + `deploy-static.sh` |
+| `.github/workflows/build-push-nginx-dev.yml` | dev CI（当前启用） |
+| `.github/workflows/build-push-nginx-prd.yml` | prd CI（当前启用） |
+| `JeecgBoot/deploy/frontend-nginx/` | Nginx 管理端部署 |
 | `JeecgBoot/deploy/README.md` | 部署总览（二选一） |
 | `JeecgBoot/jeecgboot-vue3/.env.docker.prod` | 同域 API 构建配置 |
 | `JeecgBoot/deploy/setup-ecs.md` | ECS 首次部署步骤 |
@@ -471,7 +468,7 @@ HomeAI 必填运行时配置（通过 env 或 K8s Secret 注入）：
 
 - [x] `JeecgBoot/deploy/docker-compose.dev.yml` / `docker-compose.prd.yml`
 - [x] 管理端方案分离：`frontend-docker/` 与 `frontend-nginx/`
-- [x] CI workflow 分离：`build-push-docker-*` / `build-push-nginx-*`
+- [x] 采用 Nginx 方案；已删除 `build-push-docker-*.yml`
 - [ ] 配置 GitHub Secrets：`ACR_USERNAME`、`ACR_PASSWORD`
 - [ ] ECS 首次初始化（`setup-ecs.md`）
 
