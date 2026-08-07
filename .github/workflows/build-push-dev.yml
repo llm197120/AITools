@@ -36,31 +36,12 @@ jobs:
         id: meta
         run: echo "image_tag=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
-      - name: Check ACR secrets
-        env:
-          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
-          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
-        run: |
-          if [ -z "$ACR_USERNAME" ] || [ -z "$ACR_PASSWORD" ]; then
-            echo "::error::请配置 GitHub Secrets: ACR_USERNAME=liulim, ACR_PASSWORD=访问凭证固定密码"
-            exit 1
-          fi
-          # 去除 Secret 复制时可能带入的首尾空白/换行
-          U=$(printf '%s' "$ACR_USERNAME" | tr -d '[:space:]')
-          P=$(printf '%s' "$ACR_PASSWORD" | tr -d '\r\n')
-          echo "ACR_USERNAME=${U}（长度 ${#U}）"
-          echo "ACR_PASSWORD 已配置（长度 ${#P}）"
-          if [ "$U" != "liulim" ]; then
-            echo "::warning::ACR 控制台登录用户名为 liulim，当前 Secret 值为「${U}」，若 login 失败请核对"
-          fi
-          echo "username=$U" >> "$GITHUB_ENV"
-          echo "password=$P" >> "$GITHUB_ENV"
-
       - name: Login to ACR
-        run: |
-          # 与控制台命令一致: docker login --username=liulim crpi-xxx.personal.cr.aliyuncs.com
-          echo "$password" | docker login --username="$username" "${{ env.ACR_REGISTRY }}" --password-stdin
-          echo "Login Succeeded"
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_REGISTRY }}
+          username: liulim
+          password: ${{ secrets.ACR_PASSWORD }}
 
       - uses: docker/setup-buildx-action@v3
 

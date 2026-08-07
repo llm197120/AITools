@@ -22,10 +22,10 @@ crpi-1is06jvzttfocl45.cn-hangzhou.personal.cr.aliyuncs.com/liulm/homeai-backend:
 
 | Secret | 值 |
 |--------|-----|
-| `ACR_USERNAME` | `liulim`（与控制台 `--username=liulim` 一致） |
-| `ACR_PASSWORD` | 访问凭证页设置的**固定密码**（开通服务时设置，可在访问凭证修改） |
+| `ACR_PASSWORD` | 访问凭证页固定密码（workflow 用户名已固定为 `liulim`） |
 
-> 不是阿里云官网登录密码。
+> `ACR_USERNAME` 可不配置；CI 已硬编码 `liulim` 与控制台一致。  
+> **勿**通过 shell/`GITHUB_ENV` 中转密码（特殊字符会被破坏导致本地成功、CI 失败）。
 
 ## 与控制台命令对照
 
@@ -72,5 +72,5 @@ ACR_PASSWORD=<同上固定密码>
 
 1. 在 ACR **访问凭证** 页重置固定密码
 2. 本地 `docker login` 验证新密码
-3. 更新 GitHub Secret `ACR_PASSWORD`（完整替换，勿改 `ACR_USERNAME`）
-4. 确认 workflow 日志中 `ACR_USERNAME=liulim`
+3. 更新 GitHub Secret `ACR_PASSWORD`（只需这一项；用户名 workflow 已写死 `liulim`）
+4. 若密码含 `$` `%` `&` 等符号，务必用 Secret 直接注入，不要写入 workflow 明文
