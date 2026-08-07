@@ -27,23 +27,3 @@ jobs:
         working-directory: JeecgBoot/jeecg-boot
         run: mvn -B clean package -Pdocker -pl jeecg-module-system/jeecg-system-start -am -DskipTests
 
-  admin-web:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: pnpm
-          cache-dependency-path: JeecgBoot/jeecgboot-vue3/pnpm-lock.yaml
-
-      - name: Install & build
-        working-directory: JeecgBoot/jeecgboot-vue3
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm run build:docker:prod
