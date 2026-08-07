@@ -22,15 +22,19 @@ resolve_env() {
 }
 
 login_acr() {
-  local registry="${ACR_REGISTRY:-crpi-1is06jvzttfocl45.cn-hangzhou.personal.cr.aliyuncs.com}"
-  if [[ -z "${ACR_USERNAME:-}" || -z "${ACR_PASSWORD:-}" ]]; then
-    echo "[提示] 未配置 ACR_USERNAME/ACR_PASSWORD，跳过 docker login（请确保已手动登录）"
+  local registry="${ACR_REGISTRY:-crpi-1is06jvzttfocl45-vpc.cn-hangzhou.personal.cr.aliyuncs.com}"
+  local user="${ACR_USERNAME:-}"
+  local pass="${ACR_PASSWORD:-}"
+  user=$(printf '%s' "$user" | tr -d '[:space:]')
+  pass=$(printf '%s' "$pass" | tr -d '\r\n')
+  if [[ -z "$user" || -z "$pass" ]]; then
+    echo "[提示] 未配置 ACR_USERNAME/ACR_PASSWORD，跳过 docker login"
     return 0
   fi
-  echo "$ACR_PASSWORD" | docker login "$registry" -u "$ACR_USERNAME" --password-stdin
+  echo "$pass" | docker login --username="$user" "$registry" --password-stdin
 }
 
 export_defaults() {
-  export ACR_REGISTRY="${ACR_REGISTRY:-crpi-1is06jvzttfocl45.cn-hangzhou.personal.cr.aliyuncs.com}"
+  export ACR_REGISTRY="${ACR_REGISTRY:-crpi-1is06jvzttfocl45-vpc.cn-hangzhou.personal.cr.aliyuncs.com}"
   export ACR_NAMESPACE="${ACR_NAMESPACE:-liulm}"
 }
