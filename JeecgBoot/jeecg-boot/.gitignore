@@ -6,6 +6,7 @@ rebel.xml
 ## backend
 **/target
 **/logs
+**/application-dev-local.yml
 
 ## front
 **/*.lock

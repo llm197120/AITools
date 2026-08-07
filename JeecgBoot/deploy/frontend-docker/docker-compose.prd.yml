@@ -1,0 +1,88 @@
+# 生产环境 — 管理端 Docker 方案（全栈容器）
+# 使用前：cp env.example .env && cp ../env.homeai.example .env.homeai
+
+services:
+  homeai-mysql:
+    build:
+      context: ../jeecg-boot/db
+    image: homeai-mysql:local
+    container_name: homeai-prd-mysql
+    hostname: jeecg-boot-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_ROOT_HOST: "%"
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --explicit_defaults_for_timestamp=true
+      - --lower_case_table_names=1
+      - --max_allowed_packet=128M
+      - --default-authentication-plugin=caching_sha2_password
+    volumes:
+      - homeai_prd_mysql_data:/var/lib/mysql
+    networks:
+      homeai_prd:
+        aliases:
+          - jeecg-boot-mysql
+
+  homeai-redis:
+    image: registry.cn-hangzhou.aliyuncs.com/jeecgdocker/redis:5.0
+    container_name: homeai-prd-redis
+    hostname: jeecg-boot-redis
+    restart: always
+    networks:
+      homeai_prd:
+        aliases:
+          - jeecg-boot-redis
+
+  homeai-pgvector:
+    image: registry.cn-hangzhou.aliyuncs.com/jeecgdocker/pgvector
+    container_name: homeai-prd-pgvector
+    hostname: jeecg-boot-pgvector
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vector_db
+    networks:
+      homeai_prd:
+        aliases:
+          - jeecg-boot-pgvector
+
+  homeai-backend:
+    image: ${ACR_REGISTRY}/${ACR_NAMESPACE}/homeai-backend:${IMAGE_TAG:-prd-latest}
+    container_name: homeai-prd-backend
+    hostname: jeecg-boot-system
+    restart: unless-stopped
+    depends_on:
+      - homeai-mysql
+      - homeai-redis
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_PROFILES_ACTIVE: docker
+    env_file:
+      - .env.homeai
+    networks:
+      homeai_prd:
+        aliases:
+          - jeecg-boot-system
+
+  homeai-admin:
+    image: ${ACR_REGISTRY}/${ACR_NAMESPACE}/homeai-admin-web:${IMAGE_TAG:-prd-latest}
+    container_name: homeai-prd-admin
+    restart: unless-stopped
+    depends_on:
+      - homeai-backend
+    ports:
+      - "${ADMIN_HTTP_PORT:-80}:80"
+    networks:
+      - homeai_prd
+
+networks:
+  homeai_prd:
+    name: homeai_prd
+
+volumes:
+  homeai_prd_mysql_data:

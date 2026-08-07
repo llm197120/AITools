@@ -3,7 +3,7 @@
     "navigationStyle": "default",
     "navigationBarTitleText": "家庭AI小工具",
     "navigationBarBackgroundColor": "#f8f8f8",
-    "navigationBarTextStyle": "white",
+    "navigationBarTextStyle": "black",
     "backgroundColor": "#000000"
   },
   "easycom": {
@@ -89,10 +89,38 @@
       "root": "pages-homeai-more",
       "pages": [
         {
+          "path": "all-functions/index",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "全部功能"
+          }
+        },
+        {
           "path": "bill/add",
           "type": "page",
           "style": {
             "navigationBarTitleText": "记一笔"
+          }
+        },
+        {
+          "path": "bill/edit",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "编辑账单"
+          }
+        },
+        {
+          "path": "bill/import-confirm",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "导入确认"
+          }
+        },
+        {
+          "path": "bill/import",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "导入账单"
           }
         },
         {
@@ -110,6 +138,20 @@
           }
         },
         {
+          "path": "learn/add",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "添加学习资料"
+          }
+        },
+        {
+          "path": "learn/detail",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "学习资料"
+          }
+        },
+        {
           "path": "learn/index",
           "type": "page",
           "style": {
@@ -117,10 +159,24 @@
           }
         },
         {
+          "path": "learn/record",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "学习记录"
+          }
+        },
+        {
           "path": "plan/add",
           "type": "page",
           "style": {
             "navigationBarTitleText": "新增计划"
+          }
+        },
+        {
+          "path": "plan/detail",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "计划详情"
           }
         },
         {
@@ -135,6 +191,13 @@
           "type": "page",
           "style": {
             "navigationBarTitleText": "新增菜谱"
+          }
+        },
+        {
+          "path": "recipe/category",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "分类浏览"
           }
         },
         {
@@ -155,7 +218,7 @@
           "path": "storage/files",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "文件列表"
+            "navigationBarTitleText": "文件夹"
           }
         },
         {
@@ -187,11 +250,22 @@
           }
         },
         {
+          "path": "storage/preview",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "文件预览"
+          }
+        },
+        {
           "path": "storage/search",
           "type": "page",
           "style": {
             "navigationBarTitleText": "搜索文件"
           }
+        },
+        {
+          "path": "storage/StorageBrowser",
+          "type": "page"
         }
       ]
     }

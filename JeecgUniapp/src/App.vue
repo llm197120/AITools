@@ -1,5 +1,7 @@
 <script lang="ts">
 import { onLaunch, onShow, onHide, onLoad, onReady } from '@dcloudio/uni-app'
+import { useUserStore } from '@/pages-homeai/stores/user'
+import { HOMEAI_PROFILE_TAB } from '@/pages-homeai/utils/homeaiAuth'
 import 'abortcontroller-polyfill/dist/abortcontroller-polyfill-only'
  // #ifdef APP-PLUS
 import appUpdate from "@/common/appUpdate";
@@ -8,6 +10,10 @@ export default {
   onLaunch: function (options) {
     console.log('App Launch')
     console.log('应用启动路径：', options.path)
+    const userStore = useUserStore()
+    if (!userStore.isLogin) {
+      uni.switchTab({ url: HOMEAI_PROFILE_TAB })
+    }
     // #ifdef APP-PLUS
     // 检测升级
     appUpdate()

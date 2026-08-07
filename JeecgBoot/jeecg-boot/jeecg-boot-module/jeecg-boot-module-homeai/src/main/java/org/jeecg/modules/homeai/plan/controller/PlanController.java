@@ -16,9 +16,12 @@ import org.jeecg.common.util.oConvertUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
+import org.jeecg.modules.homeai.audit.service.IHomeaiAuditLogService;
+import org.jeecg.modules.homeai.plan.entity.PlanCategory;
 import org.jeecg.modules.homeai.plan.entity.PlanMaster;
 import org.jeecg.modules.homeai.plan.entity.PlanInstance;
 import org.jeecg.modules.homeai.plan.mapper.PlanMasterMapper;
+import org.jeecg.modules.homeai.plan.service.IPlanCategoryService;
 import org.jeecg.modules.homeai.plan.service.IPlanService;
 import org.jeecg.modules.homeai.user.service.IWxUserService;
 import org.jeecgframework.poi.excel.ExcelImportUtil;
@@ -54,6 +57,14 @@ public class PlanController {
     @Autowired
     private HomeaiSecurityUtil securityUtil;
 
+    @Autowired
+    private IPlanCategoryService planCategoryService;
+
+    @Autowired
+    private IHomeaiAuditLogService auditLogService;
+
+    private static final String ACTION_PLAN_ROLL_FORWARD = "plan_repeat_roll_forward";
+
     private String getUserId(HttpServletRequest r) {
         // 优先从Shiro认证获取（管理端）
         try {
@@ -73,6 +84,30 @@ public class PlanController {
         return u != null ? u.getId() : null;
     }
 
+    private String getOperatorId(HttpServletRequest r) {
+        try {
+            if (SecurityUtils.getSubject() != null && SecurityUtils.getSubject().isAuthenticated()) {
+                Object principal = SecurityUtils.getSubject().getPrincipal();
+                if (principal instanceof LoginUser) {
+                    return ((LoginUser) principal).getId();
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return getUserId(r);
+    }
+
+    private String clientIp(HttpServletRequest r) {
+        if (r == null) {
+            return null;
+        }
+        String ip = r.getHeader("X-Forwarded-For");
+        if (oConvertUtils.isNotEmpty(ip)) {
+            return ip.split(",")[0].trim();
+        }
+        return r.getRemoteAddr();
+    }
+
     /** 创建计划 */
     @PostMapping
     public Result<?> create(@RequestBody PlanMaster plan, HttpServletRequest r) {
@@ -87,7 +122,7 @@ public class PlanController {
     public Result<?> calendar(@RequestParam String yearMonth, HttpServletRequest r) {
         String uid = getUserId(r);
         if (uid == null) return Result.error("未登录");
-        return Result.OK(planService.getCalendarDates(uid, yearMonth));
+        return Result.OK(planService.getCalendarSummary(uid, yearMonth));
     }
 
     /** 获取某日计划 */
@@ -117,7 +152,14 @@ public class PlanController {
                 return Result.error("无权操作该计划");
             }
         }
-        planService.toggleInstanceStatus(id);
+        if ("expired".equals(instance.getStatus())) {
+            return Result.error("已过期计划不可切换");
+        }
+        try {
+            planService.toggleInstanceStatus(id);
+        } catch (org.jeecg.common.exception.JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
         return Result.OK("OK");
     }
 
@@ -141,6 +183,69 @@ public class PlanController {
     public Result<?> completion(@RequestParam(required = false) String userId,
                                 @RequestParam(required = false) String yearMonth) {
         return Result.OK(planService.getCompletionStats(userId, yearMonth));
+    }
+
+    /** 管理端日历：某月计划摘要（实例维度） */
+    @GetMapping("/admin/calendar")
+    @Operation(summary = "计划-日历概览(管理端)")
+    @RequiresPermissions("homeai:plan:list")
+    public Result<?> adminCalendar(@RequestParam String yearMonth,
+                                   @RequestParam(required = false) String userId) {
+        return Result.OK(planService.getAdminCalendarSummary(yearMonth, userId));
+    }
+
+    /** 管理端日历：某日计划实例 */
+    @GetMapping("/admin/date/{date}")
+    @Operation(summary = "计划-某日列表(管理端)")
+    @RequiresPermissions("homeai:plan:list")
+    public Result<?> adminByDate(@PathVariable String date,
+                                 @RequestParam(required = false) String userId) {
+        return Result.OK(planService.getAdminInstancesByDate(LocalDate.parse(date), userId));
+    }
+
+    /** 管理端：手动补跑重复计划实例 */
+    @PostMapping("/admin/repeat/roll-forward")
+    @AutoLog(value = "计划-补跑重复实例")
+    @Operation(summary = "计划-补跑重复实例(管理端)")
+    @RequiresPermissions("homeai:plan:edit")
+    public Result<?> rollForwardRepeat(@RequestParam(required = false) String masterId,
+                                       HttpServletRequest request) {
+        try {
+            Map<String, Object> data = planService.rollForwardRepeatInstances(masterId);
+            String summary = "all".equals(data.get("scope"))
+                    ? "全量补跑重复计划，新建 " + data.get("created") + " 条实例"
+                    : "补跑计划「" + data.get("masterTitle") + "」，新建 " + data.get("created") + " 条实例";
+            auditLogService.record(
+                    getOperatorId(request),
+                    ACTION_PLAN_ROLL_FORWARD,
+                    "plan",
+                    masterId,
+                    summary,
+                    data,
+                    "success",
+                    clientIp(request));
+            return Result.OK(data);
+        } catch (org.jeecg.common.exception.JeecgBootException e) {
+            auditLogService.record(
+                    getOperatorId(request),
+                    ACTION_PLAN_ROLL_FORWARD,
+                    "plan",
+                    masterId,
+                    e.getMessage(),
+                    Collections.singletonMap("masterId", masterId),
+                    "fail",
+                    clientIp(request));
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** 管理端：补跑操作日志 */
+    @GetMapping("/admin/repeat/roll-forward/logs")
+    @Operation(summary = "计划-补跑日志(管理端)")
+    @RequiresPermissions("homeai:plan:list")
+    public Result<?> rollForwardLogs(@RequestParam(defaultValue = "1") int pageNo,
+                                     @RequestParam(defaultValue = "10") int pageSize) {
+        return Result.OK(auditLogService.pageByAction(ACTION_PLAN_ROLL_FORWARD, pageNo, pageSize));
     }
 
     //update-begin---author:admin ---date:2026-07-30  for：计划管理-新增/导入/导出/回收站功能-----------
@@ -308,4 +413,55 @@ public class PlanController {
         return Result.OK("彻底删除成功");
     }
     //update-end---author:admin ---date:2026-07-30  for：计划管理-新增/导入/导出/回收站功能-----------
+
+    //update-begin---author:admin ---date:2026-08-04  for：计划分类独立管理-----------
+    /** 获取启用的计划分类（下拉选项） */
+    @GetMapping("/categories")
+    @Operation(summary = "计划分类-启用列表")
+    public Result<?> categories() {
+        return Result.OK(planCategoryService.getEnabledCategories());
+    }
+
+    /** 计划分类分页列表（管理端） */
+    @GetMapping("/category-list")
+    @Operation(summary = "计划分类-分页列表(管理端)")
+    @RequiresPermissions("homeai:plan:category:list")
+    public Result<?> categoryList(PlanCategory c,
+                                  @RequestParam(defaultValue = "1") int pageNo,
+                                  @RequestParam(defaultValue = "10") int pageSize,
+                                  HttpServletRequest req) {
+        QueryWrapper<PlanCategory> qw = QueryGenerator.initQueryWrapper(c, req.getParameterMap());
+        qw.orderByAsc("sort_order");
+        return Result.OK(planCategoryService.page(new Page<>(pageNo, pageSize), qw));
+    }
+
+    @PostMapping("/category")
+    @AutoLog(value = "计划分类-新增")
+    @Operation(summary = "计划分类-新增")
+    @RequiresPermissions("homeai:plan:category:add")
+    public Result<?> addCategory(@RequestBody PlanCategory c) {
+        if (c.getIsEnabled() == null) c.setIsEnabled(1);
+        if (c.getSortOrder() == null) c.setSortOrder(0);
+        planCategoryService.save(c);
+        return Result.OK("OK");
+    }
+
+    @PutMapping("/category")
+    @AutoLog(value = "计划分类-编辑")
+    @Operation(summary = "计划分类-编辑")
+    @RequiresPermissions("homeai:plan:category:edit")
+    public Result<?> editCategory(@RequestBody PlanCategory c) {
+        planCategoryService.updateById(c);
+        return Result.OK("OK");
+    }
+
+    @DeleteMapping("/category/{id}")
+    @AutoLog(value = "计划分类-删除")
+    @Operation(summary = "计划分类-删除")
+    @RequiresPermissions("homeai:plan:category:delete")
+    public Result<?> deleteCategory(@PathVariable String id) {
+        planCategoryService.removeById(id);
+        return Result.OK("OK");
+    }
+    //update-end---author:admin ---date:2026-08-04  for：计划分类独立管理-----------
 }

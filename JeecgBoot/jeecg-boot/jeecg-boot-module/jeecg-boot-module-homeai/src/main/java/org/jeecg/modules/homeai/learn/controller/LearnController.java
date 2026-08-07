@@ -12,11 +12,13 @@ import org.jeecg.common.api.vo.Result;
 import org.jeecg.common.aspect.annotation.AutoLog;
 import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.vo.LoginUser;
+import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
 import io.swagger.v3.oas.annotations.Operation;
-import org.jeecg.modules.homeai.config.HomeaiFileUrlUtil;
+import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
+import org.jeecg.modules.homeai.learn.service.ILearnCategoryService;
 import org.jeecg.modules.homeai.recipe.entity.LearnMaterial;
 import org.jeecg.modules.homeai.recipe.mapper.LearnMaterialMapper;
 import org.jeecg.modules.homeai.recipe.service.ILearnService;
@@ -41,9 +43,11 @@ import java.util.stream.Collectors;
 @RequestMapping("/homeai/learn")
 public class LearnController {
     @Autowired private ILearnService learnService;
+    @Autowired private ILearnCategoryService learnCategoryService;
     @Autowired private IWxUserService wxUserService;
     @Autowired private LearnMaterialMapper learnMaterialMapper;
     @Autowired private HomeaiSecurityUtil securityUtil;
+    @Autowired private IHomeaiFileStorageService fileStorageService;
 
     private String getUserId(HttpServletRequest r) {
         // 优先从Shiro认证获取（管理端）
@@ -64,6 +68,21 @@ public class LearnController {
         return u != null ? u.getId() : null;
     }
 
+    private Result<?> syncLearnCategory(LearnMaterial m) {
+        try {
+            if (oConvertUtils.isNotEmpty(m.getCategoryId())) {
+                learnCategoryService.validateCategoryId(m.getCategoryId());
+                String name = learnCategoryService.resolveCategoryName(m.getCategoryId());
+                if (name != null) {
+                    m.setCategory(name);
+                }
+            }
+            return null;
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
     @GetMapping("/materials")
     @Operation(summary="学习资料-分页列表查询")
     public Result<?> materials(LearnMaterial m, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "10") int pageSize, HttpServletRequest req) {
@@ -73,11 +92,11 @@ public class LearnController {
         // 兼容历史相对地址数据：统一转换为绝对访问地址
         if (result.getRecords() != null) {
             for (LearnMaterial item : result.getRecords()) {
-                if (item.getFileUrl() != null && !item.getFileUrl().startsWith("http")) {
-                    item.setFileUrl(HomeaiFileUrlUtil.toAbsoluteUrl(item.getFileUrl()));
+                if (item.getFileUrl() != null) {
+                    item.setFileUrl(fileStorageService.resolveAccessUrl(item.getFileUrl()));
                 }
-                if (item.getCoverUrl() != null && !item.getCoverUrl().startsWith("http") && !item.getCoverUrl().startsWith("data:")) {
-                    item.setCoverUrl(HomeaiFileUrlUtil.toAbsoluteUrl(item.getCoverUrl()));
+                if (item.getCoverUrl() != null && !item.getCoverUrl().startsWith("data:")) {
+                    item.setCoverUrl(fileStorageService.resolveAccessUrl(item.getCoverUrl()));
                 }
             }
         }
@@ -97,6 +116,14 @@ public class LearnController {
         String uid = getUserId(r);
         if (uid == null) return Result.error("未登录");
         return Result.OK(learnService.stopLearn(uid, materialId));
+    }
+
+    @GetMapping("/session/active")
+    @Operation(summary = "学习-当前进行中的计时会话")
+    public Result<?> activeSession(HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        return Result.OK(learnService.getActiveSession(uid));
     }
 
     @GetMapping("/records")
@@ -128,6 +155,13 @@ public class LearnController {
         return Result.OK(learnService.adminStats());
     }
 
+    @GetMapping("/admin/stats/trend")
+    @Operation(summary = "学习-近N日趋势(管理端)")
+    @RequiresPermissions("homeai:learn:material:list")
+    public Result<?> adminStatsTrend(@RequestParam(defaultValue = "30") int days) {
+        return Result.OK(learnService.adminStatsTrend(days));
+    }
+
     /**
      * 学习统计（小程序端）
      */
@@ -136,6 +170,15 @@ public class LearnController {
         String uid = getUserId(r);
         if (uid == null) return Result.error("未登录");
         return Result.OK(learnService.getUserStatistics(uid));
+    }
+
+    /** 学习日历：某月有学习记录的日期 */
+    @GetMapping("/calendar")
+    @Operation(summary = "学习-日历(小程序)")
+    public Result<?> calendar(@RequestParam String yearMonth, HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        return Result.OK(learnService.getLearnCalendarDates(uid, yearMonth));
     }
 
     /**
@@ -161,15 +204,19 @@ public class LearnController {
     public Result<?> createMat(@RequestBody LearnMaterial m, HttpServletRequest r) {
         String uid = getUserId(r);
         if (uid == null) return Result.error("未登录");
+        Result<?> categoryError = syncLearnCategory(m);
+        if (categoryError != null) return categoryError;
         m.setUserId(uid);
         learnService.save(m);
-        return Result.OK("OK");
+        return Result.OK(m);
     }
     @PutMapping("/material")
     public Result<?> editMat(@RequestBody LearnMaterial m, HttpServletRequest r) {
         if (m == null || m.getId() == null) return Result.error("参数异常");
         LearnMaterial existing = learnService.getById(m.getId());
         if (existing == null) return Result.error("资料不存在");
+        Result<?> categoryError = syncLearnCategory(m);
+        if (categoryError != null) return categoryError;
         // 管理端控制台可编辑任意资料；小程序端只能编辑自己的资料
         if (!securityUtil.isConsoleAuthenticated(r)) {
             String uid = getUserId(r);
@@ -201,6 +248,8 @@ public class LearnController {
     @Operation(summary="学习资料-新增(管理端)")
     @RequiresPermissions("homeai:learn:addMaterial")
     public Result<?> addMaterial(@RequestBody LearnMaterial m) {
+        Result<?> categoryError = syncLearnCategory(m);
+        if (categoryError != null) return categoryError;
         m.setDelFlag(0);
         learnService.save(m);
         return Result.OK("新增成功");
@@ -352,9 +401,33 @@ public class LearnController {
     @RequiresPermissions("homeai:learn:edit")
     public Result<?> editMaterial(@PathVariable String id, @RequestBody LearnMaterial m) {
         m.setId(id);
+        Result<?> categoryError = syncLearnCategory(m);
+        if (categoryError != null) return categoryError;
         learnService.updateById(m);
         return Result.OK("编辑成功");
     }
+
+    //update-begin---author:admin ---date:2026-08-04  for：学习资料预上传API-----------
+    /**
+     * 学习资料预上传（新增前上传文件）
+     */
+    @PostMapping("/upload")
+    @Operation(summary = "学习资料-预上传文件")
+    public Result<?> uploadTemp(@RequestParam MultipartFile file,
+                                @RequestParam String type,
+                                HttpServletRequest r) {
+        if (getUserId(r) == null) return Result.error("未登录");
+        try {
+            String fileUrl = fileStorageService.resolveAccessUrl(learnService.uploadTempFile(file, type));
+            return Result.OK("上传成功", fileUrl);
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        } catch (Exception e) {
+            log.error("文件上传失败", e);
+            return Result.error("文件上传失败: " + e.getMessage());
+        }
+    }
+    //update-end---author:admin ---date:2026-08-04  for：学习资料预上传API-----------
 
     //update-begin---author:admin ---date:2026-07-31  for：A4-学习资料文件上传API-----------
     /**
@@ -368,7 +441,9 @@ public class LearnController {
             String fileUrl = learnService.uploadMaterialFile(id, file);
             material.setFileUrl(fileUrl);
             learnService.updateById(material);
-            return Result.OK("上传成功", fileUrl);
+            return Result.OK("上传成功", fileStorageService.resolveAccessUrl(fileUrl));
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
         } catch (Exception e) {
             log.error("文件上传失败", e);
             return Result.error("文件上传失败: " + e.getMessage());

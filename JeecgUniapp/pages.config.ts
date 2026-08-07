@@ -5,7 +5,7 @@ export default defineUniPages({
     navigationStyle: 'default',
     navigationBarTitleText: '家庭AI小工具',
     navigationBarBackgroundColor: '#f8f8f8',
-    navigationBarTextStyle: 'white',
+    navigationBarTextStyle: 'black',
     backgroundColor: '#000000',
   },
   easycom: {

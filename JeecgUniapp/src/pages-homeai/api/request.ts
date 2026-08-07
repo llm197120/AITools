@@ -1,21 +1,19 @@
 /**
  * HomeAI 小程序 API 请求封装
  */
-import { getToken, setToken, removeToken } from '../utils/auth'
+import { getToken, removeToken } from '../utils/auth'
+import { getEnvBaseUrl } from '@/utils/index'
 
 const BASE_URL = '/homeai'
-
-/** 服务器完整地址（生产环境通过 manifest.json 配置，开发时可手动覆盖） */
-const SERVER_BASE = 'http://localhost:8080/jeecg-boot'
 
 /** 获取 API 基础路径 */
 export function getBaseUrl(): string {
   return BASE_URL
 }
 
-/** 获取服务器完整地址 */
+/** 获取服务器完整地址（读取 VITE_SERVER_BASEURL，微信小程序按环境版本区分） */
 export function getServerBaseUrl(): string {
-  return SERVER_BASE
+  return getEnvBaseUrl()
 }
 
 interface RequestOptions {
@@ -121,6 +119,11 @@ export function post<T = any>(url: string, data?: any) {
 /** PUT 请求 */
 export function put<T = any>(url: string, data?: any) {
   return request<T>({ url, method: 'PUT', data })
+}
+
+/** PATCH 请求 */
+export function patch<T = any>(url: string, params?: Record<string, string>) {
+  return request<T>({ url, method: 'PATCH', params })
 }
 
 /** DELETE 请求 */

@@ -16,7 +16,10 @@ import org.jeecg.common.system.util.JwtUtil;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.RedisUtil;
 import org.jeecg.common.util.TokenUtils;
-import org.jeecg.modules.homeai.config.HomeaiFileUrlUtil;
+import org.jeecg.modules.homeai.ai.service.IAiQuotaService;
+import org.jeecg.modules.homeai.ai.util.HomeaiAiQuotaEstimateUtil;
+import org.jeecg.modules.homeai.config.service.IHomeaiPlanConfigService;
+import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.storage.entity.StorageConvertTask;
 import org.jeecg.modules.homeai.storage.service.IStorageConvertTaskService;
@@ -26,6 +29,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Office处理（格式转换/AI生成）
@@ -47,6 +51,15 @@ public class StorageOfficeController {
 
     @Autowired
     private RedisUtil redisUtil;
+
+    @Autowired
+    private IAiQuotaService quotaService;
+
+    @Autowired
+    private IHomeaiPlanConfigService planConfigService;
+
+    @Autowired
+    private IHomeaiFileStorageService fileStorageService;
 
     /**
      * 从 Token 解析用户ID（支持管理端 JeecgBoot JWT 与小程序端 HomeaiJWT）
@@ -108,8 +121,37 @@ public class StorageOfficeController {
                                     HttpServletRequest request) {
         String userId = getUserId(request);
         if (userId == null) return Result.error("未登录");
+        if (planConfigService.isAiDocPolishEnabled()) {
+            int estIn = HomeaiAiQuotaEstimateUtil.estimateInputTokens(instruction);
+            int estOut = HomeaiAiQuotaEstimateUtil.estimateOutputTokens(instruction);
+            Map<String, Object> quotaCheck = quotaService.checkQuota(userId, estIn, estOut);
+            if (!Boolean.TRUE.equals(quotaCheck.get("allowed"))) {
+                return Result.error(String.valueOf(quotaCheck.get("message")));
+            }
+        }
         StorageConvertTask task = taskService.submitGenerateTask(userId, fileId, instruction);
         return Result.OK(task);
+    }
+
+    /**
+     * AI 生成前 Token 配额预检
+     */
+    @GetMapping("/generate/quota-check")
+    @Operation(summary = "Office AI生成-配额预检")
+    public Result<?> checkGenerateQuota(@RequestParam(required = false) String instruction,
+                                        HttpServletRequest request) {
+        String userId = getUserId(request);
+        if (userId == null) return Result.error("未登录");
+        int estIn = HomeaiAiQuotaEstimateUtil.estimateInputTokens(instruction);
+        int estOut = HomeaiAiQuotaEstimateUtil.estimateOutputTokens(instruction);
+        Map<String, Object> quota = quotaService.checkQuota(userId, estIn, estOut);
+        Map<String, Integer> defaultQuota = quotaService.getDefaultQuota();
+        quota.put("dailyLimit", defaultQuota.get("dailyLimit"));
+        quota.put("monthlyLimit", defaultQuota.get("monthlyLimit"));
+        quota.put("estimatedInputTokens", estIn);
+        quota.put("estimatedOutputTokens", estOut);
+        quota.put("aiDocPolishEnabled", planConfigService.isAiDocPolishEnabled());
+        return Result.OK(quota);
     }
 
     /**
@@ -161,8 +203,8 @@ public class StorageOfficeController {
 
     /** 兼容历史相对地址数据：转换 resultFileUrl 为绝对访问地址 */
     private void resolveResultUrl(StorageConvertTask task) {
-        if (task != null && task.getResultFileUrl() != null && !task.getResultFileUrl().startsWith("http")) {
-            task.setResultFileUrl(HomeaiFileUrlUtil.toAbsoluteUrl(task.getResultFileUrl()));
+        if (task != null && task.getResultFileUrl() != null) {
+            task.setResultFileUrl(fileStorageService.resolveAccessUrl(task.getResultFileUrl()));
         }
     }
 

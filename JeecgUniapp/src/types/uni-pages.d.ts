@@ -9,13 +9,22 @@ interface NavigateToOptions {
        "/pages/homeai/profile" |
        "/pages-homeai-ai/ai/chat" |
        "/pages-homeai-ai/ai/conversations" |
+       "/pages-homeai-more/all-functions/index" |
        "/pages-homeai-more/bill/add" |
+       "/pages-homeai-more/bill/edit" |
+       "/pages-homeai-more/bill/import-confirm" |
+       "/pages-homeai-more/bill/import" |
        "/pages-homeai-more/bill/index" |
        "/pages-homeai-more/bill/statistics" |
+       "/pages-homeai-more/learn/add" |
+       "/pages-homeai-more/learn/detail" |
        "/pages-homeai-more/learn/index" |
+       "/pages-homeai-more/learn/record" |
        "/pages-homeai-more/plan/add" |
+       "/pages-homeai-more/plan/detail" |
        "/pages-homeai-more/plan/index" |
        "/pages-homeai-more/recipe/add" |
+       "/pages-homeai-more/recipe/category" |
        "/pages-homeai-more/recipe/detail" |
        "/pages-homeai-more/recipe/index" |
        "/pages-homeai-more/storage/files" |
@@ -23,7 +32,9 @@ interface NavigateToOptions {
        "/pages-homeai-more/storage/office-convert" |
        "/pages-homeai-more/storage/office-generate" |
        "/pages-homeai-more/storage/office-history" |
-       "/pages-homeai-more/storage/search";
+       "/pages-homeai-more/storage/preview" |
+       "/pages-homeai-more/storage/search" |
+       "/pages-homeai-more/storage/StorageBrowser";
 }
 interface RedirectToOptions extends NavigateToOptions {}
 

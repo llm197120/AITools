@@ -120,6 +120,33 @@ public class WxUserController {
         return Result.OK(pageList);
     }
 
+    /** 用户下拉选项（管理端，日历筛选等） */
+    @GetMapping("/options")
+    @Operation(summary = "微信用户-下拉选项")
+    @RequiresPermissions("homeai:plan:list")
+    public Result<?> options() {
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<WxUser> q =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        q.select(WxUser::getId, WxUser::getNickname, WxUser::getPhone)
+                .orderByDesc(WxUser::getCreateTime)
+                .last("LIMIT 200");
+        List<WxUser> users = wxUserService.list(q);
+        List<Map<String, String>> options = users.stream().map(u -> {
+            Map<String, String> row = new LinkedHashMap<>();
+            row.put("value", u.getId());
+            String label = u.getNickname();
+            if (oConvertUtils.isEmpty(label)) {
+                label = u.getPhone();
+            }
+            if (oConvertUtils.isEmpty(label)) {
+                label = u.getId();
+            }
+            row.put("label", label);
+            return row;
+        }).collect(Collectors.toList());
+        return Result.OK(options);
+    }
+
     /**
      * 用户详情（管理端）
      */

@@ -20,6 +20,8 @@ export const userApi = {
   /** 设置用户所属家庭（familyId 为空表示解除关联） */
   setFamily: (id: string, data: { familyId?: string; role?: string }) =>
     defHttp.put({ url: `${BASE}/user/${id}/family`, data }),
+  /** 用户下拉（日历筛选等） */
+  options: () => defHttp.get({ url: `${BASE}/user/options` }),
   /** 导出Excel */
   exportXls: `${BASE}/user/exportXls`,
   /** 导入Excel */
@@ -100,6 +102,29 @@ export const planApi = {
   moveToRecycleBin: (ids: string[]) => defHttp.put({ url: `${BASE}/plan/moveToRecycleBin`, data: ids }),
   restore: (ids: string[]) => defHttp.put({ url: `${BASE}/plan/restore`, data: ids }),
   deletePermanently: (ids: string[]) => defHttp.delete({ url: `${BASE}/plan/deletePermanently`, data: ids }),
+  /** 启用的计划分类（下拉） */
+  categories: () => defHttp.get({ url: `${BASE}/plan/categories` }),
+  categoryList: (params?: any) => defHttp.get({ url: `${BASE}/plan/category-list`, params }),
+  addCategory: (data: any) => defHttp.post({ url: `${BASE}/plan/category`, data }),
+  editCategory: (data: any) => defHttp.put({ url: `${BASE}/plan/category`, data }),
+  deleteCategory: (id: string) => defHttp.delete({ url: `${BASE}/plan/category/${id}` }),
+  /** 管理端日历 */
+  adminCalendar: (params: { yearMonth: string; userId?: string }) =>
+    defHttp.get({ url: `${BASE}/plan/admin/calendar`, params }),
+  adminPlansByDate: (date: string, userId?: string) =>
+    defHttp.get({ url: `${BASE}/plan/admin/date/${date}`, params: userId ? { userId } : {} }),
+  rollForwardRepeat: (masterId?: string) =>
+    defHttp.post({ url: `${BASE}/plan/admin/repeat/roll-forward`, params: masterId ? { masterId } : {} }, { joinParamsToUrl: true }),
+  rollForwardLogs: (params?: { pageNo?: number; pageSize?: number }) =>
+    defHttp.get({ url: `${BASE}/plan/admin/repeat/roll-forward/logs`, params }),
+  completion: (params?: { userId?: string; yearMonth?: string }) =>
+    defHttp.get({ url: `${BASE}/plan/admin/completion`, params }),
+};
+
+/** 审计日志 API */
+export const auditApi = {
+  logs: (params?: { module?: string; actionType?: string; pageNo?: number; pageSize?: number }) =>
+    defHttp.get({ url: `${BASE}/audit/logs`, params }),
 };
 
 /** 菜谱管理 API */
@@ -117,6 +142,11 @@ export const recipeApi = {
   uploadVideo: (id: string) => `${BASE}/recipe/${id}/video`,
   /** 删除菜谱视频 */
   deleteVideo: (id: string) => defHttp.delete({ url: `${BASE}/recipe/${id}/video` }),
+  /** 启用的菜谱分类（下拉） */
+  categories: () => defHttp.get({ url: `${BASE}/recipe/category/all` }),
+  categoryList: (params?: any) => defHttp.get({ url: `${BASE}/recipe/category/list`, params }),
+  toggleFavorite: (id: string) => defHttp.post({ url: `${BASE}/recipe/${id}/favorite` }),
+  favorites: () => defHttp.get({ url: `${BASE}/recipe/favorites` }),
 };
 
 /** 学习资料 API */
@@ -132,6 +162,24 @@ export const learnApi = {
   deletePermanently: (ids: string[]) => defHttp.delete({ url: `${BASE}/learn/deletePermanently`, data: ids }),
   /** 上传学习资料文件 */
   uploadFile: (id: string) => `${BASE}/learn/materials/${id}/upload`,
+  /** 新增前预上传文件 */
+  uploadTemp: () => `${BASE}/learn/upload`,
+  /** 启用的学习分类（下拉） */
+  categories: () => defHttp.get({ url: `${BASE}/learn/category/all` }),
+  categoryList: (params?: any) => defHttp.get({ url: `${BASE}/learn/category/list`, params }),
+  addCategory: (data: any) => defHttp.post({ url: `${BASE}/learn/category`, data }),
+  editCategory: (data: any) => defHttp.put({ url: `${BASE}/learn/category`, data }),
+  deleteCategory: (id: string) => defHttp.delete({ url: `${BASE}/learn/category/${id}` }),
+  adminStatsTrend: (days = 30) => defHttp.get({ url: `${BASE}/learn/admin/stats/trend`, params: { days } }),
+};
+
+/** 系统配置 API */
+export const configApi = {
+  getFileWhitelist: () => defHttp.get({ url: `${BASE}/config/file-whitelist` }),
+  updateFileWhitelist: (items: any[]) => defHttp.put({ url: `${BASE}/config/file-whitelist`, data: items }),
+  getPlanConfig: () => defHttp.get({ url: `${BASE}/config/plan` }),
+  updatePlanConfig: (data: any) => defHttp.put({ url: `${BASE}/config/plan`, data }),
+  getWechatPublic: () => defHttp.get({ url: `${BASE}/config/wechat-public` }),
 };
 
 /** 资料存储管理 API */
@@ -144,6 +192,8 @@ export const storageApi = {
   updateFolderVisibility: (id: string, visibility: string) => defHttp.patch({ url: `${BASE}/storage/folders/${id}/visibility`, params: { visibility } }, { joinParamsToUrl: true }),
   deleteFile: (id: string) => defHttp.delete({ url: `${BASE}/storage/files/${id}` }),
   deleteFolder: (id: string) => defHttp.delete({ url: `${BASE}/storage/folders/${id}` }),
+  checkGenerateQuota: (instruction?: string) =>
+    defHttp.get({ url: `${BASE}/storage/office/generate/quota-check`, params: instruction ? { instruction } : {} }),
 };
 
 //update-begin---author:admin ---date:2026-07-31  for：AI管理API集中定义-----------

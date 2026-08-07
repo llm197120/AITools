@@ -13,12 +13,15 @@
       <view class="message-item" v-for="(msg, i) in messages" :key="msg.id || i"
         :id="'msg-' + i"
         :class="msg.role === 'user' ? 'user-msg' : 'assistant-msg'">
-        <image v-if="msg.role === 'assistant'" class="ai-avatar" src="/static/ai-avatar.png" mode="aspectFill" />
+        <view v-if="msg.role === 'assistant'" class="ai-avatar">
+          <text class="ai-avatar-text">AI</text>
+        </view>
         <view class="bubble" :class="msg.role">
           <!-- 图片附件 -->
           <image v-if="msg.contentType === 'image' && msg.fileUrl" class="msg-image" :src="msg.fileUrl" mode="widthFix" />
-          <!-- 文本内容（支持Markdown） -->
-          <text class="msg-text" v-if="msg.content" selectable>{{ msg.content }}</text>
+          <!-- 文本内容（Markdown） -->
+          <mp-html v-if="msg.content && msg.role === 'assistant'" class="msg-text" :content="msg.content" selectable />
+          <text v-else-if="msg.content" class="msg-text" selectable>{{ msg.content }}</text>
           <!-- 流式加载动画 -->
           <view class="streaming-dots" v-if="msg.role === 'assistant' && msg.isStreaming">
             <text class="dot">.</text><text class="dot">.</text><text class="dot">.</text>
@@ -67,8 +70,9 @@
 
 <script lang="ts" setup>
 import { ref, nextTick } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi, del as delApi, getServerBaseUrl } from '../../pages-homeai/api/request'
+import { preloadWhitelist, validateUploadFile } from '../../pages-homeai/utils/fileWhitelist'
 
 const conversationId = ref('')
 const messages = ref<any[]>([])
@@ -93,6 +97,10 @@ onLoad(async (options: any) => {
   }
 })
 
+onShow(() => {
+  preloadWhitelist()
+})
+
 async function loadMessages() {
   messages.value = await getApi(`/ai/conversations/${conversationId.value}/messages`)
   scrollToBottom()
@@ -102,6 +110,114 @@ function scrollToBottom() {
   nextTick(() => {
     scrollToId.value = 'msg-' + (messages.value.length - 1)
   })
+}
+
+/** 将 SSE chunk 转为字符串 */
+function chunkToString(chunk: unknown): string {
+  if (!chunk) return ''
+  if (typeof chunk === 'string') return chunk
+  if (chunk instanceof ArrayBuffer) {
+    return new TextDecoder('utf-8').decode(chunk)
+  }
+  if (ArrayBuffer.isView(chunk)) {
+    return new TextDecoder('utf-8').decode(chunk)
+  }
+  return String(chunk)
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** 解析单条 SSE JSON 事件 */
+function tryParseSseJson(raw: string, aiMsgIdx: number) {
+  const text = raw.trim()
+  if (!text || text === '[DONE]') return
+  try {
+    appendAiragEvent(JSON.parse(text), aiMsgIdx)
+  } catch (_) {
+    // 非完整 JSON，忽略
+  }
+}
+
+/** 解析 airag EventData 格式，累加 AI 回复内容 */
+function appendAiragEvent(event: any, aiMsgIdx: number) {
+  if (!event || aiMsgIdx < 0 || aiMsgIdx >= messages.value.length) return
+  const type = event.event || event.eventType
+  if (type === 'MESSAGE' || type === 'THINKING' || type === 'THINKING_END') {
+    const piece = event.data?.message
+    if (piece) {
+      messages.value[aiMsgIdx].content += piece
+    }
+  } else if (type === 'ERROR' || type === 'FLOW_ERROR') {
+    const errMsg = event.data?.message || '请求出错，请稍后重试'
+    if (!messages.value[aiMsgIdx].content) {
+      messages.value[aiMsgIdx].content = errMsg
+    }
+  }
+  if (event.conversationId) {
+    conversationId.value = event.conversationId
+  }
+}
+
+/** 按 SSE 协议解析缓冲区，返回未处理完的剩余内容 */
+function consumeSseBuffer(buffer: string, aiMsgIdx: number): string {
+  const normalized = buffer.replace(/\r\n/g, '\n')
+  const parts = normalized.split('\n\n')
+  const remaining = parts.pop() || ''
+
+  for (const part of parts) {
+    if (!part.trim()) continue
+    for (const line of part.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      if (trimmed.startsWith('data:')) {
+        tryParseSseJson(trimmed.substring(5), aiMsgIdx)
+      } else if (trimmed.startsWith('{')) {
+        tryParseSseJson(trimmed, aiMsgIdx)
+      }
+    }
+  }
+
+  // 保留可能未以空行结尾的最后一行
+  const lines = remaining.split('\n')
+  const kept: string[] = []
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (trimmed.startsWith('data:')) {
+      const payload = trimmed.substring(5).trim()
+      if (payload.startsWith('{') && payload.endsWith('}')) {
+        tryParseSseJson(payload, aiMsgIdx)
+        continue
+      }
+    } else if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      tryParseSseJson(trimmed, aiMsgIdx)
+      continue
+    }
+    kept.push(line)
+  }
+  return kept.join('\n')
+}
+
+/** SSE 未解析到内容时，从服务端拉取最新 assistant 消息 */
+async function reloadAssistantFromServer(aiMsgIdx: number): Promise<boolean> {
+  if (!conversationId.value) return false
+  for (let i = 0; i < 8; i++) {
+    await sleep(400)
+    try {
+      const list = (await getApi(`/ai/conversations/${conversationId.value}/messages`)) || []
+      const assistants = list.filter((m: any) => m.role === 'assistant')
+      const last = assistants[assistants.length - 1]
+      if (last?.content) {
+        messages.value[aiMsgIdx].content = last.content
+        messages.value[aiMsgIdx].id = last.id
+        return true
+      }
+    } catch (_) {
+      // 继续重试
+    }
+  }
+  return false
 }
 
 async function sendMessage() {
@@ -152,6 +268,7 @@ async function sendMessage() {
         imageUrls.push(img)
         continue
       }
+      if (!(await validateUploadFile(img))) continue
       try {
         const up = await uni.uploadFile({
           url: getAppBaseUrl() + '/homeai/ai/chat/upload',
@@ -160,12 +277,27 @@ async function sendMessage() {
           header: { 'X-Access-Token': token },
         })
         const d = JSON.parse(up.data)
-        if (d && d.result && d.result.url) imageUrls.push(d.result.url)
+        if (d && d.result) {
+          const stored = d.result.storedUrl || d.result.url
+          if (stored) imageUrls.push(stored)
+        }
       } catch (e) {
         console.error('图片上传失败', e)
       }
     }
     
+    const requestData: Record<string, unknown> = {
+      conversationId: conversationId.value,
+      content: content,
+    }
+    if (imageUrls.length > 0) {
+      requestData.images = imageUrls
+    }
+    const fileUrls = selectedFiles.value.map((f: any) => f.url).filter((u: string) => u && u !== 'undefined')
+    if (fileUrls.length > 0) {
+      requestData.files = fileUrls
+    }
+
     const requestTask = uni.request({
       url: getAppBaseUrl() + '/homeai/ai/chat/send',
       method: 'POST',
@@ -173,83 +305,57 @@ async function sendMessage() {
         'X-Access-Token': token,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      data: {
-        conversationId: conversationId.value,
-        content: content,
-        images: imageUrls.length > 0 ? imageUrls : undefined,
-        files: selectedFiles.value.length > 0 ? selectedFiles.value.map((f: any) => f.url) : undefined,
-      },
+      data: requestData,
       enableChunked: true,
       responseType: 'text',
       // 实时流式接收
       onChunkReceived: (res) => {
         try {
-          const chunk = (res as any).data as string
+          const chunk = chunkToString((res as any).data)
           if (!chunk) return
           sseBuffer += chunk
-          // 按换行分割处理完整的 SSE 行
-          const lines = sseBuffer.split('\n')
-          // 最后一行可能不完整，保留到下次处理
-          sseBuffer = lines.pop() || ''
-          
-          for (const line of lines) {
-            const trimmed = line.trim()
-            if (!trimmed.startsWith('data:')) continue
-            const data = trimmed.substring(5).trim()
-            if (!data || data === '[DONE]') continue
-            
-            // 解析 JSON 提取内容
-            try {
-              const json = JSON.parse(data)
-              let content = ''
-              // 优先从 choices[0].delta.content 提取 (OpenAI 兼容格式)
-              if (json.choices && json.choices[0] && json.choices[0].delta) {
-                content = json.choices[0].delta.content || ''
-              }
-              // 其次从 content 字段提取
-              if (!content && json.content) {
-                content = json.content
-              }
-              if (content) {
-                messages.value[aiMsgIdx].content += content
-                scrollToBottom()
-              }
-            } catch (_) {
-              // 非 JSON 数据忽略
-            }
-          }
+          sseBuffer = consumeSseBuffer(sseBuffer, aiMsgIdx)
+          scrollToBottom()
         } catch (_) {
           // 忽略单次解析错误
         }
       },
-      success: (res) => {
-        // SSE 流结束后的最终处理
-        if (sseBuffer) {
-          // 处理缓冲区中剩余的完整数据
-          const lines = sseBuffer.split('\n')
-          for (const line of lines) {
-            const trimmed = line.trim()
-            if (!trimmed.startsWith('data:')) continue
-            const data = trimmed.substring(5).trim()
-            if (!data || data === '[DONE]') continue
-            try {
-              const json = JSON.parse(data)
-              let content = ''
-              if (json.choices && json.choices[0] && json.choices[0].delta) {
-                content = json.choices[0].delta.content || ''
-              }
-              if (!content && json.content) {
-                content = json.content
-              }
-              if (content) {
-                messages.value[aiMsgIdx].content += content
-              }
-            } catch (_) { }
-          }
-          sseBuffer = ''
+      success: async (res) => {
+        const statusCode = (res as any).statusCode
+        if (statusCode && statusCode >= 400) {
+          messages.value[aiMsgIdx].isStreaming = false
+          isStreaming.value = false
+          messages.value[aiMsgIdx].content = '请求失败，请检查登录状态或稍后重试'
+          return
         }
+        const body = chunkToString((res as any).data)
+        if (body) {
+          // 若返回的是普通 JSON 错误而非 SSE
+          if (body.trim().startsWith('{') && body.includes('"success"')) {
+            try {
+              const json = JSON.parse(body)
+              if (!json.success) {
+                messages.value[aiMsgIdx].content = json.message || '请求失败'
+                messages.value[aiMsgIdx].isStreaming = false
+                isStreaming.value = false
+                return
+              }
+            } catch (_) {
+              // 继续按 SSE 解析
+            }
+          }
+          sseBuffer += body
+        }
+        sseBuffer = consumeSseBuffer(sseBuffer + '\n\n', aiMsgIdx)
+        sseBuffer = ''
         messages.value[aiMsgIdx].isStreaming = false
         isStreaming.value = false
+        if (!messages.value[aiMsgIdx].content) {
+          const loaded = await reloadAssistantFromServer(aiMsgIdx)
+          if (!loaded) {
+            messages.value[aiMsgIdx].content = '未收到 AI 回复，请检查 AI 密钥配置或稍后重试'
+          }
+        }
         scrollToBottom()
       },
       fail: (err) => {
@@ -332,6 +438,7 @@ function showAttachmentPicker() {
           type: 'all',
           success: async (r) => {
             for (const file of r.tempFiles) {
+              if (!(await validateUploadFile(file.path))) continue
               // 上传文件到服务器
               try {
                 const token = uni.getStorageSync('homeai_token')
@@ -347,7 +454,7 @@ function showAttachmentPicker() {
                 if (data && data.result) {
                   selectedFiles.value.push({
                     name: file.name,
-                    url: data.result.url,
+                    url: data.result.storedUrl || data.result.url,
                     size: file.size,
                   })
                 }
@@ -403,6 +510,16 @@ function getAppBaseUrl(): string {
   height: 60rpx;
   border-radius: 50%;
   flex-shrink: 0;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ai-avatar-text {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1;
 }
 .bubble {
   max-width: 70%;

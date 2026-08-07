@@ -12,20 +12,26 @@ const homeai: AppRouteModule = {
     title: '家庭AI小工具',
   },
   children: [
-    // 用户管理
     {
       path: 'user',
       name: 'HomeaiUser',
       component: () => import('/@/views/homeai/user/index.vue'),
       meta: { title: '用户管理', icon: 'ant-design:user-outlined' },
     },
-    // 家庭管理
     {
       path: 'family',
       name: 'HomeaiFamily',
       component: () => import('/@/views/homeai/family/index.vue'),
       meta: { title: '家庭管理', icon: 'ant-design:team-outlined' },
     },
+    // AI 管理（与设计文档 / 菜单 SQL 路径一致：/homeai/ai/*）
+    {
+      path: 'ai',
+      name: 'HomeaiAi',
+      component: LAYOUT,
+      redirect: '/homeai/ai/conversationList',
+      meta: { title: 'AI管理', icon: 'ant-design:robot-outlined' },
+      children: [
         {
           path: 'conversationList',
           name: 'HomeaiAiConversationList',
@@ -44,10 +50,12 @@ const homeai: AppRouteModule = {
           component: () => import('/@/views/homeai/ai/quota.vue'),
           meta: { title: 'Token额度配置', icon: 'ant-design:dashboard-outlined' },
         },
-    // 资料存储管理
+      ],
+    },
     {
       path: 'storage',
       name: 'HomeaiStorage',
+      component: LAYOUT,
       redirect: '/homeai/storage/fileList',
       meta: { title: '资料存储管理', icon: 'ant-design:folder-outlined' },
       children: [
@@ -75,12 +83,18 @@ const homeai: AppRouteModule = {
           component: () => import('/@/views/homeai/storage/officeHistory.vue'),
           meta: { title: '处理记录', icon: 'ant-design:history-outlined' },
         },
+        {
+          path: 'fileWhitelist',
+          name: 'HomeaiStorageFileWhitelist',
+          component: () => import('/@/views/homeai/storage/fileWhitelist.vue'),
+          meta: { title: '文件白名单', icon: 'ant-design:safety-outlined' },
+        },
       ],
     },
-    // 账单管理
     {
       path: 'bill',
       name: 'HomeaiBill',
+      component: LAYOUT,
       redirect: '/homeai/bill/billList',
       meta: { title: '账单管理', icon: 'ant-design:account-book-outlined' },
       children: [
@@ -110,10 +124,10 @@ const homeai: AppRouteModule = {
         },
       ],
     },
-    // 计划管理
     {
       path: 'plan',
       name: 'HomeaiPlan',
+      component: LAYOUT,
       redirect: '/homeai/plan/planList',
       meta: { title: '计划管理', icon: 'ant-design:calendar-outlined' },
       children: [
@@ -123,12 +137,30 @@ const homeai: AppRouteModule = {
           component: () => import('/@/views/homeai/plan/planList.vue'),
           meta: { title: '计划列表' },
         },
+        {
+          path: 'planCategory',
+          name: 'HomeaiPlanCategory',
+          component: () => import('/@/views/homeai/plan/planCategory.vue'),
+          meta: { title: '计划分类' },
+        },
+        {
+          path: 'planConfig',
+          name: 'HomeaiPlanConfig',
+          component: () => import('/@/views/homeai/plan/planConfig.vue'),
+          meta: { title: '计划配置' },
+        },
+        {
+          path: 'auditLog',
+          name: 'HomeaiPlanAuditLog',
+          component: () => import('/@/views/homeai/plan/auditLog.vue'),
+          meta: { title: '操作审计' },
+        },
       ],
     },
-    // 菜谱管理
     {
       path: 'recipe',
       name: 'HomeaiRecipe',
+      component: LAYOUT,
       redirect: '/homeai/recipe/recipeList',
       meta: { title: '菜谱管理', icon: 'ant-design:fire-outlined' },
       children: [
@@ -146,10 +178,10 @@ const homeai: AppRouteModule = {
         },
       ],
     },
-    // 学习管理
     {
       path: 'learn',
       name: 'HomeaiLearn',
+      component: LAYOUT,
       redirect: '/homeai/learn/learnList',
       meta: { title: '学习管理', icon: 'ant-design:book-outlined' },
       children: [
@@ -158,6 +190,12 @@ const homeai: AppRouteModule = {
           name: 'HomeaiLearnList',
           component: () => import('/@/views/homeai/learn/learnList.vue'),
           meta: { title: '学习资料' },
+        },
+        {
+          path: 'learnCategory',
+          name: 'HomeaiLearnCategory',
+          component: () => import('/@/views/homeai/learn/learnCategory.vue'),
+          meta: { title: '学习分类' },
         },
         {
           path: 'learnRecord',

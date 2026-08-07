@@ -1,18 +1,26 @@
 package org.jeecg.modules.homeai.storage.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
+import org.jeecg.common.util.oConvertUtils;
+import org.jeecg.common.exception.JeecgBootException;
+import org.jeecg.modules.homeai.storage.constant.StorageVisibility;
 import org.jeecg.modules.homeai.storage.entity.StorageFile;
 import org.jeecg.modules.homeai.storage.entity.StorageFolder;
 import org.jeecg.modules.homeai.storage.mapper.StorageFileMapper;
 import org.jeecg.modules.homeai.storage.mapper.StorageFolderMapper;
+import org.jeecg.modules.homeai.storage.service.IStorageFileService;
 import org.jeecg.modules.homeai.storage.service.IStorageFolderService;
+import org.jeecg.modules.homeai.storage.service.IStorageResourceFamilyService;
+import org.jeecg.modules.homeai.storage.util.StorageVisibilityQueryUtil;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -23,19 +31,38 @@ public class StorageFolderServiceImpl extends ServiceImpl<StorageFolderMapper, S
     @org.springframework.beans.factory.annotation.Autowired
     private StorageFileMapper fileMapper;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private IStorageFileService fileService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private IStorageResourceFamilyService resourceFamilyService;
+
+    /** 设计文档：文件夹最多 5 级嵌套（level 0~4） */
+    private static final int MAX_FOLDER_DEPTH = 5;
+
     @Override
     public List<StorageFolder> getUserFolderTree(String userId, String familyId) {
         LambdaQueryWrapper<StorageFolder> query = new LambdaQueryWrapper<>();
-        query.eq(StorageFolder::getUserId, userId)
-                .eq(StorageFolder::getDelFlag, 0);
-        List<StorageFolder> allFolders = list(query);
-        // 填充每个文件夹的文件数（用于前端展示）
+        query.eq(StorageFolder::getDelFlag, 0);
+        StorageVisibilityQueryUtil.applyReadableFolderFilter(query, userId, familyId);
+        return buildFolderTreeWithCounts(list(query));
+    }
+
+    @Override
+    public List<StorageFolder> getAllFolderTree() {
+        LambdaQueryWrapper<StorageFolder> query = new LambdaQueryWrapper<>();
+        query.eq(StorageFolder::getDelFlag, 0);
+        return buildFolderTreeWithCounts(list(query));
+    }
+
+    private List<StorageFolder> buildFolderTreeWithCounts(List<StorageFolder> allFolders) {
         for (StorageFolder folder : allFolders) {
             folder.setFileCount(Math.toIntExact(fileMapper.selectCount(
                     new LambdaQueryWrapper<StorageFile>()
                             .eq(StorageFile::getFolderId, folder.getId())
                             .eq(StorageFile::getDelFlag, 0))));
         }
+        resourceFamilyService.enrichFolders(allFolders);
         return buildTree(allFolders, null);
     }
 
@@ -52,17 +79,94 @@ public class StorageFolderServiceImpl extends ServiceImpl<StorageFolderMapper, S
     @Override
     public StorageFolder createFolder(String userId, String familyId, String parentId,
                                        String name, String visibility) {
+        //update-begin---author:admin ---date:2026-08-04  for：文件夹上下级循环引用校验-----------
+        validateParentNotCycle(null, parentId);
+        validateFolderDepth(parentId);
+        if (parentId != null && !parentId.isEmpty()) {
+            StorageFolder parent = getById(parentId);
+            if (parent == null || Objects.equals(parent.getDelFlag(), 1)) {
+                throw new JeecgBootException("上级文件夹不存在");
+            }
+            if (!userId.equals(parent.getUserId())) {
+                throw new JeecgBootException("无权在上级文件夹下创建");
+            }
+        }
+        //update-end---author:admin ---date:2026-08-04  for：文件夹上下级循环引用校验-----------
         StorageFolder folder = new StorageFolder();
         folder.setUserId(userId);
         folder.setFamilyId(familyId);
         folder.setParentId(parentId);
         folder.setName(name);
-        folder.setVisibility(visibility != null ? visibility : "private");
+        folder.setVisibility(visibility != null ? visibility : StorageVisibility.PRIVATE);
         folder.setLevel(parentId != null ? getParentLevel(parentId) + 1 : 0);
         folder.setCreateTime(new Date());
         folder.setUpdateTime(new Date());
         save(folder);
         return folder;
+    }
+
+    @Override
+    public void updateFolder(StorageFolder folder, String newParentId) {
+        String normalizedParentId = (newParentId == null || newParentId.isEmpty()) ? null : newParentId;
+        validateParentNotCycle(folder.getId(), normalizedParentId);
+        validateFolderDepth(normalizedParentId);
+        if (normalizedParentId != null) {
+            StorageFolder parent = getById(normalizedParentId);
+            if (parent == null || Objects.equals(parent.getDelFlag(), 1)) {
+                throw new JeecgBootException("上级文件夹不存在");
+            }
+            if (!folder.getUserId().equals(parent.getUserId())) {
+                throw new JeecgBootException("无权移动到该上级文件夹");
+            }
+            folder.setParentId(normalizedParentId);
+            folder.setLevel(getParentLevel(normalizedParentId) + 1);
+        } else {
+            folder.setParentId(null);
+            folder.setLevel(0);
+        }
+        folder.setUpdateTime(new Date());
+        updateById(folder);
+        refreshChildLevels(folder.getId(), folder.getLevel());
+    }
+
+    @Override
+    public void validateParentNotCycle(String folderId, String parentId) {
+        if (parentId == null || parentId.isEmpty()) {
+            return;
+        }
+        if (folderId != null && parentId.equals(folderId)) {
+            throw new JeecgBootException("不能将文件夹设为自身的上级");
+        }
+        String current = parentId;
+        int depth = 0;
+        while (current != null && depth < 100) {
+            if (folderId != null && current.equals(folderId)) {
+                throw new JeecgBootException("不能将文件夹移动到其子文件夹下，会造成循环引用");
+            }
+            StorageFolder parent = getById(current);
+            if (parent == null || Objects.equals(parent.getDelFlag(), 1)) {
+                break;
+            }
+            current = parent.getParentId();
+            depth++;
+        }
+    }
+
+    private void validateFolderDepth(String parentId) {
+        int newLevel = parentId == null || parentId.isEmpty() ? 0 : getParentLevel(parentId) + 1;
+        if (newLevel >= MAX_FOLDER_DEPTH) {
+            throw new JeecgBootException("文件夹层级不能超过 " + MAX_FOLDER_DEPTH + " 级");
+        }
+    }
+
+    private void refreshChildLevels(String parentId, int parentLevel) {
+        List<StorageFolder> children = getChildFolders(parentId);
+        for (StorageFolder child : children) {
+            child.setLevel(parentLevel + 1);
+            child.setUpdateTime(new Date());
+            updateById(child);
+            refreshChildLevels(child.getId(), child.getLevel());
+        }
     }
 
     @Override
@@ -72,6 +176,22 @@ public class StorageFolderServiceImpl extends ServiceImpl<StorageFolderMapper, S
                 .eq(StorageFolder::getDelFlag, 0)
                 .orderByAsc(StorageFolder::getCreateTime);
         return list(query);
+    }
+
+    @Override
+    public void deleteFolderCascade(String folderId) {
+        if (oConvertUtils.isEmpty(folderId)) {
+            return;
+        }
+        List<StorageFolder> children = getChildFolders(folderId);
+        for (StorageFolder child : children) {
+            deleteFolderCascade(child.getId());
+        }
+        fileService.softDeleteByFolderId(folderId);
+        resourceFamilyService.deleteByFolderId(folderId);
+        update(new LambdaUpdateWrapper<StorageFolder>()
+                .eq(StorageFolder::getId, folderId)
+                .set(StorageFolder::getDelFlag, 1));
     }
 
     private int getParentLevel(String parentId) {

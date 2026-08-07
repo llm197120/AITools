@@ -4,6 +4,7 @@
 
 <template>
   <view class="generate-page">
+    <view v-if="quotaHint" class="quota-bar">{{ quotaHint }}</view>
     <view class="type-select">
       <text class="section-title">选择文档类型：</text>
       <view class="type-row">
@@ -14,7 +15,12 @@
     </view>
     <view class="input-area">
       <text class="section-title">描述你的需求：</text>
-      <textarea class="desc-input" v-model="instruction" placeholder="比如：生成一份家庭月度开支汇总表，包含食品、交通、住房等分类..." />
+      <textarea
+        class="desc-input"
+        v-model="instruction"
+        placeholder="比如：生成一份家庭月度开支汇总表，包含食品、交通、住房等分类..."
+        @blur="refreshQuota"
+      />
     </view>
     <view class="template-area">
       <text class="section-title">选择模板（可选）：</text>
@@ -24,36 +30,84 @@
         </view>
       </scroll-view>
     </view>
-    <wd-button size="large" type="primary" @click="generate">开始生成</wd-button>
+    <wd-button size="large" type="primary" :disabled="quotaBlocked" @click="generate">开始生成</wd-button>
   </view>
 </template>
 
 <script lang="ts" setup>
 import { ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi } from '../../pages-homeai/api/request'
+import { storageApi } from '../../pages-homeai/api/index'
 
 const docType = ref('word')
 const instruction = ref('')
 const templates = ref<any[]>([])
 const selectedTemplate = ref('')
+const sourceFileId = ref('')
+const quotaHint = ref('')
+const quotaBlocked = ref(false)
 
-onLoad(async () => {
+onLoad(async (opts: any) => {
+  sourceFileId.value = opts?.fileId || ''
   templates.value = await getApi('/storage/template/enabled', { params: { type: docType.value } })
+  await refreshQuota()
 })
 
+async function refreshQuota() {
+  try {
+    const q: any = await storageApi.generateQuotaCheck(instruction.value.trim() || undefined)
+    if (!q) return
+    if (q.aiDocPolishEnabled === false) {
+      quotaHint.value = '当前未启用 AI 润色，将直接按指令生成'
+      quotaBlocked.value = false
+      return
+    }
+    const daily = q.remainingDaily
+    const monthly = q.remainingMonthly
+    quotaHint.value = `预估消耗约 ${q.estimatedInputTokens || 0}+${q.estimatedOutputTokens || 0} Token · 今日剩余 ${daily ?? '-'} · 本月剩余 ${monthly ?? '-'}`
+    quotaBlocked.value = q.allowed === false
+    if (quotaBlocked.value && q.message) {
+      quotaHint.value = q.message
+    }
+  } catch {
+    quotaHint.value = ''
+    quotaBlocked.value = false
+  }
+}
+
 async function generate() {
-  if (!instruction.value.trim()) { uni.showToast({ title: '请描述需求', icon: 'none' }); return }
+  if (!instruction.value.trim()) {
+    uni.showToast({ title: '请描述需求', icon: 'none' })
+    return
+  }
+  await refreshQuota()
+  if (quotaBlocked.value) {
+    uni.showToast({ title: quotaHint.value || 'Token 额度不足', icon: 'none' })
+    return
+  }
   uni.showLoading({ title: '提交中...' })
   try {
-    await postApi('/storage/office/generate', { params: { fileId: '', instruction: instruction.value } })
+    await postApi('/storage/office/generate', {
+      params: {
+        fileId: sourceFileId.value || '',
+        instruction: instruction.value,
+        docType: docType.value,
+        templateId: selectedTemplate.value || '',
+      },
+    })
     uni.hideLoading()
     uni.showToast({ title: '生成任务已提交', icon: 'success' })
-  } catch (e) { uni.hideLoading() }
+  } catch (e: any) {
+    uni.hideLoading()
+    uni.showToast({ title: e?.message || '提交失败', icon: 'none' })
+  }
 }
 </script>
 
 <style scoped>
 .generate-page { min-height: 100vh; background: #f5f5f5; padding: 30rpx; }
+.quota-bar { font-size: 24rpx; color: #666; background: #fff; padding: 16rpx 20rpx; border-radius: 12rpx; margin-bottom: 20rpx; line-height: 1.5; }
 .section-title { font-size: 26rpx; color: #666; margin-bottom: 16rpx; display: block; }
 .type-row { display: flex; gap: 20rpx; margin-bottom: 30rpx; }
 .type-btn { flex: 1; text-align: center; padding: 20rpx; background: #fff; border-radius: 12rpx; font-size: 28rpx; color: #666; }

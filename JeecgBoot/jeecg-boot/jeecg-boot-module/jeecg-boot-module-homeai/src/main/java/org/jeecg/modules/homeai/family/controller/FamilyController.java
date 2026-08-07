@@ -545,6 +545,9 @@ public class FamilyController {
     @Operation(summary="家庭-新增(管理端)")
     @RequiresPermissions("homeai:family:add")
     public Result<?> add(@RequestBody Family family, HttpServletRequest request) {
+        if (family.getStatus() == null) {
+            family.setStatus("normal");
+        }
         // 管理端新增家庭时，从 Shiro 获取当前管理员 ID 作为创建者
         if (family.getCreatorId() == null) {
             try {

@@ -17,11 +17,12 @@
       <view class="user-info" @click="goProfile">
         <image class="avatar" :src="userStore.userInfo?.avatarUrl || '/static/default-avatar.png'" mode="aspectFill" />
         <view class="info">
-          <text class="nickname">{{ userStore.userInfo?.nickname || '微信用户' }}</text>
-          <text class="family-name" v-if="familyStore.hasFamily">
+          <text class="nickname">{{ userStore.isLogin ? (userStore.userInfo?.nickname || '微信用户') : '未登录' }}</text>
+          <text class="family-name" v-if="userStore.isLogin && familyStore.hasFamily">
             {{ familyStore.familyInfo?.name || '我的家庭' }}
           </text>
-          <text class="family-name" v-else @click.stop="goFamily">加入家庭 ></text>
+          <text class="family-name" v-else-if="userStore.isLogin" @click.stop="goFamily">加入家庭 ></text>
+          <text class="family-name" v-else @click.stop="goProfile">点击登录 ></text>
         </view>
       </view>
     </view>
@@ -56,6 +57,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '../../pages-homeai/stores/user'
 import { useFamilyStore } from '../../pages-homeai/stores/family'
 import { get as getApi } from '../../pages-homeai/api/request'
+import { ensureLoginForAction, ensureProfileWhenGuest } from '../../pages-homeai/utils/homeaiAuth'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
@@ -68,17 +70,12 @@ const modules = [
   { key: 'plan', icon: '📋', label: '日常计划', bgColor: '#43e97b' },
   { key: 'recipe', icon: '🍳', label: '烹饪指南', bgColor: '#fa709a' },
   { key: 'learn', icon: '📚', label: '学习模块', bgColor: '#a18cd1' },
+  { key: 'more', icon: '➕', label: '更多', bgColor: '#bdc3c7' },
 ]
 
 onShow(async () => {
-  if (!userStore.isLogin) {
-    // 静默登录
-    try {
-      const { code } = await uni.login({ provider: 'weixin' })
-      await userStore.login(code)
-    } catch (e) {
-      console.error('登录失败', e)
-    }
+  if (!ensureProfileWhenGuest()) {
+    return
   }
   await familyStore.fetchFamilyInfo()
   // 今日待办数量
@@ -86,7 +83,7 @@ onShow(async () => {
     const now = new Date()
     const d = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const list = await getApi(`/plan/date/${d}`)
-    todayTodo.value = Array.isArray(list) ? list.length : 0
+    todayTodo.value = Array.isArray(list) ? list.filter((p: any) => p.status === 'pending').length : 0
   } catch (e) {
     todayTodo.value = 0
   }
@@ -97,10 +94,12 @@ function goProfile() {
 }
 
 function goFamily() {
+  if (!ensureLoginForAction()) return
   uni.switchTab({ url: '/pages/homeai/family' })
 }
 
 function goModule(key: string) {
+  if (!ensureLoginForAction()) return
   const pages: Record<string, string> = {
     ai: '/pages-homeai-ai/ai/conversations',
     storage: '/pages-homeai-more/storage/index',
@@ -108,6 +107,7 @@ function goModule(key: string) {
     plan: '/pages-homeai-more/plan/index',
     recipe: '/pages-homeai-more/recipe/index',
     learn: '/pages-homeai-more/learn/index',
+    more: '/pages-homeai-more/all-functions/index',
   }
   const url = pages[key]
   if (url) {

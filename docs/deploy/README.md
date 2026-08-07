@@ -4,9 +4,9 @@
 
 ## 文档清单
 
-| 文件名 | 内容 | 日期 | 版本 |
-|--------|------|------|------|
-| -      | -    | -    | -    |
+| 文件名 | 内容 | 状态 |
+|--------|------|------|
+| [github-actions-acr-cicd-design.md](./github-actions-acr-cicd-design.md) | GitHub Actions + 阿里云 ACR 个人版 CI/CD 方案 | 方案设计（待实施） |
 
 ## 文档分类
 

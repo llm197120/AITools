@@ -11,18 +11,21 @@ import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.jeecg.common.api.vo.Result;
 import org.jeecg.common.aspect.annotation.AutoLog;
+import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.oConvertUtils;
 import io.swagger.v3.oas.annotations.Operation;
-import org.jeecg.modules.homeai.config.HomeaiFileUrlUtil;
+import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.recipe.entity.Recipe;
 import org.jeecg.modules.homeai.recipe.entity.RecipeIngredient;
 import org.jeecg.modules.homeai.recipe.entity.RecipeStep;
 import org.jeecg.modules.homeai.recipe.mapper.RecipeMapper;
+import org.jeecg.modules.homeai.recipe.service.IRecipeCategoryService;
 import org.jeecg.modules.homeai.recipe.service.IRecipeService;
+import org.jeecg.modules.homeai.user.entity.WxUser;
 import org.jeecg.modules.homeai.user.service.IWxUserService;
 import org.jeecgframework.poi.excel.ExcelImportUtil;
 import org.jeecgframework.poi.excel.def.NormalExcelConstants;
@@ -44,9 +47,11 @@ import java.util.stream.Collectors;
 @RequestMapping("/homeai/recipe")
 public class RecipeController {
     @Autowired private IRecipeService recipeService;
+    @Autowired private IRecipeCategoryService recipeCategoryService;
     @Autowired private IWxUserService wxUserService;
     @Autowired private RecipeMapper recipeMapper;
     @Autowired private HomeaiSecurityUtil securityUtil;
+    @Autowired private IHomeaiFileStorageService fileStorageService;
 
     private String getUserId(HttpServletRequest r) {
         // 优先从Shiro认证获取（管理端）
@@ -72,6 +77,14 @@ public class RecipeController {
     public Result<?> list(Recipe r, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "10") int pageSize, HttpServletRequest req) {
         QueryWrapper<Recipe> qw = QueryGenerator.initQueryWrapper(r, req.getParameterMap());
         qw.eq("del_flag", "0").orderByDesc("create_time");
+        if (!securityUtil.isConsoleAuthenticated(req)) {
+            String uid = getUserId(req);
+            if (uid == null) {
+                return Result.error("未登录");
+            }
+            WxUser user = wxUserService.getById(uid);
+            recipeService.applyClientVisibilityFilter(qw, uid, user != null ? user.getFamilyId() : null);
+        }
         IPage<Recipe> result = recipeService.page(new Page<>(pageNo, pageSize), qw);
         // 兼容历史相对地址数据：统一转换为绝对访问地址
         if (result.getRecords() != null) {
@@ -82,17 +95,19 @@ public class RecipeController {
         return Result.OK(result);
     }
 
-    @GetMapping("/{id}")
-    public Result<?> detail(@PathVariable String id) {
-        Map<String, Object> detail = recipeService.getDetailWithRelations(id);
-        Recipe recipe = (Recipe) detail.get("recipe");
-        resolveRecipeUrls(recipe);
-        return Result.OK(detail);
-    }
-
     @GetMapping("/search")
-    public Result<?> search(@RequestParam String keyword) {
-        List<Recipe> list = recipeService.search(keyword);
+    public Result<?> search(@RequestParam String keyword, HttpServletRequest req) {
+        List<Recipe> list;
+        if (securityUtil.isConsoleAuthenticated(req)) {
+            list = recipeService.search(keyword);
+        } else {
+            String uid = getUserId(req);
+            if (uid == null) {
+                return Result.error("未登录");
+            }
+            WxUser user = wxUserService.getById(uid);
+            list = recipeService.searchVisible(keyword, uid, user != null ? user.getFamilyId() : null);
+        }
         if (list != null) {
             for (Recipe item : list) {
                 resolveRecipeUrls(item);
@@ -101,14 +116,88 @@ public class RecipeController {
         return Result.OK(list);
     }
 
+    @GetMapping("/favorites")
+    @Operation(summary = "菜谱-我的收藏")
+    public Result<?> favorites(HttpServletRequest req) {
+        String uid = getUserId(req);
+        if (uid == null) return Result.error("未登录");
+        WxUser user = wxUserService.getById(uid);
+        List<Recipe> list = recipeService.listFavoriteRecipes(uid, user != null ? user.getFamilyId() : null);
+        if (list != null) {
+            for (Recipe item : list) {
+                resolveRecipeUrls(item);
+            }
+        }
+        return Result.OK(list);
+    }
+
+    @GetMapping("/{id}")
+    public Result<?> detail(@PathVariable String id, HttpServletRequest req) {
+        try {
+            if (securityUtil.isConsoleAuthenticated(req)) {
+                Map<String, Object> detail = recipeService.getDetailWithRelations(id);
+                resolveRecipeDetail(detail);
+                return Result.OK(detail);
+            }
+            String uid = getUserId(req);
+            if (uid == null) return Result.error("未登录");
+            WxUser user = wxUserService.getById(uid);
+            Map<String, Object> detail = recipeService.getDetailWithRelations(
+                    id, uid, user != null ? user.getFamilyId() : null, true);
+            resolveRecipeDetail(detail);
+            return Result.OK(detail);
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    @PostMapping("/{id}/favorite")
+    @Operation(summary = "菜谱-切换收藏")
+    public Result<?> toggleFavorite(@PathVariable String id, HttpServletRequest req) {
+        String uid = getUserId(req);
+        if (uid == null) return Result.error("未登录");
+        try {
+            WxUser user = wxUserService.getById(uid);
+            boolean favorited = recipeService.toggleFavorite(uid, id, user != null ? user.getFamilyId() : null);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("favorited", favorited);
+            return Result.OK(result);
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
     /** 兼容历史相对地址数据：转换 coverUrl / videoUrl 为绝对访问地址 */
     private void resolveRecipeUrls(Recipe recipe) {
         if (recipe == null) return;
-        if (recipe.getCoverUrl() != null && !recipe.getCoverUrl().startsWith("http") && !recipe.getCoverUrl().startsWith("data:")) {
-            recipe.setCoverUrl(HomeaiFileUrlUtil.toAbsoluteUrl(recipe.getCoverUrl()));
+        if (recipe.getCoverUrl() != null && !recipe.getCoverUrl().startsWith("data:")) {
+            recipe.setCoverUrl(fileStorageService.resolveAccessUrl(recipe.getCoverUrl()));
         }
-        if (recipe.getVideoUrl() != null && !recipe.getVideoUrl().startsWith("http")) {
-            recipe.setVideoUrl(HomeaiFileUrlUtil.toAbsoluteUrl(recipe.getVideoUrl()));
+        if (recipe.getVideoUrl() != null) {
+            recipe.setVideoUrl(fileStorageService.resolveAccessUrl(recipe.getVideoUrl()));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void resolveRecipeDetail(Map<String, Object> detail) {
+        if (detail == null) return;
+        resolveRecipeUrls((Recipe) detail.get("recipe"));
+        List<RecipeStep> steps = (List<RecipeStep>) detail.get("steps");
+        if (steps != null) {
+            for (RecipeStep step : steps) {
+                if (step.getImageUrl() != null) {
+                    step.setImageUrl(fileStorageService.resolveAccessUrl(step.getImageUrl()));
+                }
+            }
+        }
+    }
+
+    private Result<?> validateRecipeCategory(Recipe recipe) {
+        try {
+            recipeCategoryService.validateCategoryId(recipe.getCategoryId());
+            return null;
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
         }
     }
 
@@ -117,7 +206,15 @@ public class RecipeController {
         String uid = getUserId(r);
         if (uid == null) return Result.error("未登录");
         Recipe recipe = JSON.parseObject(JSON.toJSONString(body), Recipe.class);
+        Result<?> categoryError = validateRecipeCategory(recipe);
+        if (categoryError != null) return categoryError;
         recipe.setUserId(uid);
+        WxUser user = wxUserService.getById(uid);
+        try {
+            recipeService.applyFamilyOnSave(recipe, uid, user != null ? user.getFamilyId() : null);
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
         List<RecipeIngredient> ingredients = JSON.parseArray(
                 JSON.toJSONString(body.get("ingredients")), RecipeIngredient.class);
         List<RecipeStep> steps = JSON.parseArray(
@@ -126,8 +223,12 @@ public class RecipeController {
         return Result.OK(recipe);
     }
 
-    @PutMapping public Result<?> edit(@RequestBody Recipe r, HttpServletRequest req) {
+    @PutMapping
+    public Result<?> edit(@RequestBody Map<String, Object> body, HttpServletRequest req) {
+        Recipe r = JSON.parseObject(JSON.toJSONString(body), Recipe.class);
         if (r == null || r.getId() == null) return Result.error("参数异常");
+        Result<?> categoryError = validateRecipeCategory(r);
+        if (categoryError != null) return categoryError;
         Recipe existing = recipeService.getById(r.getId());
         if (existing == null) return Result.error("菜谱不存在");
         // 管理端控制台可编辑任意菜谱；小程序端只能编辑自己的菜谱
@@ -135,8 +236,18 @@ public class RecipeController {
             String uid = getUserId(req);
             if (uid == null) return Result.error("未登录");
             if (!uid.equals(existing.getUserId())) return Result.error("无权编辑该菜谱");
+            WxUser user = wxUserService.getById(uid);
+            try {
+                recipeService.applyFamilyOnSave(r, uid, user != null ? user.getFamilyId() : null);
+            } catch (JeecgBootException e) {
+                return Result.error(e.getMessage());
+            }
         }
-        recipeService.updateById(r);
+        List<RecipeIngredient> ingredients = JSON.parseArray(
+                JSON.toJSONString(body.get("ingredients")), RecipeIngredient.class);
+        List<RecipeStep> steps = JSON.parseArray(
+                JSON.toJSONString(body.get("steps")), RecipeStep.class);
+        recipeService.updateWithRelations(r, ingredients, steps);
         return Result.OK("OK");
     }
     @DeleteMapping("/{id}") public Result<?> delete(@PathVariable String id, HttpServletRequest req) {
@@ -159,9 +270,16 @@ public class RecipeController {
     @AutoLog(value="菜谱-新增(管理端)")
     @Operation(summary="菜谱-新增(管理端)")
     @RequiresPermissions("homeai:recipe:add")
-    public Result<?> add(@RequestBody Recipe recipe) {
+    public Result<?> add(@RequestBody Map<String, Object> body) {
+        Recipe recipe = JSON.parseObject(JSON.toJSONString(body), Recipe.class);
+        Result<?> categoryError = validateRecipeCategory(recipe);
+        if (categoryError != null) return categoryError;
         recipe.setDelFlag(0);
-        recipeService.save(recipe);
+        List<RecipeIngredient> ingredients = JSON.parseArray(
+                JSON.toJSONString(body.get("ingredients")), RecipeIngredient.class);
+        List<RecipeStep> steps = JSON.parseArray(
+                JSON.toJSONString(body.get("steps")), RecipeStep.class);
+        recipeService.saveWithRelations(recipe, ingredients, steps);
         return Result.OK("新增成功");
     }
 
@@ -309,9 +427,16 @@ public class RecipeController {
     @AutoLog(value="菜谱-编辑(管理端)")
     @Operation(summary="菜谱-编辑(管理端)")
     @RequiresPermissions("homeai:recipe:edit")
-    public Result<?> edit(@PathVariable String id, @RequestBody Recipe recipe) {
+    public Result<?> edit(@PathVariable String id, @RequestBody Map<String, Object> body) {
+        Recipe recipe = JSON.parseObject(JSON.toJSONString(body), Recipe.class);
         recipe.setId(id);
-        recipeService.updateById(recipe);
+        Result<?> categoryError = validateRecipeCategory(recipe);
+        if (categoryError != null) return categoryError;
+        List<RecipeIngredient> ingredients = JSON.parseArray(
+                JSON.toJSONString(body.get("ingredients")), RecipeIngredient.class);
+        List<RecipeStep> steps = JSON.parseArray(
+                JSON.toJSONString(body.get("steps")), RecipeStep.class);
+        recipeService.updateWithRelations(recipe, ingredients, steps);
         return Result.OK("编辑成功");
     }
     //update-end---author:admin ---date:2026-07-30  for：菜谱管理-新增/导入/导出/回收站功能-----------
@@ -323,7 +448,7 @@ public class RecipeController {
     @PostMapping("/{id}/video")
     public Result<?> uploadVideo(@PathVariable String id, @RequestParam MultipartFile file) {
         try {
-            String videoUrl = recipeService.uploadVideo(id, file);
+            String videoUrl = fileStorageService.resolveAccessUrl(recipeService.uploadVideo(id, file));
             return Result.OK("视频上传成功", videoUrl);
         } catch (Exception e) {
             log.error("视频上传失败", e);
@@ -340,4 +465,63 @@ public class RecipeController {
         return Result.OK("视频删除成功");
     }
     //update-end---author:admin ---date:2026-07-31  for：A5-菜谱视频上传/删除API-----------
+
+    /**
+     * 上传菜谱封面图
+     */
+    @PostMapping("/{id}/cover")
+    public Result<?> uploadCover(@PathVariable String id, @RequestParam MultipartFile file) {
+        try {
+            String url = fileStorageService.resolveAccessUrl(recipeService.uploadCover(id, file));
+            return Result.OK(url);
+        } catch (Exception e) {
+            log.error("封面上传失败", e);
+            return Result.error("封面上传失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 上传烹饪步骤图片（返回图片地址，由步骤记录保存）
+     */
+    @PostMapping("/step-image")
+    public Result<?> uploadStepImage(@RequestParam MultipartFile file, HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        try {
+            return Result.OK(fileStorageService.resolveAccessUrl(recipeService.uploadStepImage(file)));
+        } catch (Exception e) {
+            log.error("步骤图片上传失败", e);
+            return Result.error("步骤图片上传失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 通用上传封面图片（保存菜谱前先获取图片地址）
+     */
+    @PostMapping("/cover")
+    public Result<?> uploadCoverFile(@RequestParam MultipartFile file, HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        try {
+            return Result.OK(fileStorageService.resolveAccessUrl(recipeService.uploadCoverFile(file)));
+        } catch (Exception e) {
+            log.error("封面上传失败", e);
+            return Result.error("封面上传失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 通用上传做菜视频（保存菜谱前先获取视频地址）
+     */
+    @PostMapping("/video")
+    public Result<?> uploadVideoFile(@RequestParam MultipartFile file, HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        try {
+            return Result.OK(fileStorageService.resolveAccessUrl(recipeService.uploadVideoFile(file)));
+        } catch (Exception e) {
+            log.error("视频上传失败", e);
+            return Result.error("视频上传失败: " + e.getMessage());
+        }
+    }
 }

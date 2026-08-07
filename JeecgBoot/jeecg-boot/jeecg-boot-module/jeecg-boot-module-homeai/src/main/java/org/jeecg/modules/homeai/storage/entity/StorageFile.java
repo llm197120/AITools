@@ -1,6 +1,7 @@
 package org.jeecg.modules.homeai.storage.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -10,6 +11,7 @@ import lombok.experimental.Accessors;
 
 import java.io.Serializable;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 文件记录
@@ -35,10 +37,10 @@ public class StorageFile implements Serializable {
     @Schema(description = "所属文件夹ID")
     private String folderId;
 
-    @Schema(description = "原始文件名")
+    @Schema(description = "用户上传时的原始文件名（页面展示、重命名均使用此字段）")
     private String originalName;
 
-    @Schema(description = "存储文件名")
+    @Schema(description = "OSS/磁盘实际存储文件名（UUID+扩展名，与 originalName 分离）")
     private String storedName;
 
     @Schema(description = "文件扩展名")
@@ -50,13 +52,13 @@ public class StorageFile implements Serializable {
     @Schema(description = "文件大小(字节)")
     private Long fileSize;
 
-    @Schema(description = "文件访问URL")
+    @Schema(description = "文件存储引用（oss:objectKey 或本地绝对URL，不含展示文件名）")
     private String fileUrl;
 
     @Schema(description = "缩略图URL")
     private String thumbnailUrl;
 
-    @Schema(description = "可见性:private/family")
+    @Schema(description = "可见性:private/family/public")
     private String visibility;
 
     @Schema(description = "是否收藏:1=是 0=否")
@@ -82,4 +84,8 @@ public class StorageFile implements Serializable {
 
     @Schema(description = "删除时间")
     private Date deletedAt;
+
+    /** 家庭可见时关联的家庭 ID 列表（非数据库字段） */
+    @TableField(exist = false)
+    private List<String> familyIds;
 }

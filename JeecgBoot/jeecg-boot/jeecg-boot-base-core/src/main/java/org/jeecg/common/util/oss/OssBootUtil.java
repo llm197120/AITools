@@ -352,6 +352,54 @@ public class OssBootUtil {
     }
 
     /**
+     * 上传至私有桶（不修改 Bucket ACL），返回对象 Key
+     */
+    public static String uploadPrivate(InputStream stream, String relativePath) {
+        if (oConvertUtils.isEmpty(relativePath)) {
+            return null;
+        }
+        initOss(endPoint, accessKeyId, accessKeySecret);
+        String objectKey = relativePath.replace("\\", "/");
+        while (objectKey.startsWith("/")) {
+            objectKey = objectKey.substring(1);
+        }
+        objectKey = StrAttackFilter.filter(objectKey);
+        try {
+            if (!ossClient.doesBucketExist(bucketName)) {
+                ossClient.createBucket(bucketName);
+            }
+            ossClient.putObject(bucketName, objectKey, stream);
+            log.info("------OSS私有文件上传成功------{}", objectKey);
+            return objectKey;
+        } catch (Exception e) {
+            log.error("OSS私有上传失败: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * 生成私有桶预签名访问 URL
+     */
+    public static String getPresignedUrl(String objectKey, long expireSeconds) {
+        if (oConvertUtils.isEmpty(objectKey) || expireSeconds <= 0) {
+            return null;
+        }
+        Date expires = new Date(System.currentTimeMillis() + expireSeconds * 1000L);
+        return getObjectUrl(bucketName, objectKey, expires);
+    }
+
+    /**
+     * 删除 OSS 对象（按 objectKey）
+     */
+    public static void deleteObject(String objectKey) {
+        if (oConvertUtils.isEmpty(objectKey)) {
+            return;
+        }
+        initOss(endPoint, accessKeyId, accessKeySecret);
+        ossClient.deleteObject(bucketName, objectKey);
+    }
+
+    /**
      * 替换前缀，防止key不一致导致获取不到文件
      * @param objectName 文件上传路径 key
      * @param customBucket 自定义桶

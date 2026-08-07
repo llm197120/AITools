@@ -1,6 +1,5 @@
 <template>
   <div style="padding: 16px">
-    <!-- 统计概览 -->
     <a-row :gutter="16" style="margin-bottom: 16px">
       <a-col :span="6">
         <a-card title="学习记录总数" :bordered="false">
@@ -24,6 +23,10 @@
       </a-col>
     </a-row>
 
+    <a-card title="近30日学习趋势" :bordered="false" style="margin-bottom: 16px">
+      <div ref="chartRef" style="height: 320px"></div>
+    </a-card>
+
     <BasicTable @register="registerTable">
       <template #tableTitle>
         <a-button preIcon="ant-design:reload-outlined" type="primary" @click="reload">刷新</a-button>
@@ -41,11 +44,15 @@
 </template>
 
 <script lang="ts" name="homeai-learn-record" setup>
-  import { ref, onMounted } from 'vue';
+  import { ref, onMounted, Ref } from 'vue';
   import { BasicTable, useTable } from '/@/components/Table';
   import { defHttp } from '/@/utils/http/axios';
+  import { learnApi } from '/@/api/homeai';
+  import { useECharts } from '/@/hooks/web/useECharts';
 
   const stats = ref({ totalRecords: 0, totalDurationMinutes: 0, activeUserCount: 0, activeDayCount: 0 });
+  const chartRef = ref<HTMLDivElement | null>(null);
+  const { setOptions } = useECharts(chartRef as Ref<HTMLDivElement>);
 
   const [registerTable, { reload }] = useTable({
     title: '学习记录',
@@ -76,7 +83,27 @@
     }
   }
 
+  async function loadTrend() {
+    try {
+      const trend: any[] = (await learnApi.adminStatsTrend(30)) || [];
+      setOptions({
+        tooltip: { trigger: 'axis' },
+        legend: { data: ['记录数', '时长(分钟)'] },
+        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        xAxis: { type: 'category', data: trend.map((t) => t.date) },
+        yAxis: [{ type: 'value', name: '记录数' }, { type: 'value', name: '分钟' }],
+        series: [
+          { name: '记录数', type: 'bar', data: trend.map((t) => t.recordCount || 0) },
+          { name: '时长(分钟)', type: 'line', yAxisIndex: 1, smooth: true, data: trend.map((t) => t.durationMinutes || 0) },
+        ],
+      });
+    } catch {
+      setOptions({ title: { text: '暂无趋势数据', left: 'center', top: 'center' } });
+    }
+  }
+
   onMounted(() => {
     loadStats();
+    loadTrend();
   });
 </script>

@@ -17,6 +17,8 @@ management:
         include: metrics,httpexchanges,jeecghttptrace
 
 spring:
+  config:
+    import: optional:classpath:application-dev-local.yml
   main:
     allow-bean-definition-overriding: true
   cloud:
@@ -275,8 +277,8 @@ jeecg:
   signatureSecret: dd05f1c54d63749eda95f9fa6d49v442a
   #签名拦截接口
   signUrls: /sys/dict/getDictItems/*,/sys/dict/loadDict/*,/sys/dict/loadDictOrderByValue/*,/sys/dict/loadDictItem/*,/sys/dict/loadTreeData,/sys/api/queryTableDictItemsByCode,/sys/api/queryFilterTableDictInfo,/sys/api/queryTableDictByKeys,/sys/api/translateDictFromTable,/sys/api/translateDictFromTableByKeys,/sys/sendChangePwdSms,/sys/user/sendChangePhoneSms,/sys/sms,/desform/api/sendVerifyCode
-  # 本地：local、Minio：minio、阿里云：alioss
-  uploadType: local
+  # 本地：local、Minio：minio、阿里云：alioss（可在 application-dev-local.yml 覆盖）
+  uploadType: ${JEECG_UPLOAD_TYPE:local}
   # 前端访问地址
   domainUrl:
     pc: http://localhost:3100
@@ -292,10 +294,10 @@ jeecg:
   smsSendType: aliyun
   #阿里云oss存储和大鱼短信秘钥配置
   oss:
-    accessKey: ??
-    secretKey: ??
-    endpoint: oss-cn-beijing.aliyuncs.com
-    bucketName: jeecgdev
+    accessKey: ${JEECG_OSS_ACCESS_KEY:??}
+    secretKey: ${JEECG_OSS_SECRET_KEY:??}
+    endpoint: ${JEECG_OSS_ENDPOINT:oss-cn-beijing.aliyuncs.com}
+    bucketName: ${JEECG_OSS_BUCKET:llmaitools}
     # 短信模板
     sms-template:
       # 签名
@@ -382,6 +384,24 @@ homeai:
   ai:
     # AES-256-GCM加密密钥(32字节，生产环境请更换)
     key-encryption-key: HomeAI@2026!SecretKeyForAES!!!
+  office:
+    # Windows 下优先使用本机 Microsoft Office（Word/Excel/PowerPoint），失败或未安装时回退 LibreOffice
+    prefer-ms-office: true
+    # LibreOffice soffice 可执行文件路径（回退方案）
+    soffice-path: soffice
+    # PowerShell 路径（Windows 调用 Office COM 时使用）
+    powershell-path: powershell
+    # 单次转换超时（秒）
+    convert-timeout-seconds: 120
+  file:
+    # 异步/定时任务无 HTTP 请求时用于拼接文件绝对地址；留空则自动使用 server.port + context-path
+    # base-url: http://127.0.0.1:8080/jeecg-boot
+    scheme: http
+    host: 127.0.0.1
+  oss:
+    # 私有 Bucket 时使用预签名 URL 访问（默认 2 小时有效）
+    private-bucket: true
+    presign-expire-seconds: 7200
 #cas单点登录
 cas:
   prefixUrl: http://cas.example.org:8443/cas

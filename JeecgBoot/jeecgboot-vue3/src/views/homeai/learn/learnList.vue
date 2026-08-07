@@ -31,7 +31,7 @@
 </template>
 
 <script lang="ts" name="homeai-learn-list" setup>
-  import { computed, ref } from 'vue';
+  import { computed, ref, onMounted } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
   import { useMessage } from '/@/hooks/web/useMessage';
@@ -44,6 +44,18 @@
   const [registerDrawer, { openDrawer }] = useDrawer();
   const selectedRowKeys = ref<string[]>([]);
   const activeTab = ref('list');
+  const categoryOptions = ref<{ label: string; value: string }[]>([]);
+
+  async function loadCategoryOptions() {
+    try {
+      const list: any[] = (await learnApi.categories()) || [];
+      categoryOptions.value = list.map((c) => ({ label: c.name, value: c.id }));
+    } catch {
+      categoryOptions.value = [];
+    }
+  }
+
+  onMounted(loadCategoryOptions);
 
   const rowSelection = computed(() => ({
     selectedRowKeys: selectedRowKeys.value,
@@ -73,6 +85,7 @@
       labelWidth: 80,
       schemas: [
         { field: 'title', label: '标题', component: 'Input', colProps: { span: 8 } },
+        { field: 'categoryId', label: '分类', component: 'Select', colProps: { span: 8 }, componentProps: { options: categoryOptions, allowClear: true, placeholder: '请选择分类' } },
       ],
     },
   });

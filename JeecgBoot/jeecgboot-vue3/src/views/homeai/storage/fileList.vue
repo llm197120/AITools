@@ -1,14 +1,6 @@
 <template>
   <div style="padding: 16px">
     <div class="storage-toolbar">
-      <a-radio-group v-model:value="viewMode" button-style="solid" style="margin-right: 8px">
-        <a-radio-button value="list">
-          <Icon icon="ant-design:unordered-list-outlined" /> 文件列表
-        </a-radio-button>
-        <a-radio-button value="folder">
-          <Icon icon="ant-design:folder-outlined" /> 文件夹视图
-        </a-radio-button>
-      </a-radio-group>
       <a-button type="primary" preIcon="ant-design:folder-add-outlined" @click="openCreateFolderModal">新增文件夹</a-button>
       <a-button type="primary" preIcon="ant-design:upload-outlined" @click="handleUploadModal" style="margin-left: 8px">上传文件</a-button>
     </div>
@@ -23,7 +15,7 @@
       </a-col>
       <a-col :span="12">
         <a-card :bordered="false" title="各用户占用（Top 5）">
-          <div v-for="(u, i) in topUsers" :key="u.userId" style="display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0">
+          <div v-for="u in topUsers" :key="u.userId" style="display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0">
             <span>{{ u.userId }}</span>
             <span>{{ u.fileCount }} 个 · {{ formatSize(u.totalSize) }}</span>
           </div>
@@ -32,17 +24,8 @@
       </a-col>
     </a-row>
 
-    <!-- 文件列表视图 -->
-    <div v-if="viewMode === 'list'">
-      <BasicTable @register="registerTable">
-        <template #action="{ record }">
-          <TableAction :actions="getTableAction(record)" />
-        </template>
-      </BasicTable>
-    </div>
-
     <!-- 文件夹视图 -->
-    <div v-if="viewMode === 'folder'" class="folder-view">
+    <div class="folder-view">
       <a-card title="文件夹" :bordered="false" class="folder-card">
         <template #extra>
           <a-button type="link" @click="loadFolderTree" preIcon="ant-design:reload-outlined">刷新</a-button>
@@ -54,12 +37,19 @@
           default-expand-all
           @select="onFolderSelect"
         >
-          <template #title="{ name, fileCount }">
-            <span style="display:flex;align-items:center;gap:8px">
+          <template #title="{ id, name, fileCount, visibility, userId }">
+            <div style="display:flex;align-items:center;gap:8px;width:100%">
               <Icon icon="ant-design:folder-outlined" :style="{color:'#faad14'}" />
-              <span>{{ name }}</span>
+              <span style="flex:1">{{ name }}</span>
+              <a-tag v-if="visibility === 'family'" color="green" size="small">家庭</a-tag>
+              <a-tag v-else-if="visibility === 'public'" color="blue" size="small">公开</a-tag>
+              <a-tag v-else size="small">私有</a-tag>
               <a-tag v-if="fileCount !== undefined" color="blue" size="small">{{ fileCount }}个文件</a-tag>
-            </span>
+              <a-button type="link" size="small" @click.stop="openEditFolderModal({ id, name })">编辑</a-button>
+              <a-popconfirm title="确定删除该文件夹？其内文件与子文件夹将一并删除" @confirm="handleDeleteFolder(id)">
+                <a-button type="link" danger size="small" @click.stop>删除</a-button>
+              </a-popconfirm>
+            </div>
           </template>
         </a-tree>
         <a-empty v-else description="暂无文件夹" />
@@ -75,8 +65,22 @@
           row-key="id"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'fileSize'">
+            <template v-if="column.key === 'visibility'">
+              <a-tag :color="record.visibility === 'family' ? 'green' : record.visibility === 'public' ? 'blue' : 'default'">
+                {{ record.visibility === 'family' ? '家庭' : record.visibility === 'public' ? '公开' : '私有' }}
+              </a-tag>
+            </template>
+            <template v-else-if="column.key === 'isFavorite'">
+              <span>{{ record.isFavorite === '1' ? '⭐' : '-' }}</span>
+            </template>
+            <template v-else-if="column.key === 'fileSize'">
               {{ formatFileSize(record.fileSize) }}
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <a-button type="link" size="small" @click="handleDownload(record)">下载</a-button>
+              <a-button type="link" size="small" @click="openConvertModal(record)">格式转换</a-button>
+              <a-button v-if="canConvertToPdf(record)" type="link" size="small" @click="handleConvertToPdf(record)">转PDF</a-button>
+              <a-button type="link" danger size="small" @click="handleDeleteFile(record)">删除</a-button>
             </template>
           </template>
         </a-table>
@@ -91,9 +95,15 @@
           <input type="file" ref="fileInputRef" @change="onFileChange" />
         </a-form-item>
         <a-form-item label="所属文件夹">
-          <a-select v-model:value="uploadForm.folderId" placeholder="请选择文件夹（可选）" allowClear style="width:100%">
-            <a-select-option v-for="f in folderList" :key="f.id" :value="f.id">{{ f.name }}</a-select-option>
-          </a-select>
+          <a-tree-select
+            v-model:value="uploadForm.folderId"
+            :tree-data="folderTreeData"
+            :field-names="{ label: 'name', value: 'id', children: 'children' }"
+            placeholder="请选择文件夹（可选）"
+            allow-clear
+            tree-default-expand-all
+            style="width:100%"
+          />
         </a-form-item>
         <a-form-item label="可见性">
           <a-select v-model:value="uploadForm.visibility" style="width:100%">
@@ -102,23 +112,54 @@
             <a-select-option value="public">公开</a-select-option>
           </a-select>
         </a-form-item>
+        <a-form-item v-if="uploadForm.visibility === 'family'" label="可见家庭">
+          <a-select v-model:value="uploadForm.familyIds" mode="multiple" placeholder="选择家庭" style="width:100%">
+            <a-select-option v-for="f in familyOptions" :key="f.id" :value="f.id">{{ f.name }}</a-select-option>
+          </a-select>
+        </a-form-item>
       </div>
     </BasicModal>
 
     <!-- 新增文件夹模态框 -->
-    <BasicModal @register="registerFolderModal" title="新增文件夹" @ok="handleCreateFolder" width="400px">
+    <BasicModal @register="registerFolderModal" :title="folderEditId ? '编辑文件夹' : '新增文件夹'" @ok="handleCreateFolder" width="400px">
       <a-form-item label="文件夹名称" required>
         <a-input v-model:value="folderForm.name" placeholder="请输入文件夹名称" />
       </a-form-item>
       <a-form-item label="上级文件夹">
-        <a-select v-model:value="folderForm.parentId" placeholder="根目录（可选）" allowClear style="width:100%">
-          <a-select-option v-for="f in folderList" :key="f.id" :value="f.id">{{ f.name }}</a-select-option>
-        </a-select>
+        <a-tree-select
+          v-model:value="folderForm.parentId"
+          :tree-data="folderTreeData"
+          :field-names="{ label: 'name', value: 'id', children: 'children' }"
+          placeholder="根目录（可选）"
+          allow-clear
+          tree-default-expand-all
+          style="width:100%"
+        />
       </a-form-item>
       <a-form-item label="可见性">
         <a-select v-model:value="folderForm.visibility" style="width:100%">
           <a-select-option value="private">私有</a-select-option>
           <a-select-option value="family">家庭可见</a-select-option>
+          <a-select-option value="public">公开</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item v-if="folderForm.visibility === 'family'" label="可见家庭">
+        <a-select v-model:value="folderForm.familyIds" mode="multiple" placeholder="选择家庭" style="width:100%">
+          <a-select-option v-for="f in familyOptions" :key="f.id" :value="f.id">{{ f.name }}</a-select-option>
+        </a-select>
+      </a-form-item>
+    </BasicModal>
+
+    <!-- Office 格式转换模态框 -->
+    <BasicModal @register="registerConvertModal" title="格式转换" @ok="handleConvert" width="420px">
+      <a-form-item label="源文件">
+        <span>{{ convertForm.fileName }}</span>
+      </a-form-item>
+      <a-form-item label="目标格式" required>
+        <a-select v-model:value="convertForm.targetFormat" placeholder="请选择目标格式" style="width:100%">
+          <a-select-option v-for="rule in convertTargets" :key="rule.targetFormat" :value="rule.targetFormat">
+            {{ rule.sourceFormat }} → {{ rule.targetFormat }}
+          </a-select-option>
         </a-select>
       </a-form-item>
     </BasicModal>
@@ -127,11 +168,11 @@
 
 <script lang="ts" name="homeai-storage-file" setup>
 import { ref, computed, onMounted } from 'vue';
-  import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { BasicModal, useModal } from '/@/components/Modal';
   import { defHttp } from '/@/utils/http/axios';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { Icon } from '/@/components/Icon';
+  import { familyApi } from '/@/api/homeai';
 
   const { createMessage, createConfirm } = useMessage();
 
@@ -159,73 +200,58 @@ import { ref, computed, onMounted } from 'vue';
     }
     return size.toFixed(1) + ' ' + units[i];
   }
-  const [registerUploadModal, { openModal: openUploadModal }] = useModal();
-  const [registerFolderModal, { openModal: openFolderModal }] = useModal();
+  const [registerUploadModal, { openModal: openUploadModal, closeModal: closeUploadModal }] = useModal();
+  const [registerFolderModal, { openModal: openFolderModal, closeModal: closeFolderModal }] = useModal();
+  const [registerConvertModal, { openModal: openConvertModalDialog, closeModal: closeConvertModal }] = useModal();
   const fileInputRef = ref<HTMLInputElement | null>(null);
   const selectedFile = ref<File | null>(null);
-  const folderList = ref<any[]>([]);
   const folderTreeData = ref<any[]>([]);
   const selectedFolderId = ref<string | null>(null);
   const folderFiles = ref<any[]>([]);
-  const viewMode = ref<'list' | 'folder'>('list');
+  const folderEditId = ref('');
+  const convertTargets = ref<any[]>([]);
+  const convertForm = ref({
+    fileId: '',
+    fileName: '',
+    sourceFormat: '',
+    targetFormat: undefined as string | undefined,
+  });
 
   const uploadForm = ref({
     folderId: undefined as string | undefined,
     visibility: 'private' as string,
+    familyIds: [] as string[],
   });
 
   const folderForm = ref({
     name: '',
     parentId: undefined as string | undefined,
     visibility: 'private' as string,
+    familyIds: [] as string[],
   });
+
+  const familyOptions = ref<Array<{ id: string; name: string }>>([]);
+
+  async function loadFamilyOptions() {
+    try {
+      const res = await familyApi.list({ pageNo: 1, pageSize: 500 });
+      const records = (res as any)?.records || (res as any)?.result?.records || [];
+      familyOptions.value = records.map((f: any) => ({ id: f.id, name: f.name }));
+    } catch {
+      familyOptions.value = [];
+    }
+  }
 
   const folderFileColumns = [
     { title: '文件名', dataIndex: 'originalName', key: 'name' },
     { title: '扩展名', dataIndex: 'extension', width: 80 },
+    { title: '可见性', dataIndex: 'visibility', key: 'visibility', width: 80 },
+    { title: '收藏', dataIndex: 'isFavorite', key: 'isFavorite', width: 60 },
+    { title: '上传者', dataIndex: 'userId', width: 120 },
     { title: '文件大小', dataIndex: 'fileSize', key: 'fileSize', width: 100 },
     { title: '上传时间', dataIndex: 'createTime', width: 160 },
+    { title: '操作', key: 'action', width: 220 },
   ];
-
-  const [registerTable, { reload }] = useTable({
-    title: '资料存储管理',
-    api: (params: any) => defHttp.get({ url: '/homeai/storage/file-list', params }),
-    columns: [
-      { title: '文件名', dataIndex: 'originalName', width: 250 },
-      { title: '扩展名', dataIndex: 'extension', width: 80 },
-      { title: '文件大小', dataIndex: 'fileSize', width: 100 },
-      { title: '上传者', dataIndex: 'userId', width: 150 },
-      { title: '可见性', dataIndex: 'visibility', width: 80 },
-      { title: '下载次数', dataIndex: 'downloadCount', width: 80 },
-      { title: '上传时间', dataIndex: 'createTime', width: 160 },
-    ],
-    useSearchForm: true,
-    showTableSetting: true,
-    showIndexColumn: true,
-    actionColumn: { width: 120, title: '操作', dataIndex: 'action', slots: { customRender: 'action' } },
-    formConfig: {
-      schemas: [
-        { field: 'originalName', label: '文件名', component: 'Input' },
-        { field: 'extension', label: '扩展名', component: 'Input' },
-      ],
-    },
-  });
-
-  function getTableAction(record: any) {
-    return [
-      { icon: 'ant-design:download-outlined', onClick: () => handleDownload(record), title: '下载' },
-      { icon: 'ant-design:delete-outlined', onClick: () => handleDeleteFile(record), title: '删除', color: 'error' },
-    ];
-  }
-
-  async function loadFolderList() {
-    try {
-      const res = await defHttp.get({ url: '/homeai/storage/folder-list' });
-      folderList.value = (res as any)?.records || (res as any[]) || [];
-    } catch {
-      folderList.value = [];
-    }
-  }
 
   async function loadFolderTree() {
     try {
@@ -260,9 +286,90 @@ import { ref, computed, onMounted } from 'vue';
     return size.toFixed(1) + ' ' + units[i];
   }
 
+  function getFileExtension(record: any): string {
+    if (record.extension) return String(record.extension).toLowerCase().replace(/^\./, '');
+    const name = record.originalName || '';
+    const idx = name.lastIndexOf('.');
+    return idx >= 0 ? name.substring(idx + 1).toLowerCase() : '';
+  }
+
+  function canConvertToPdf(record: any): boolean {
+    const ext = getFileExtension(record);
+    return ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext);
+  }
+
+  async function loadConvertTargets(sourceFormat: string) {
+    try {
+      convertTargets.value = ((await defHttp.get({
+        url: '/homeai/storage/rule/targets',
+        params: { sourceFormat },
+      })) as any[]) || [];
+    } catch {
+      convertTargets.value = [];
+    }
+  }
+
+  async function openConvertModal(record: any) {
+    const sourceFormat = getFileExtension(record);
+    if (!sourceFormat) {
+      createMessage.warning('无法识别文件格式');
+      return;
+    }
+    convertForm.value = {
+      fileId: record.id,
+      fileName: record.originalName,
+      sourceFormat,
+      targetFormat: undefined,
+    };
+    await loadConvertTargets(sourceFormat);
+    if (convertTargets.value.length === 0) {
+      createMessage.warning('暂无可用转换规则，请先在「转换规则」中配置');
+      return;
+    }
+    openConvertModalDialog(true);
+  }
+
+  async function handleConvert() {
+    if (!convertForm.value.targetFormat) {
+      createMessage.warning('请选择目标格式');
+      return;
+    }
+    await defHttp.post({
+      url: '/homeai/storage/office/convert',
+      params: {
+        fileId: convertForm.value.fileId,
+        sourceFormat: convertForm.value.sourceFormat,
+        targetFormat: convertForm.value.targetFormat,
+      },
+    }, { joinParamsToUrl: true });
+    createMessage.success('转换任务已提交，请在「处理记录」中查看进度');
+    closeConvertModal();
+  }
+
+  async function handleConvertToPdf(record: any) {
+    const sourceFormat = getFileExtension(record);
+    await loadConvertTargets(sourceFormat);
+    const pdfRule = convertTargets.value.find((r) => r.targetFormat === 'pdf');
+    if (!pdfRule) {
+      createMessage.warning('暂无转 PDF 规则，请先在「转换规则」中配置');
+      return;
+    }
+    await defHttp.post({
+      url: '/homeai/storage/office/convert',
+      params: {
+        fileId: record.id,
+        sourceFormat,
+        targetFormat: 'pdf',
+      },
+    }, { joinParamsToUrl: true });
+    createMessage.success('PDF 转换任务已提交，请在「处理记录」中查看进度');
+  }
+
   function openCreateFolderModal() {
-    folderForm.value = { name: '', parentId: undefined, visibility: 'private' };
-    loadFolderList();
+    folderEditId.value = '';
+    folderForm.value = { name: '', parentId: undefined, visibility: 'private', familyIds: [] };
+    loadFamilyOptions();
+    loadFolderTree();
     openFolderModal(true);
   }
 
@@ -275,20 +382,62 @@ import { ref, computed, onMounted } from 'vue';
     if (folderForm.value.parentId) {
       params.parentId = folderForm.value.parentId;
     }
-    await defHttp.post({ url: '/homeai/storage/folders', params }, { joinParamsToUrl: true });
-    createMessage.success('文件夹创建成功');
-    if (viewMode.value === 'folder') {
+    if (folderForm.value.visibility === 'family' && folderForm.value.familyIds.length) {
+      params.familyIds = folderForm.value.familyIds.join(',');
+    }
+    if (folderEditId.value) {
+      await defHttp.put({
+        url: `/homeai/storage/folders/${folderEditId.value}`,
+        data: { ...params, familyIds: folderForm.value.familyIds },
+      });
+      createMessage.success('文件夹修改成功');
+    } else {
+      await defHttp.post({ url: '/homeai/storage/folders', params }, { joinParamsToUrl: true });
+      createMessage.success('文件夹创建成功');
+    }
+    closeFolderModal();
+    loadFolderTree();
+  }
+
+  function openEditFolderModal(record: any) {
+    folderEditId.value = record.id;
+    folderForm.value = {
+      name: record.name,
+      parentId: undefined,
+      visibility: record.visibility || 'private',
+      familyIds: record.familyIds ? [...record.familyIds] : [],
+    };
+    loadFamilyOptions();
+    loadFolderTree();
+    openFolderModal(true);
+  }
+
+  async function handleDeleteFolder(id: string) {
+    try {
+      await defHttp.delete({ url: `/homeai/storage/folders/${id}` });
+      createMessage.success('文件夹已删除');
+      if (selectedFolderId.value === id) {
+        selectedFolderId.value = null;
+        folderFiles.value = [];
+      }
       loadFolderTree();
+    } catch (e: any) {
+      createMessage.error(e?.message || '删除失败');
     }
   }
 
   async function handleUploadModal() {
-    uploadForm.value = { folderId: undefined, visibility: 'private' };
+    uploadForm.value = {
+      folderId: selectedFolderId.value ?? undefined,
+      visibility: 'private',
+      familyIds: [],
+    };
+    await loadFamilyOptions();
     selectedFile.value = null;
     if (fileInputRef.value) {
       fileInputRef.value.value = '';
     }
-    loadFolderList();
+    await loadFolderTree();
     openUploadModal(true);
   }
 
@@ -304,11 +453,12 @@ import { ref, computed, onMounted } from 'vue';
       createMessage.warning('请选择文件');
       return;
     }
-    // 使用 defHttp.uploadFile 上传（内部正确构造 multipart/form-data，
-    // 避免 defHttp.post 的 beforeRequestHook 将 FormData 改写为 JSON 的问题）
     const extra: any = { visibility: uploadForm.value.visibility };
     if (uploadForm.value.folderId) {
       extra.folderId = uploadForm.value.folderId;
+    }
+    if (uploadForm.value.visibility === 'family' && uploadForm.value.familyIds.length) {
+      extra.familyIds = uploadForm.value.familyIds.join(',');
     }
     await defHttp.uploadFile(
       { url: '/homeai/storage/files/upload' },
@@ -316,9 +466,13 @@ import { ref, computed, onMounted } from 'vue';
       {
         success: () => {
           createMessage.success('上传成功');
-          reload();
-          if (viewMode.value === 'folder') {
-            loadFolderTree();
+          closeUploadModal();
+          selectedFile.value = null;
+          if (fileInputRef.value) fileInputRef.value.value = '';
+          loadFolderTree();
+          loadSpaceStats();
+          if (selectedFolderId.value) {
+            onFolderSelect([selectedFolderId.value]);
           }
         },
       }
@@ -326,7 +480,6 @@ import { ref, computed, onMounted } from 'vue';
   }
 
   function handleDownload(record: any) {
-    // 直接使用文件的绝对访问地址下载，绕过需要鉴权的接口
     if (record.fileUrl) {
       window.open(record.fileUrl, '_blank');
     }
@@ -340,7 +493,11 @@ import { ref, computed, onMounted } from 'vue';
       onOk: async () => {
         await defHttp.delete({ url: `/homeai/storage/files/${record.id}` });
         createMessage.success('删除成功');
-        reload();
+        if (selectedFolderId.value) {
+          onFolderSelect([selectedFolderId.value]);
+        }
+        loadFolderTree();
+        loadSpaceStats();
       },
     });
   }
@@ -348,6 +505,7 @@ import { ref, computed, onMounted } from 'vue';
   onMounted(() => {
     loadFolderTree();
     loadSpaceStats();
+    loadFamilyOptions();
   });
 </script>
 

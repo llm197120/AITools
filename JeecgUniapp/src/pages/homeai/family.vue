@@ -93,6 +93,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '../../pages-homeai/stores/user'
 import { useFamilyStore } from '../../pages-homeai/stores/family'
 import { get as getApi, post as postApi, del as delApi, put as putApi } from '../../pages-homeai/api'
+import { ensureProfileWhenGuest, ensureLoginForAction } from '../../pages-homeai/utils/homeaiAuth'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
@@ -110,6 +111,9 @@ const joinVisible = ref(false)
 const inviteCode = ref('')
 
 onShow(async () => {
+  if (!ensureProfileWhenGuest()) {
+    return
+  }
   await familyStore.fetchFamilyInfo()
   if (familyStore.hasFamily) {
     await fetchMembers()
@@ -218,7 +222,7 @@ function showTransfer() {
 function confirmDisband() {
   uni.showModal({
     title: '解散家庭',
-    content: '解散家庭将删除所有家庭共享数据，此操作不可撤销。请输入"确认解散"继续。',
+    content: '解散后家庭将被标记为已解散（数据保留），所有成员将退出家庭。请输入"确认解散"继续。',
     editable: true,
     success: async (res) => {
       if (res.confirm && res.content === '确认解散') {

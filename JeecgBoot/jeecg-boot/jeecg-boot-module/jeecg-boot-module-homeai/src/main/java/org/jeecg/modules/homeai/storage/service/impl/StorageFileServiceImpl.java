@@ -4,17 +4,22 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
-import org.jeecg.modules.homeai.config.HomeaiFileUrlUtil;
+import org.jeecg.common.util.oConvertUtils;
+import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
+import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
+import org.jeecg.modules.homeai.config.service.IHomeaiFileWhitelistService;
+import org.jeecg.modules.homeai.storage.constant.StorageVisibility;
+import org.jeecg.modules.homeai.storage.util.StorageFileNameUtil;
+import org.jeecg.modules.homeai.storage.util.StorageVisibilityQueryUtil;
 import org.jeecg.modules.homeai.storage.entity.StorageFile;
 import org.jeecg.modules.homeai.storage.mapper.StorageFileMapper;
 import org.jeecg.modules.homeai.storage.service.IStorageFileService;
-import org.springframework.beans.factory.annotation.Value;
+import org.jeecg.modules.homeai.storage.service.IStorageResourceFamilyService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
 
 @Slf4j
@@ -22,8 +27,15 @@ import java.util.*;
 public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, StorageFile>
         implements IStorageFileService {
 
-    @Value("${jeecg.path.upload:./upload}")
-    private String uploadPath;
+
+    @Autowired
+    private IHomeaiFileWhitelistService whitelistService;
+
+    @Autowired
+    private IHomeaiFileStorageService fileStorageService;
+
+    @Autowired
+    private IStorageResourceFamilyService resourceFamilyService;
 
     @Override
     public List<StorageFile> getFilesByFolder(String folderId) {
@@ -35,27 +47,41 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
     }
 
     @Override
+    public List<StorageFile> getRootFiles(String userId, String familyId) {
+        LambdaQueryWrapper<StorageFile> query = new LambdaQueryWrapper<>();
+        query.eq(StorageFile::getDelFlag, 0)
+                .and(w -> w.isNull(StorageFile::getFolderId).or().eq(StorageFile::getFolderId, ""));
+        StorageVisibilityQueryUtil.applyReadableFileFilter(query, userId, familyId);
+        query.orderByDesc(StorageFile::getCreateTime);
+        return list(query);
+    }
+
+    @Override
+    public List<StorageFile> getAllRootFiles() {
+        LambdaQueryWrapper<StorageFile> query = new LambdaQueryWrapper<>();
+        query.eq(StorageFile::getDelFlag, 0)
+                .and(w -> w.isNull(StorageFile::getFolderId).or().eq(StorageFile::getFolderId, ""))
+                .orderByDesc(StorageFile::getCreateTime);
+        return list(query);
+    }
+
+    @Override
     public StorageFile uploadFile(String userId, String familyId, String folderId,
-                                   MultipartFile file, String visibility) {
-        String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "unknown";
-        String ext = originalName.contains(".") ? originalName.substring(originalName.lastIndexOf(".") + 1).toLowerCase() : "";
-        if (!HomeaiFileUrlUtil.isAllowedUploadExtension(ext)) {
+                                   MultipartFile file, String visibility, String fileName) {
+        String originalName = resolveOriginalName(file, fileName);
+        String ext = StorageFileNameUtil.extensionOf(originalName);
+        if (!whitelistService.isAllowedExtension(ext)) {
             throw new RuntimeException("不支持上传该文件类型");
         }
-        String storedName = UUID.randomUUID().toString().replace("-", "") + (ext.isEmpty() ? "" : "." + ext);
-
-        // 保存物理文件到上传目录：{upload}/homeai/{userId}/{storedName}
         try {
-            String dir = uploadPath + "/homeai/" + userId + "/";
-            Files.createDirectories(Paths.get(dir));
-            file.transferTo(Paths.get(dir + storedName).toFile());
+            HomeaiFileMagicUtil.validate(file, ext);
         } catch (IOException e) {
-            log.error("文件保存失败: userId={}, name={}", userId, originalName, e);
-            throw new RuntimeException("文件保存失败", e);
+            throw new RuntimeException(e.getMessage(), e);
         }
-
-        // 数据库保存文件绝对访问地址
-        String fileUrl = HomeaiFileUrlUtil.toAbsoluteUrl("/upload/homeai/" + userId + "/" + storedName);
+        // storedName：OSS/磁盘实际文件名（UUID），与 originalName 分字段存储
+        String storedName = UUID.randomUUID().toString().replace("-", "") + (ext.isEmpty() ? "" : "." + ext);
+        String objectKey = StorageFileNameUtil.buildObjectKey(userId, storedName);
+        String fileUrl = fileStorageService.storeMultipart(file, objectKey);
 
         StorageFile sf = new StorageFile();
         sf.setUserId(userId);
@@ -67,7 +93,7 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
         sf.setMimeType(file.getContentType());
         sf.setFileSize(file.getSize());
         sf.setFileUrl(fileUrl);
-        sf.setVisibility(visibility != null ? visibility : "private");
+        sf.setVisibility(visibility != null ? visibility : StorageVisibility.PRIVATE);
         sf.setIsFavorite("0");
         sf.setDownloadCount(0);
         sf.setCreateTime(new Date());
@@ -76,13 +102,47 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
         return sf;
     }
 
+    /** 优先使用客户端传入的原始文件名；storedName 单独生成，二者分字段落库 */
+    private String resolveOriginalName(MultipartFile file, String fileName) {
+        if (oConvertUtils.isNotEmpty(fileName)) {
+            return StorageFileNameUtil.sanitizeOriginalName(fileName);
+        }
+        String fromMultipart = file.getOriginalFilename();
+        if (StorageFileNameUtil.isTempUploadName(fromMultipart)) {
+            String ext = StorageFileNameUtil.extensionOf(fromMultipart);
+            if (oConvertUtils.isEmpty(ext)) {
+                ext = "dat";
+            }
+            return "FILE_" + System.currentTimeMillis() + "." + ext;
+        }
+        return StorageFileNameUtil.sanitizeOriginalName(fromMultipart);
+    }
+
     @Override
     public void softDelete(String id) {
-        // @TableLogic 字段不参与 updateById，需通过 update wrapper 显式设置
         update(new LambdaUpdateWrapper<StorageFile>()
                 .eq(StorageFile::getId, id)
                 .set(StorageFile::getDelFlag, 1)
                 .set(StorageFile::getDeletedAt, new Date()));
+        resourceFamilyService.deleteByFileId(id);
+    }
+
+    @Override
+    public void softDeleteByFolderId(String folderId) {
+        if (oConvertUtils.isEmpty(folderId)) {
+            return;
+        }
+        List<StorageFile> files = list(new LambdaQueryWrapper<StorageFile>()
+                .eq(StorageFile::getFolderId, folderId)
+                .eq(StorageFile::getDelFlag, 0));
+        update(new LambdaUpdateWrapper<StorageFile>()
+                .eq(StorageFile::getFolderId, folderId)
+                .eq(StorageFile::getDelFlag, 0)
+                .set(StorageFile::getDelFlag, 1)
+                .set(StorageFile::getDeletedAt, new Date()));
+        for (StorageFile file : files) {
+            resourceFamilyService.deleteByFileId(file.getId());
+        }
     }
 
     @Override
@@ -95,10 +155,19 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
     }
 
     @Override
-    public List<StorageFile> searchFiles(String keyword, String userId) {
+    public List<StorageFile> searchFiles(String keyword, String userId, String familyId) {
         LambdaQueryWrapper<StorageFile> query = new LambdaQueryWrapper<>();
-        query.eq(StorageFile::getUserId, userId)
-                .eq(StorageFile::getDelFlag, 0)
+        query.eq(StorageFile::getDelFlag, 0)
+                .like(StorageFile::getOriginalName, keyword);
+        StorageVisibilityQueryUtil.applyReadableFileFilter(query, userId, familyId);
+        query.orderByDesc(StorageFile::getCreateTime);
+        return list(query);
+    }
+
+    @Override
+    public List<StorageFile> searchAllFiles(String keyword) {
+        LambdaQueryWrapper<StorageFile> query = new LambdaQueryWrapper<>();
+        query.eq(StorageFile::getDelFlag, 0)
                 .like(StorageFile::getOriginalName, keyword)
                 .orderByDesc(StorageFile::getCreateTime);
         return list(query);

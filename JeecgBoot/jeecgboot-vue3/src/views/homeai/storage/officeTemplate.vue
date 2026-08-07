@@ -17,17 +17,19 @@
   </div>
   <BasicModal @register="registerModal" :title="isUpdate ? '编辑模板' : '新增模板'" width="480px">
     <BasicForm @register="registerForm" @submit="handleSubmit">
-      <template #fileUrlSlot="{ model, field }">
-        <div style="display: flex; gap: 8px">
-          <a-input v-model:value="model[field]" placeholder="模板文件地址" style="flex: 1" />
-          <input ref="fileInputRef" type="file" style="display: none" @change="onFileChange" />
-          <a-button :disabled="!recordId" @click="triggerUpload">上传</a-button>
+      <template #fileUrlSlot>
+        <div style="display: flex; gap: 8px; align-items: center">
+          <input ref="fileInputRef" type="file" accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx" style="display: none" @change="onFileChange" />
+          <a-button type="primary" @click="fileInputRef?.click()">选择模板文件</a-button>
+          <span v-if="selectedFileName" style="color: #666; flex: 1; overflow: hidden; text-overflow: ellipsis">{{ selectedFileName }}</span>
+          <span v-else style="color: #999">请上传模板文件</span>
         </div>
+        <div v-if="uploadedFileUrl" style="margin-top: 8px; font-size: 12px; color: #52c41a">已上传：{{ uploadedFileUrl }}</div>
       </template>
     </BasicForm>
     <template #footer>
       <a-button @click="closeModal()">取消</a-button>
-      <a-button type="primary" @click="submit">保存</a-button>
+      <a-button type="primary" :loading="saving" @click="submit">保存</a-button>
     </template>
   </BasicModal>
 </template>
@@ -64,24 +66,35 @@
 
   const isUpdate = ref(false);
   const recordId = ref('');
+  const saving = ref(false);
   const fileInputRef = ref<HTMLInputElement | null>(null);
   const selectedFile = ref<File | null>(null);
+  const selectedFileName = ref('');
+  const uploadedFileUrl = ref('');
   const [registerModal, { openModal, closeModal }] = useModal();
-  const [registerForm, { setFieldsValue, resetFields, validate, submit }] = useForm({
+  const [registerForm, { setFieldsValue, resetFields, submit }] = useForm({
     labelWidth: 100,
     schemas: [
       { field: 'name', label: '模板名称', component: 'Input', required: true },
       { field: 'type', label: '类型', component: 'Input', componentProps: { placeholder: '如: docx, xlsx' } },
-      { field: 'fileUrl', label: '文件地址', component: 'Input', slot: 'fileUrlSlot' },
+      { field: 'fileUrl', label: '模板文件', component: 'Input', slot: 'fileUrlSlot' },
       { field: 'remark', label: '备注', component: 'InputTextArea' },
     ],
     showSubmitButton: false,
     showResetButton: false,
   });
 
+  function resetFileState() {
+    selectedFile.value = null;
+    selectedFileName.value = '';
+    uploadedFileUrl.value = '';
+    if (fileInputRef.value) fileInputRef.value.value = '';
+  }
+
   function handleAdd() {
     isUpdate.value = false;
     recordId.value = '';
+    resetFileState();
     resetFields();
     openModal(true);
   }
@@ -96,40 +109,31 @@
   function handleEdit(record: any) {
     isUpdate.value = true;
     recordId.value = record.id;
+    resetFileState();
+    uploadedFileUrl.value = record.fileUrl || '';
+    selectedFileName.value = record.fileUrl ? '已有模板文件（重新选择可替换）' : '';
     setFieldsValue({ ...record });
     openModal(true);
-  }
-
-  function triggerUpload() {
-    if (!recordId.value) {
-      createMessage.warning('请先保存模板，再上传文件');
-      return;
-    }
-    fileInputRef.value?.click();
   }
 
   function onFileChange(e: Event) {
     const target = e.target as HTMLInputElement;
     if (target.files && target.files[0]) {
       selectedFile.value = target.files[0];
-      uploadFile();
+      selectedFileName.value = target.files[0].name;
+      uploadedFileUrl.value = '';
     }
-    target.value = '';
   }
 
-  async function uploadFile() {
-    if (!selectedFile.value || !recordId.value) return;
-    try {
-      const formData = new FormData();
-      formData.append('file', selectedFile.value);
-      const url: any = await defHttp.uploadFile(
-        { url: `/homeai/storage/template/${recordId.value}/upload`, data: formData },
-      );
-      setFieldsValue({ fileUrl: url });
-      createMessage.success('文件上传成功');
-    } catch (e: any) {
-      createMessage.error(e?.message || '上传失败');
-    }
+  async function uploadSelectedFile(id: string) {
+    if (!selectedFile.value) return uploadedFileUrl.value;
+    const url: any = await defHttp.uploadFile(
+      { url: `/homeai/storage/template/${id}/upload` },
+      { file: selectedFile.value, name: 'file' },
+    );
+    uploadedFileUrl.value = url;
+    setFieldsValue({ fileUrl: url });
+    return url;
   }
 
   async function handleDelete(record: any) {
@@ -145,12 +149,30 @@
   }
 
   async function handleSubmit(values: any) {
+    saving.value = true;
     try {
+      if (!isUpdate.value && !selectedFile.value && !values.fileUrl) {
+        createMessage.warning('请上传模板文件');
+        return false;
+      }
       if (isUpdate.value) {
         await defHttp.put({ url: '/homeai/storage/template', data: { id: recordId.value, ...values } });
+        if (selectedFile.value) {
+          await uploadSelectedFile(recordId.value);
+        }
         createMessage.success('编辑成功');
+      } else if (selectedFile.value) {
+        await defHttp.uploadFile(
+          { url: '/homeai/storage/template/create-with-file' },
+          { file: selectedFile.value, name: 'file', data: { name: values.name, type: values.type || '', remark: values.remark || '' } },
+        );
+        createMessage.success('新增成功');
       } else {
-        await defHttp.post({ url: '/homeai/storage/template', data: values });
+        const res: any = await defHttp.post({ url: '/homeai/storage/template', data: values });
+        const newId = res?.id;
+        if (newId && selectedFile.value) {
+          await uploadSelectedFile(newId);
+        }
         createMessage.success('新增成功');
       }
       closeModal();
@@ -159,6 +181,8 @@
     } catch (e: any) {
       createMessage.error(e?.message || '操作失败');
       return false;
+    } finally {
+      saving.value = false;
     }
   }
 

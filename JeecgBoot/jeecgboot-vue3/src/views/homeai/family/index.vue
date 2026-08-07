@@ -27,8 +27,8 @@
       </template>
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'status'">
-          <a-tag :color="record.delFlag === 1 ? 'red' : 'green'">
-            {{ record.delFlag === 1 ? '已解散' : '正常' }}
+          <a-tag :color="record.status === 'disbanded' ? 'orange' : 'green'">
+            {{ record.status === 'disbanded' ? '已解散' : '正常' }}
           </a-tag>
         </template>
       </template>
@@ -67,7 +67,7 @@
     { title: '家庭名称', dataIndex: 'name', width: 150 },
     { title: '创建者ID', dataIndex: 'creatorId', width: 150 },
     { title: '成员数量', dataIndex: 'memberCount', width: 80 },
-    { title: '状态', dataIndex: 'delFlag', key: 'status', width: 80 },
+{ title: '状态', dataIndex: 'status', key: 'status', width: 80 },
     { title: '创建时间', dataIndex: 'createTime', width: 180 },
   ];
 
@@ -75,7 +75,24 @@
     title: '家庭列表',
     api: (params: any) => activeTab.value === 'list' ? familyApi.list(params) : familyApi.recycleBin(params),
     columns: columns,
-    useSearchForm: false,
+    useSearchForm: true,
+    formConfig: {
+      schemas: [
+        { field: 'name', label: '家庭名称', component: 'Input' },
+        {
+          field: 'status',
+          label: '状态',
+          component: 'Select',
+          componentProps: {
+            options: [
+              { label: '正常', value: 'normal' },
+              { label: '已解散', value: 'disbanded' },
+            ],
+            allowClear: true,
+          },
+        },
+      ],
+    },
     showTableSetting: true,
     showIndexColumn: true,
     actionColumn: {

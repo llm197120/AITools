@@ -4,6 +4,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.util.SpringContextUtils;
 import org.jeecg.common.util.oConvertUtils;
+import org.springframework.core.env.Environment;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * HomeAI 模块文件 URL 工具
@@ -21,7 +24,7 @@ public class HomeaiFileUrlUtil {
 
     /**
      * 将相对访问地址（/upload/...）转为绝对访问地址（http://host:port/context-path/upload/...）
-     * 已为绝对地址时原样返回；无法获取请求上下文时回退为相对地址
+     * 已为绝对地址时原样返回；无法获取请求上下文时回退为配置地址
      */
     public static String toAbsoluteUrl(String relativeUrl) {
         if (oConvertUtils.isEmpty(relativeUrl)) {
@@ -30,22 +33,15 @@ public class HomeaiFileUrlUtil {
         if (relativeUrl.startsWith("http://") || relativeUrl.startsWith("https://")) {
             return relativeUrl;
         }
-        try {
-            HttpServletRequest request = SpringContextUtils.getHttpServletRequest();
-            String domain = SpringContextUtils.getDomain();
-            String contextPath = request.getContextPath();
-            String base = domain + (oConvertUtils.isEmpty(contextPath) ? "" : contextPath);
-            if (base.endsWith("/")) {
-                base = base.substring(0, base.length() - 1);
-            }
-            if (!relativeUrl.startsWith("/")) {
-                relativeUrl = "/" + relativeUrl;
-            }
-            return base + relativeUrl;
-        } catch (Exception e) {
-            log.warn("转换文件绝对地址失败，保留相对地址: {}", relativeUrl, e);
+        if (!relativeUrl.startsWith("/")) {
+            relativeUrl = "/" + relativeUrl;
+        }
+        String base = resolveBaseUrl();
+        if (oConvertUtils.isEmpty(base)) {
+            log.warn("无法解析文件访问根地址，保留相对地址: {}", relativeUrl);
             return relativeUrl;
         }
+        return trimTrailingSlash(base) + relativeUrl;
     }
 
     /**
@@ -64,9 +60,9 @@ public class HomeaiFileUrlUtil {
     }
 
     /**
-     * 判断上传文件扩展名是否允许（黑名单校验，扩展名统一转小写）
+     * 黑名单校验（危险扩展名一律禁止）
      */
-    public static boolean isAllowedUploadExtension(String extension) {
+    public static boolean passBlacklist(String extension) {
         if (oConvertUtils.isEmpty(extension)) {
             return false;
         }
@@ -77,5 +73,74 @@ public class HomeaiFileUrlUtil {
             }
         }
         return true;
+    }
+
+    /**
+     * @deprecated 请使用 {@link org.jeecg.modules.homeai.config.service.IHomeaiFileWhitelistService#isAllowedExtension(String)}
+     */
+    @Deprecated
+    public static boolean isAllowedUploadExtension(String extension) {
+        return passBlacklist(extension);
+    }
+
+    private static String resolveBaseUrl() {
+        //update-begin---author:admin ---date:2026-08-04  for：异步线程无请求上下文时回退配置地址-----------
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null) {
+                HttpServletRequest request = attrs.getRequest();
+                String domain = SpringContextUtils.getDomain();
+                String contextPath = request.getContextPath();
+                return joinBase(domain, contextPath);
+            }
+        } catch (Exception e) {
+            log.debug("从请求上下文解析文件根地址失败: {}", e.getMessage());
+        }
+        return resolveBaseUrlFromConfig();
+        //update-end---author:admin ---date:2026-08-04  for：异步线程无请求上下文时回退配置地址-----------
+    }
+
+    private static String resolveBaseUrlFromConfig() {
+        try {
+            if (SpringContextUtils.getApplicationContext() == null) {
+                return null;
+            }
+            Environment env = SpringContextUtils.getApplicationContext().getEnvironment();
+            String configured = env.getProperty("homeai.file.base-url");
+            if (oConvertUtils.isNotEmpty(configured)) {
+                return trimTrailingSlash(configured.trim());
+            }
+            String scheme = oConvertUtils.getString(env.getProperty("homeai.file.scheme"), "http");
+            String host = oConvertUtils.getString(env.getProperty("homeai.file.host"), "127.0.0.1");
+            String port = oConvertUtils.getString(env.getProperty("server.port"), "8080");
+            String contextPath = oConvertUtils.getString(env.getProperty("server.servlet.context-path"), "");
+            StringBuilder base = new StringBuilder(scheme).append("://").append(host);
+            int portNum = Integer.parseInt(port);
+            if (portNum != 80 && portNum != 443) {
+                base.append(":").append(port);
+            }
+            if (oConvertUtils.isNotEmpty(contextPath)) {
+                base.append(contextPath);
+            }
+            return trimTrailingSlash(base.toString());
+        } catch (Exception e) {
+            log.warn("从配置解析文件根地址失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private static String joinBase(String domain, String contextPath) {
+        String base = domain + (oConvertUtils.isEmpty(contextPath) ? "" : contextPath);
+        return trimTrailingSlash(base);
+    }
+
+    private static String trimTrailingSlash(String value) {
+        if (oConvertUtils.isEmpty(value)) {
+            return value;
+        }
+        while (value.endsWith("/")) {
+            value = value.substring(0, value.length() - 1);
+        }
+        return value;
     }
 }

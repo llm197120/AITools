@@ -7,7 +7,7 @@ import 'virtual:uno.css'
 import { createSSRApp } from 'vue'
 
 import App from './App.vue'
-import { prototypeInterceptor, requestInterceptor, routeInterceptor } from './interceptors'
+import { prototypeInterceptor, requestInterceptor, routeInterceptor, homeaiRouteInterceptor } from './interceptors'
 import { registerGlobComp } from '@/components/registerGlobComp';
 import store from './store'
 import router from './router'
@@ -17,6 +17,7 @@ export function createApp() {
   app.use(store)
   app.use(router)
   app.use(routeInterceptor)
+  app.use(homeaiRouteInterceptor)
   app.use(requestInterceptor)
   app.use(prototypeInterceptor)
   app.use(VueQueryPlugin)

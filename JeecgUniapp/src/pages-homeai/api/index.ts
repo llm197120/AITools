@@ -1,6 +1,17 @@
 /**
- * HomeAI 小程序 put 请求导出修复
+ * HomeAI 小程序 API 集中定义
  */
-import { put as _put } from '../api/request'
-export { get, post, del } from '../api/request'
-export const put = _put
+export { get, post, put, del, getServerBaseUrl, getBaseUrl } from './request'
+export { billApi } from './bill'
+export { recipeApi } from './recipe'
+export { storageApi } from './storage'
+export { aiApi } from './ai'
+export { planApi } from './plan'
+export { learnApi } from './learn'
+
+import { get } from './request'
+
+export const configApi = {
+  fileWhitelist: () => get<any>('/config/file-whitelist'),
+  wechatPublic: () => get<{ planRemindTemplateId?: string }>('/config/wechat-public'),
+}

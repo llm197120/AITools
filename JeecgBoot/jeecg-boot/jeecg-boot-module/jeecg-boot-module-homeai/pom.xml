@@ -39,5 +39,12 @@
             <artifactId>jeecg-boot-module-airag</artifactId>
             <version>${jeecgboot.version}</version>
         </dependency>
+
+        <!-- poi-tl 模板引擎（AI 文档生成） -->
+        <dependency>
+            <groupId>com.deepoove</groupId>
+            <artifactId>poi-tl</artifactId>
+            <version>1.12.2</version>
+        </dependency>
     </dependencies>
 </project>

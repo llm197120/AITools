@@ -40,7 +40,7 @@ public class StorageFolder implements Serializable {
     @Schema(description = "文件夹名称")
     private String name;
 
-    @Schema(description = "可见性:private/family")
+    @Schema(description = "可见性:private/family/public")
     private String visibility;
 
     @Schema(description = "嵌套层级")
@@ -68,4 +68,8 @@ public class StorageFolder implements Serializable {
     /** 文件数量（非数据库字段） */
     @TableField(exist = false)
     private Integer fileCount;
+
+    /** 家庭可见时关联的家庭 ID 列表（非数据库字段） */
+    @TableField(exist = false)
+    private List<String> familyIds;
 }

@@ -3,20 +3,20 @@ package org.jeecg.modules.homeai.ai.controller;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.api.vo.Result;
-import org.jeecg.modules.homeai.config.HomeaiFileUrlUtil;
+import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
+import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
+import org.jeecg.modules.homeai.config.service.IHomeaiFileWhitelistService;
 import org.jeecg.modules.homeai.ai.service.IHomeaiChatService;
 import org.jeecg.modules.homeai.ai.service.IAiQuotaService;
 import org.jeecg.modules.homeai.user.entity.WxUser;
 import org.jeecg.modules.homeai.user.service.IWxUserService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
-import java.nio.file.*;
 import java.util.*;
 
 /**
@@ -36,8 +36,11 @@ public class HomeaiChatController {
     @Autowired
     private IWxUserService wxUserService;
 
-    @Value("${jeecg.path.upload:./upload}")
-    private String uploadPath;
+    @Autowired
+    private IHomeaiFileWhitelistService whitelistService;
+
+    @Autowired
+    private IHomeaiFileStorageService fileStorageService;
 
     /**
      * 从 Token 解析用户ID
@@ -71,7 +74,28 @@ public class HomeaiChatController {
             }
             return emitter;
         }
+        images = sanitizeAttachmentUrls(images);
+        files = sanitizeAttachmentUrls(files);
         return chatService.sendMessage(userId, conversationId, content, images, files);
+    }
+
+    /** 过滤前端误传的 undefined/null 等无效附件地址 */
+    private List<String> sanitizeAttachmentUrls(List<String> urls) {
+        if (urls == null || urls.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> cleaned = new ArrayList<>();
+        for (String url : urls) {
+            if (url == null) {
+                continue;
+            }
+            String trimmed = url.trim();
+            if (trimmed.isEmpty() || "undefined".equalsIgnoreCase(trimmed) || "null".equalsIgnoreCase(trimmed)) {
+                continue;
+            }
+            cleaned.add(fileStorageService.normalizeStoredReference(trimmed));
+        }
+        return cleaned;
     }
 
     /**
@@ -107,22 +131,28 @@ public class HomeaiChatController {
         String userId = getUserId(request);
         if (userId == null) return Result.error("未登录");
         try {
-            String dir = uploadPath + "/homeai/chat/" + userId + "/";
-            Files.createDirectories(Path.of(dir));
             String ext = getExtension(file.getOriginalFilename());
-            if (ext != null && !HomeaiFileUrlUtil.isAllowedUploadExtension(ext)) {
+            if (ext != null && !whitelistService.isAllowedExtension(ext)) {
                 return Result.error("不支持上传该文件类型");
             }
+            if (ext != null) {
+                try {
+                    HomeaiFileMagicUtil.validate(file, ext);
+                } catch (IOException e) {
+                    return Result.error(e.getMessage());
+                }
+            }
             String fileName = UUID.randomUUID().toString().replace("-", "") + (ext != null ? "." + ext : "");
-            Path targetPath = Path.of(dir + fileName);
-            file.transferTo(targetPath.toFile());
+            String objectKey = "homeai/chat/" + userId + "/" + fileName;
+            String storedUrl = fileStorageService.storeMultipart(file, objectKey);
             Map<String, Object> result = new HashMap<>();
-            result.put("url", HomeaiFileUrlUtil.toAbsoluteUrl("/upload/homeai/chat/" + userId + "/" + fileName));
+            result.put("storedUrl", storedUrl);
+            result.put("url", fileStorageService.resolveAccessUrl(storedUrl));
             result.put("name", file.getOriginalFilename());
             result.put("size", file.getSize());
             result.put("type", file.getContentType());
             return Result.OK(result);
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.error("文件上传失败", e);
             return Result.error("文件上传失败: " + e.getMessage());
         }

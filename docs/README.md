@@ -26,7 +26,9 @@ docs/                          # 文档根目录
 │
 ├── plan/                       # 实现计划与进度
 │   ├── implementation-plan.md   # 8阶段实现计划
-│   └── phase-progress.md        # 各阶段完成情况记录
+│   ├── phase-progress.md        # 各阶段完成情况记录
+│   ├── homeai-optimization-roadmap.md  # 迭代优化路线图（暂停）
+│   └── android-migration-design.md     # 小程序→Android 迁移方案（暂不执行）
 │
 ├── review/                    # 审查记录
 │   └── README.md              # 审查记录索引
@@ -38,7 +40,8 @@ docs/                          # 文档根目录
 │   └── README.md              # 会议纪要索引
 │
 ├── deploy/                    # 部署文档
-│   └── README.md              # 部署文档索引
+│   ├── README.md              # 部署文档索引
+│   └── github-actions-acr-cicd-design.md  # GitHub Actions + ACR CI/CD（待实施）
 │
 └── guide/                     # 使用指南
     └── README.md              # 使用指南索引

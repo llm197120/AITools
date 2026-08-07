@@ -7,7 +7,7 @@
 #    2. 导入 JeecgBoot 基础表
 #    3. 导入 HomeAI 业务表
 #    4. 导入 HomeAI 菜单权限
-#    5. 执行增量修改脚本
+#    5. 执行增量修改脚本（跳过 sql/legacy/ 旧库专用脚本）
 #    6. 清空 Redis 缓存
 #
 #  用法：
@@ -15,7 +15,6 @@
 #    ./init-db.sh
 #    DB_PASSWORD=123456 ./init-db.sh
 # ============================================================
-
 # ---------- 数据库配置 ----------
 DB_HOST="${DB_HOST:-127.0.0.1}"
 DB_PORT="${DB_PORT:-3306}"
@@ -28,8 +27,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 BASE_SQL="$PROJECT_ROOT/JeecgBoot/jeecg-boot/db/jeecgboot-mysql-5.7.sql"
 HOMEAI_SQL_DIR="$PROJECT_ROOT/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/sql"
-HOMEAI_TABLES="$PROJECT_ROOT/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/sql/init_homeai_tables.sql"
-HOMEAI_MENUS="$PROJECT_ROOT/JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/sql/init_homeai_menus.sql"
+HOMEAI_TABLES="$HOMEAI_SQL_DIR/init_homeai_tables.sql"
+HOMEAI_MENUS="$HOMEAI_SQL_DIR/init_homeai_menus.sql"
 HOMEAI_RECIPE_CAT="$HOMEAI_SQL_DIR/init_homeai_recipe_category.sql"
 HOMEAI_USER_QUOTA="$HOMEAI_SQL_DIR/init_homeai_user_quota.sql"
 
@@ -44,24 +43,40 @@ echo "========================================"
 echo ""
 echo "  数据库: $DB_HOST:$DB_PORT/$DB_NAME"
 echo "  用户: $DB_USER"
+echo "  项目: $PROJECT_ROOT"
 echo ""
+
+# ---------- 检查 mysql 客户端 ----------
+if ! command -v mysql >/dev/null 2>&1; then
+    echo "[失败] 未找到 mysql 客户端，请安装 MySQL 客户端或将 mysql 加入 PATH"
+    exit 1
+fi
 
 # ---------- 密码处理 ----------
 if [ -z "$DB_PASSWORD" ]; then
-    read -sp "请输入 MySQL 密码: " DB_PASSWORD
+    read -rsp "请输入 MySQL 密码（无密码直接回车）: " DB_PASSWORD
     echo ""
     echo ""
 fi
 
-# ---------- MySQL 命令 ----------
-# 通过 MYSQL_PWD 传递密码（只输入一次、全部命令复用，且避免特殊字符转义问题）
-# 密码为空时（MySQL 无密码）不加 -p，避免 mysql 对每条命令重新提示输入
 export MYSQL_PWD="$DB_PASSWORD"
-MYSQL_CMD="mysql -h$DB_HOST -P$DB_PORT -u$DB_USER"
+MYSQL_CMD=(mysql --default-character-set=utf8mb4 -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER")
+
+import_sql() {
+    local sql_file="$1"
+    if [ ! -f "$sql_file" ]; then
+        echo "  [跳过] 文件不存在: $sql_file"
+        return 0
+    fi
+    echo "  - $(basename "$sql_file")"
+    if ! "${MYSQL_CMD[@]}" --force "$DB_NAME" < "$sql_file"; then
+        echo "    [警告] 执行出现错误，继续..."
+    fi
+}
 
 # ---------- 检查 MySQL 连接 ----------
 echo "[1/7] 检查 MySQL 连接..."
-if ! $MYSQL_CMD -e "SELECT 1" > /dev/null 2>&1; then
+if ! "${MYSQL_CMD[@]}" -e "SELECT 1" >/dev/null 2>&1; then
     echo "[失败] 无法连接到 MySQL，请检查："
     echo "  - MySQL 服务是否启动"
     echo "  - 用户名/密码是否正确"
@@ -73,7 +88,10 @@ echo "[成功] MySQL 连接正常"
 # ---------- 创建数据库 ----------
 echo ""
 echo "[2/7] 创建数据库 $DB_NAME..."
-$MYSQL_CMD -e "CREATE DATABASE IF NOT EXISTS \`$DB_NAME\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+if ! "${MYSQL_CMD[@]}" -e "CREATE DATABASE IF NOT EXISTS \`$DB_NAME\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"; then
+    echo "[失败] 创建数据库失败"
+    exit 1
+fi
 echo "[成功] 数据库已就绪"
 
 # ---------- 导入 JeecgBoot 基础表 ----------
@@ -81,21 +99,34 @@ echo ""
 echo "[3/7] 导入 JeecgBoot 基础表..."
 if [ ! -f "$BASE_SQL" ]; then
     echo "[跳过] 基础 SQL 文件不存在: $BASE_SQL"
+    echo "       请从 JeecgBoot 仓库获取 jeecgboot-mysql-5.7.sql 并放入 db 目录"
 else
-    $MYSQL_CMD "$DB_NAME" < "$BASE_SQL" || echo "[警告] 导入基础表时出现错误（可能已有旧数据），继续..."
-    echo "[成功] 基础表导入完成"
+    echo "  导入基础表..."
+    TEMP_BASE="$(mktemp)"
+    # 跳过文件前两行 CREATE DATABASE / USE，避免与脚本指定库冲突
+    tail -n +3 "$BASE_SQL" > "$TEMP_BASE"
+    if ! "${MYSQL_CMD[@]}" --force "$DB_NAME" < "$TEMP_BASE"; then
+        echo "[警告] 导入基础表时出现错误（可能已有旧数据），继续..."
+    fi
+    rm -f "$TEMP_BASE"
+
+    echo "  验证核心表..."
+    if ! "${MYSQL_CMD[@]}" "$DB_NAME" -e "SELECT 1 FROM sys_permission LIMIT 0;" >/dev/null 2>&1; then
+        echo ""
+        echo "========================================"
+        echo "[失败] sys_permission 表不存在！"
+        echo "基础 SQL 未成功创建 JeecgBoot 核心表，请检查上方 MySQL 报错。"
+        echo "========================================"
+        exit 1
+    fi
+    echo "[成功] 基础表导入完成并已验证"
 fi
 
 # ---------- 导入 HomeAI 业务表 ----------
 echo ""
 echo "[4/7] 导入 HomeAI 初始化脚本..."
 for init_sql in "$HOMEAI_TABLES" "$HOMEAI_RECIPE_CAT" "$HOMEAI_USER_QUOTA"; do
-    if [ -f "$init_sql" ]; then
-        echo "  - $(basename "$init_sql")"
-        $MYSQL_CMD "$DB_NAME" < "$init_sql" || echo "    [警告] 执行出现错误，继续..."
-    else
-        echo "  [跳过] 文件不存在: $init_sql"
-    fi
+    import_sql "$init_sql"
 done
 echo "[成功] HomeAI 业务表导入完成"
 
@@ -106,39 +137,41 @@ if [ ! -f "$HOMEAI_MENUS" ]; then
     echo "[失败] 文件不存在: $HOMEAI_MENUS"
     exit 1
 fi
-$MYSQL_CMD "$DB_NAME" < "$HOMEAI_MENUS" || echo "[警告] 菜单导入出现错误，继续..."
-echo "[成功] 菜单权限导入完成"
+import_sql "$HOMEAI_MENUS"
 
-# 验证菜单是否导入成功
-MENU_COUNT=$($MYSQL_CMD -sN "$DB_NAME" -e "SELECT COUNT(1) FROM sys_permission WHERE id='homeai_menu_root';" 2>/dev/null || echo 0)
-if [ "$MENU_COUNT" -le 0 ]; then
+MENU_COUNT=$("${MYSQL_CMD[@]}" -sN "$DB_NAME" -e "SELECT COUNT(1) FROM sys_permission WHERE id='homeai_menu_root';" 2>/dev/null || echo 0)
+if [ "${MENU_COUNT:-0}" -le 0 ]; then
     echo ""
     echo "[失败] 菜单权限数据未找到！"
-    echo "sys_permission 表存在但 HomeAI 菜单行没有成功插入。"
-    echo "请手动执行 SQL："
-    echo "  $MYSQL_CMD $DB_NAME < $HOMEAI_MENUS"
+    echo "请手动执行: mysql -u$DB_USER -p $DB_NAME < $HOMEAI_MENUS"
     exit 1
 fi
-echo "[成功] 菜单权限已验证（${MENU_COUNT} 条一级菜单）"
+echo "[成功] 菜单权限已验证"
 
-# ---------- 执行增量修改脚本 ----------
+# ---------- 执行增量修改脚本（排除 legacy 旧库专用） ----------
 echo ""
 echo "[6/7] 执行增量修改脚本..."
+ALTER_FOUND=0
+shopt -s nullglob
 for alter_sql in "$HOMEAI_SQL_DIR"/alter_homeai_*.sql; do
-    if [ -f "$alter_sql" ]; then
-        echo "  - $(basename "$alter_sql")"
-        $MYSQL_CMD "$DB_NAME" < "$alter_sql" || echo "    [警告] 执行出现错误，继续..."
-    fi
+    ALTER_FOUND=1
+    import_sql "$alter_sql"
 done
+shopt -u nullglob
+if [ "$ALTER_FOUND" -eq 0 ]; then
+    echo "  [跳过] 未找到 alter_homeai_*.sql"
+fi
 echo "[成功] 增量修改脚本执行完成"
 
 # ---------- 清空 Redis ----------
 echo ""
 echo "[7/7] 清空 Redis 缓存..."
-if command -v redis-cli &> /dev/null; then
-    redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" FLUSHALL > /dev/null 2>&1 && \
-        echo "[成功] Redis 缓存已清空" || \
+if command -v redis-cli >/dev/null 2>&1; then
+    if redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" FLUSHALL >/dev/null 2>&1; then
+        echo "[成功] Redis 缓存已清空"
+    else
         echo "[警告] Redis 清空失败（不影响数据库初始化，请手动清空）"
+    fi
 else
     echo "[跳过] redis-cli 未安装，请手动清空 Redis"
 fi

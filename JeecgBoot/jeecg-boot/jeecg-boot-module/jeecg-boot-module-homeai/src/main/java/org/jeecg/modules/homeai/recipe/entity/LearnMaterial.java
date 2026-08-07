@@ -22,6 +22,8 @@ public class LearnMaterial implements Serializable {
     private String fileUrl;
     private String coverUrl;
     private String category;
+    @TableField("category_id")
+    private String categoryId;
     /** 标签（逗号分隔） */
     private String tags;
     private String description;

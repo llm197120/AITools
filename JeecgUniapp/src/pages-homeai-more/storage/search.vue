@@ -10,9 +10,15 @@
         confirm-type="search" @confirm="doSearch" />
     </view>
     <view class="results">
-      <view class="result-item" v-for="file in results" :key="file.id" @click="previewFile(file)">
-        <text class="result-icon">{{ file.icon }}</text>
-        <text class="result-name">{{ file.originalName }}</text>
+      <view
+        class="result-item"
+        v-for="file in results"
+        :key="file.id"
+        @click="openPreview(file)"
+        @longpress="downloadFile(file)"
+      >
+        <HomeFileIcon :ext="file.extension" :name="getStorageDisplayName(file)" />
+        <text class="result-name">{{ getStorageDisplayName(file) }}</text>
         <text class="result-meta">{{ formatSize(file.fileSize) }}</text>
       </view>
       <view v-if="searched && results.length === 0" class="empty"><text>未找到相关文件</text></view>
@@ -22,7 +28,11 @@
 
 <script lang="ts" setup>
 import { ref } from 'vue'
-import { get as getApi } from '../../pages-homeai/api/request'
+import { storageApi } from '../../pages-homeai/api/storage'
+import { getStorageDisplayName, normalizeStorageFiles } from '../../pages-homeai/utils/storageFileDisplay'
+import { previewFile } from '../../pages-homeai/utils/filePreview'
+import { downloadStorageFile } from '../../pages-homeai/utils/fileDownload'
+import HomeFileIcon from '../../components/HomeFileIcon.vue'
 
 const keyword = ref('')
 const results = ref<any[]>([])
@@ -30,7 +40,34 @@ const searched = ref(false)
 
 async function doSearch() {
   searched.value = true
-  results.value = await getApi('/storage/files/search', { params: { keyword: keyword.value } })
+  results.value = normalizeStorageFiles(await storageApi.search(keyword.value))
+}
+
+function openPreview(file: any) {
+  previewFile({
+    id: file.id,
+    fileUrl: file.fileUrl,
+    originalName: file.originalName,
+    extension: file.extension,
+  })
+}
+
+function downloadFile(file: any) {
+  uni.showActionSheet({
+    itemList: ['下载', '预览'],
+    success: (res) => {
+      if (res.tapIndex === 0) {
+        downloadStorageFile({
+          id: file.id,
+          fileUrl: file.fileUrl,
+          originalName: file.originalName,
+          extension: file.extension,
+        })
+      } else {
+        openPreview(file)
+      }
+    },
+  })
 }
 
 function formatSize(bytes: number) {
@@ -38,8 +75,6 @@ function formatSize(bytes: number) {
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + 'KB'
   return (bytes / 1048576).toFixed(1) + 'MB'
 }
-
-function previewFile(file: any) { uni.showToast({ title: '预览: ' + file.originalName, icon: 'none' }) }
 </script>
 
 <style scoped>

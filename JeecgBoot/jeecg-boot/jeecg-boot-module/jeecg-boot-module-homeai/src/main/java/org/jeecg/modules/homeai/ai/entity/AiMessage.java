@@ -1,5 +1,6 @@
 package org.jeecg.modules.homeai.ai.entity;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -19,6 +20,12 @@ import java.io.Serializable;
 @Schema(description = "AI对话消息")
 public class AiMessage extends JeecgEntity implements Serializable {
     private static final long serialVersionUID = 1L;
+
+    /** 消息表为追加写入，无 update 字段 */
+    @TableField(exist = false)
+    private java.lang.String updateBy;
+    @TableField(exist = false)
+    private java.util.Date updateTime;
 
     /** 对话ID */
     @Schema(description = "对话ID")

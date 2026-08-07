@@ -27,7 +27,7 @@
       </template>
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'difficulty'">
-          <a-tag :color="{easy:'#27ae60',medium:'#f39c12',hard:'#e74c3c'}[record.difficulty]">{{ {easy:'简单',medium:'中等',hard:'困难'}[record.difficulty] }}</a-tag>
+          <a-tag :color="difficultyColor(record.difficulty)">{{ difficultyLabel(record.difficulty) }}</a-tag>
         </template>
       </template>
     </BasicTable>
@@ -36,7 +36,7 @@
 </template>
 
 <script lang="ts" name="homeai-recipe-list" setup>
-  import { computed, ref } from 'vue';
+  import { computed, ref, onMounted } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
   import { useMessage } from '/@/hooks/web/useMessage';
@@ -50,6 +50,37 @@
   const selectedRowKeys = ref<string[]>([]);
   const activeTab = ref('list');
 
+  function difficultyLabel(v: number | string | null | undefined) {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 1) return '-';
+    const labels = ['', '入门', '简单', '中等', '较难', '困难'];
+    return labels[Math.min(5, Math.max(1, Math.round(n)))] || String(v);
+  }
+
+  function difficultyColor(v: number | string | null | undefined) {
+    const n = Number(v);
+    if (n <= 2) return '#27ae60';
+    if (n === 3) return '#f39c12';
+    return '#e74c3c';
+  }
+  const categoryOptions = ref<{ label: string; value: string }[]>([]);
+  const categoryNameMap = ref<Record<string, string>>({});
+
+  async function loadCategoryOptions() {
+    try {
+      const list: any[] = (await recipeApi.categories()) || [];
+      categoryOptions.value = list.map((c) => ({ label: c.name, value: c.id }));
+      categoryNameMap.value = Object.fromEntries(list.map((c) => [c.id, c.name]));
+    } catch {
+      categoryOptions.value = [];
+      categoryNameMap.value = {};
+    }
+  }
+
+  onMounted(() => {
+    loadCategoryOptions();
+  });
+
   const rowSelection = computed(() => ({
     selectedRowKeys: selectedRowKeys.value,
     onChange: (keys: string[]) => {
@@ -59,7 +90,13 @@
 
   const columns = [
     { title: '菜名', dataIndex: 'name', width: 160 },
-    { title: '分类', dataIndex: 'categoryId', width: 80 },
+    {
+      title: '分类',
+      dataIndex: 'categoryId',
+      key: 'categoryId',
+      width: 100,
+      customRender: ({ text }: any) => categoryNameMap.value[text] || text || '-',
+    },
     { title: '难度', dataIndex: 'difficulty', key: 'difficulty', width: 70 },
     { title: '烹饪时间(分)', dataIndex: 'cookTime', width: 90 },
     { title: '浏览数', dataIndex: 'viewCount', width: 70 },
@@ -78,7 +115,7 @@
       labelWidth: 80,
       schemas: [
         { field: 'name', label: '菜名', component: 'Input', colProps: { span: 8 } },
-        { field: 'categoryId', label: '分类', component: 'Input', colProps: { span: 8 } },
+        { field: 'categoryId', label: '分类', component: 'Select', colProps: { span: 8 }, componentProps: { options: categoryOptions, allowClear: true, placeholder: '请选择分类' } },
         { field: 'userId', label: '用户ID', component: 'Input', colProps: { span: 8 } },
       ],
     },
@@ -108,7 +145,7 @@
   }
 
   function handleDownloadTemplate() {
-    const headers = ['菜名', '分类', '难度(1-3)', '烹饪时间(分)', '份数', '小贴士'];
+    const headers = ['菜名', '分类', '难度(1-5)', '烹饪时间(分)', '份数', '小贴士'];
     const blob = new Blob(['\uFEFF' + headers.join(',') + '\n'], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);

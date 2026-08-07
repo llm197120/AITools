@@ -404,6 +404,34 @@ public class BillController {
         return Result.OK("导入完成！成功: " + success + " 条, 失败: " + errors.size() + " 条");
     }
 
+    /** 小程序端：账单导入预览 */
+    @PostMapping("/app/import/preview")
+    @Operation(summary = "账单-导入预览(小程序)")
+    public Result<?> appImportPreview(@RequestParam MultipartFile file,
+                                      @RequestParam(defaultValue = "wechat_csv") String type,
+                                      HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        try {
+            List<Map<String, Object>> rows = "excel".equals(type)
+                    ? parseExcelBill(file) : parseWechatCsvBill(file);
+            return Result.OK(rows);
+        } catch (Exception e) {
+            log.error("小程序账单导入解析失败", e);
+            return Result.error("解析失败: " + e.getMessage());
+        }
+    }
+
+    /** 小程序端：账单导入确认写入 */
+    @PostMapping("/app/import/confirm")
+    @Operation(summary = "账单-导入确认(小程序)")
+    public Result<?> appImportConfirm(@RequestBody Map<String, Object> body, HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        body.put("userId", uid);
+        return importConfirm(body);
+    }
+
     /**
      * 解析微信支付 CSV 账单（自动定位表头行，兼容不同导出格式）
      */

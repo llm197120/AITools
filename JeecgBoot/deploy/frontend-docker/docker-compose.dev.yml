@@ -1,0 +1,87 @@
+# 开发环境 — 管理端 Docker 方案
+
+services:
+  homeai-mysql:
+    build:
+      context: ../jeecg-boot/db
+    image: homeai-mysql-dev:local
+    container_name: homeai-dev-mysql
+    hostname: jeecg-boot-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_ROOT_HOST: "%"
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --explicit_defaults_for_timestamp=true
+      - --lower_case_table_names=1
+      - --max_allowed_packet=128M
+      - --default-authentication-plugin=caching_sha2_password
+    volumes:
+      - homeai_dev_mysql_data:/var/lib/mysql
+    networks:
+      homeai_dev:
+        aliases:
+          - jeecg-boot-mysql
+
+  homeai-redis:
+    image: registry.cn-hangzhou.aliyuncs.com/jeecgdocker/redis:5.0
+    container_name: homeai-dev-redis
+    hostname: jeecg-boot-redis
+    restart: always
+    networks:
+      homeai_dev:
+        aliases:
+          - jeecg-boot-redis
+
+  homeai-pgvector:
+    image: registry.cn-hangzhou.aliyuncs.com/jeecgdocker/pgvector
+    container_name: homeai-dev-pgvector
+    hostname: jeecg-boot-pgvector
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vector_db
+    networks:
+      homeai_dev:
+        aliases:
+          - jeecg-boot-pgvector
+
+  homeai-backend:
+    image: ${ACR_REGISTRY}/${ACR_NAMESPACE}/homeai-backend:${IMAGE_TAG:-dev-latest}
+    container_name: homeai-dev-backend
+    hostname: jeecg-boot-system
+    restart: unless-stopped
+    depends_on:
+      - homeai-mysql
+      - homeai-redis
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_PROFILES_ACTIVE: docker
+    env_file:
+      - .env.homeai
+    networks:
+      homeai_dev:
+        aliases:
+          - jeecg-boot-system
+
+  homeai-admin:
+    image: ${ACR_REGISTRY}/${ACR_NAMESPACE}/homeai-admin-web:${IMAGE_TAG:-dev-latest}
+    container_name: homeai-dev-admin
+    restart: unless-stopped
+    depends_on:
+      - homeai-backend
+    ports:
+      - "${ADMIN_HTTP_PORT:-8088}:80"
+    networks:
+      - homeai_dev
+
+networks:
+  homeai_dev:
+    name: homeai_dev
+
+volumes:
+  homeai_dev_mysql_data:

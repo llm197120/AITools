@@ -44,6 +44,11 @@ public class Family implements Serializable {
     @Schema(description = "成员数量")
     private Integer memberCount;
 
+    /** 状态: normal-正常 disbanded-已解散 */
+    @Excel(name = "状态", width = 10)
+    @Schema(description = "状态: normal-正常 disbanded-已解散")
+    private String status;
+
     /** 创建人 */
     @Schema(description = "创建人")
     private String createBy;

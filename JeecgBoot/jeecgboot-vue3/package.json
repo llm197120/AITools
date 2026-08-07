@@ -12,6 +12,7 @@
     "dev": "vite",
     "build": "cross-env NODE_ENV=production NODE_OPTIONS=--max-old-space-size=8192 vite build && esno ./build/script/postBuild.ts && esno ./build/script/copyChat.ts",
     "build:docker": "cross-env NODE_ENV=docker NODE_OPTIONS=--max-old-space-size=8192 vite build --mode docker && esno ./build/script/postBuild.ts && esno ./build/script/copyChat.ts",
+    "build:docker:prod": "cross-env NODE_ENV=docker NODE_OPTIONS=--max-old-space-size=8192 vite build --mode docker.prod && esno ./build/script/postBuild.ts && esno ./build/script/copyChat.ts",
     "build:dockercloud": "cross-env NODE_ENV=dockercloud NODE_OPTIONS=--max-old-space-size=8192 vite build --mode dockercloud && esno ./build/script/postBuild.ts && esno ./build/script/copyChat.ts",
     "build:report": "pnpm clean:cache && cross-env REPORT=true npm run build",
     "preview": "npm run build && vite preview",

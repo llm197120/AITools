@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS `homeai_family` (
     `name`            VARCHAR(100) NOT NULL COMMENT '家庭名称',
     `creator_id`      VARCHAR(32)  NULL COMMENT '创建者用户ID（APP端填写，管理端可为空）',
     `member_count`    INT          DEFAULT 1 COMMENT '成员数量',
+    `status`          VARCHAR(20)  DEFAULT 'normal' COMMENT '状态: normal-正常 disbanded-已解散',
     `create_by`       VARCHAR(50)           COMMENT '创建人',
     `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_by`       VARCHAR(50)           COMMENT '更新人',
@@ -185,7 +186,7 @@ CREATE TABLE IF NOT EXISTS `homeai_storage_folder` (
     `user_id`         VARCHAR(32)  NOT NULL COMMENT '创建者用户ID',
     `parent_id`       VARCHAR(32)           COMMENT '父文件夹ID（NULL=根目录）',
     `name`            VARCHAR(200) NOT NULL COMMENT '文件夹名称',
-    `visibility`      VARCHAR(20)  DEFAULT 'private' COMMENT '可见性:private/family',
+    `visibility`      VARCHAR(20)  DEFAULT 'private' COMMENT '可见性:private/family/public',
     `level`           INT          DEFAULT 0 COMMENT '嵌套层级',
     `create_by`       VARCHAR(50)           COMMENT '创建人',
     `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -213,7 +214,7 @@ CREATE TABLE IF NOT EXISTS `homeai_storage_file` (
     `file_size`       BIGINT       DEFAULT 0 COMMENT '文件大小(字节)',
     `file_url`        VARCHAR(512) NOT NULL COMMENT '文件访问URL',
     `thumbnail_url`   VARCHAR(512)          COMMENT '缩略图URL（图片/视频）',
-    `visibility`      VARCHAR(20)  DEFAULT 'private' COMMENT '可见性:private/family',
+    `visibility`      VARCHAR(20)  DEFAULT 'private' COMMENT '可见性:private/family/public',
     `is_favorite`     VARCHAR(2)   DEFAULT '0' COMMENT '是否收藏:1=是 0=否',
     `download_count`  INT          DEFAULT 0 COMMENT '下载次数',
     `create_by`       VARCHAR(50)           COMMENT '创建人',
@@ -241,6 +242,7 @@ CREATE TABLE IF NOT EXISTS `homeai_office_convert_history` (
     `convert_type`    VARCHAR(20)  NOT NULL COMMENT '转换类型:format_convert=格式转换 ai_generate=AI生成',
     `source_format`   VARCHAR(20)           COMMENT '源格式',
     `target_format`   VARCHAR(20)           COMMENT '目标格式（格式转换时）',
+    `instruction`     VARCHAR(1000)         COMMENT 'AI生成指令',
     `status`          VARCHAR(20)  DEFAULT 'PENDING' COMMENT '状态:PENDING/PROCESSING/COMPLETED/FAILED',
     `result_file_url` VARCHAR(512)          COMMENT '结果文件URL',
     `result_file_size` BIGINT               COMMENT '结果文件大小',
@@ -305,7 +307,7 @@ CREATE TABLE IF NOT EXISTS `homeai_bill_entry` (
     `bill_date`       DATE         NOT NULL COMMENT '账单日期',
     `type`            VARCHAR(10)  NOT NULL COMMENT '类型:income=收入 expense=支出',
     `amount`          DECIMAL(12,2) NOT NULL COMMENT '金额(精确到分)',
-    `category_id`     VARCHAR(32)  NOT NULL COMMENT '分类ID',
+    `category_id`     VARCHAR(32)  NULL COMMENT '分类ID（NULL=未分类）',
     `payment_method`  VARCHAR(20)  DEFAULT '微信' COMMENT '支付方式:微信/支付宝/现金/银行卡/其他',
     `remark`          VARCHAR(500)          COMMENT '备注',
     `voucher_url`     VARCHAR(512)          COMMENT '凭证图片URL',
@@ -404,6 +406,27 @@ CREATE TABLE IF NOT EXISTS `homeai_plan_master` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='计划主表' ROW_FORMAT=DYNAMIC;
 
 -- =============================================================
+-- 17.1 计划分类表
+-- =============================================================
+CREATE TABLE IF NOT EXISTS `homeai_plan_category` (
+    `id`              VARCHAR(32)  NOT NULL COMMENT '主键',
+    `name`            VARCHAR(50)  NOT NULL COMMENT '分类名称',
+    `icon`            VARCHAR(10)  DEFAULT '📋' COMMENT '分类图标(emoji)',
+    `color`           VARCHAR(10)  DEFAULT '#999' COMMENT '分类颜色(十六进制)',
+    `sort_order`      INT          DEFAULT 0 COMMENT '排序号',
+    `is_default`      TINYINT      DEFAULT 0 COMMENT '是否系统默认:1=默认 0=自定义',
+    `is_enabled`      TINYINT      DEFAULT 1 COMMENT '是否启用:1=启用 0=停用',
+    `version`         INT          DEFAULT 0 COMMENT '乐观锁版本号',
+    `create_by`       VARCHAR(50)           COMMENT '创建人',
+    `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_by`       VARCHAR(50)           COMMENT '更新人',
+    `update_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `del_flag`        TINYINT      DEFAULT 0 COMMENT '删除状态(0-正常,1-已删除)',
+    PRIMARY KEY (`id`),
+    KEY `idx_hw_plan_cat_enabled` (`is_enabled`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='计划分类' ROW_FORMAT=DYNAMIC;
+
+-- =============================================================
 -- 18. 计划实例表（每日记录）
 -- =============================================================
 CREATE TABLE IF NOT EXISTS `homeai_plan_instance` (
@@ -452,7 +475,7 @@ CREATE TABLE IF NOT EXISTS `homeai_recipe` (
     `tips`            TEXT                   COMMENT '小贴士',
     `view_count`      INT          DEFAULT 0 COMMENT '浏览次数',
     `favorite_count`  INT          DEFAULT 0 COMMENT '收藏次数',
-    `visibility`      VARCHAR(20)  DEFAULT 'private' COMMENT '可见性:private/family',
+    `visibility`      VARCHAR(20)  DEFAULT 'private' COMMENT '可见性:private/family/public',
     `audit_status`    VARCHAR(20)  DEFAULT 'approved' COMMENT '审核状态:approved/rejected/pending',
     `create_by`       VARCHAR(50)           COMMENT '创建人',
     `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -508,6 +531,16 @@ CREATE TABLE IF NOT EXISTS `homeai_recipe_step` (
     KEY `idx_hw_step_order` (`step_number`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='菜谱步骤' ROW_FORMAT=DYNAMIC;
 
+CREATE TABLE IF NOT EXISTS `homeai_recipe_favorite` (
+    `id`          VARCHAR(32) NOT NULL COMMENT '主键',
+    `user_id`     VARCHAR(32) NOT NULL COMMENT '用户ID',
+    `recipe_id`   VARCHAR(32) NOT NULL COMMENT '菜谱ID',
+    `create_time` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '收藏时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_hw_recipe_fav_user_recipe` (`user_id`, `recipe_id`),
+    KEY `idx_hw_recipe_fav_recipe` (`recipe_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='菜谱收藏' ROW_FORMAT=DYNAMIC;
+
 -- =============================================================
 -- 22. 学习资料表
 -- =============================================================
@@ -519,9 +552,10 @@ CREATE TABLE IF NOT EXISTS `homeai_learn_material` (
     `type`            VARCHAR(20)  NOT NULL COMMENT '类型:video/image/pdf/doc/xls/ppt/link/note',
     `file_url`        VARCHAR(512)          COMMENT '文件URL',
     `thumbnail_url`   VARCHAR(512)          COMMENT '缩略图URL',
-    `category`        VARCHAR(50)           COMMENT '分类标签',
+    `category`        VARCHAR(50)           COMMENT '分类名称(冗余)',
+    `category_id`     VARCHAR(32)           COMMENT '分类ID',
     `tags`            VARCHAR(500)          COMMENT '标签(JSON数组)',
-    `visibility`      VARCHAR(20)  DEFAULT 'private' COMMENT '可见性:private/family',
+    `visibility`      VARCHAR(20)  DEFAULT 'private' COMMENT '可见性:private/family/public',
     `study_count`     INT          DEFAULT 0 COMMENT '学习次数',
     `favorite_count`  INT          DEFAULT 0 COMMENT '收藏次数',
     `create_by`       VARCHAR(50)           COMMENT '创建人',
@@ -540,22 +574,62 @@ CREATE TABLE IF NOT EXISTS `homeai_learn_material` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='学习资料' ROW_FORMAT=DYNAMIC;
 
 -- =============================================================
+-- 22.1 学习分类表
+-- =============================================================
+CREATE TABLE IF NOT EXISTS `homeai_learn_category` (
+    `id`              VARCHAR(32)  NOT NULL COMMENT '主键',
+    `name`            VARCHAR(50)  NOT NULL COMMENT '分类名称',
+    `icon`            VARCHAR(10)  DEFAULT '📖' COMMENT '分类图标(emoji)',
+    `color`           VARCHAR(10)  DEFAULT '#999' COMMENT '分类颜色(十六进制)',
+    `sort_order`      INT          DEFAULT 0 COMMENT '排序号',
+    `is_default`      TINYINT      DEFAULT 0 COMMENT '是否系统默认:1=默认 0=自定义',
+    `is_enabled`      TINYINT      DEFAULT 1 COMMENT '是否启用:1=启用 0=停用',
+    `version`         INT          DEFAULT 0 COMMENT '乐观锁版本号',
+    `create_by`       VARCHAR(50)           COMMENT '创建人',
+    `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_by`       VARCHAR(50)           COMMENT '更新人',
+    `update_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `del_flag`        TINYINT      DEFAULT 0 COMMENT '删除状态(0-正常,1-已删除)',
+    PRIMARY KEY (`id`),
+    KEY `idx_hw_learn_cat_enabled` (`is_enabled`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='学习分类' ROW_FORMAT=DYNAMIC;
+
+-- =============================================================
+-- 22.2 文件上传白名单表
+-- =============================================================
+CREATE TABLE IF NOT EXISTS `homeai_file_whitelist` (
+    `id`              VARCHAR(32)  NOT NULL COMMENT '主键',
+    `extension`       VARCHAR(20)  NOT NULL COMMENT '扩展名(不含点,小写)',
+    `category`        VARCHAR(20)  DEFAULT 'other' COMMENT '分类:image/doc/video/archive/text/other',
+    `sort_order`      INT          DEFAULT 0 COMMENT '排序号',
+    `is_enabled`      TINYINT      DEFAULT 1 COMMENT '是否启用:1=启用 0=停用',
+    `create_by`       VARCHAR(50)           COMMENT '创建人',
+    `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_by`       VARCHAR(50)           COMMENT '更新人',
+    `update_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `del_flag`        TINYINT      DEFAULT 0 COMMENT '删除状态(0-正常,1-已删除)',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_hw_file_whitelist_ext` (`extension`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文件上传白名单' ROW_FORMAT=DYNAMIC;
+
+-- =============================================================
 -- 23. 学习记录表
 -- =============================================================
 CREATE TABLE IF NOT EXISTS `homeai_learn_record` (
     `id`              VARCHAR(32)  NOT NULL COMMENT '主键',
     `user_id`         VARCHAR(32)  NOT NULL COMMENT '用户ID',
     `material_id`     VARCHAR(32)  NOT NULL COMMENT '学习资料ID',
-    `mode`            VARCHAR(20)  DEFAULT 'timing' COMMENT '学习模式:timing=计时 manual=手动',
-    `duration_minutes` INT         DEFAULT 0 COMMENT '学习时长(分钟)',
-    `study_date`      DATE         NOT NULL COMMENT '学习日期',
-    `note`            TEXT                   COMMENT '学习笔记',
+    `start_time`      DATETIME              COMMENT '开始时间',
+    `end_time`        DATETIME              COMMENT '结束时间',
+    `mode`            VARCHAR(20)  DEFAULT 'timer' COMMENT '学习模式:timer=计时 manual=手动',
+    `duration`        INT          DEFAULT 0 COMMENT '学习时长(秒)',
+    `notes`           TEXT                   COMMENT '学习笔记',
     `create_by`       VARCHAR(50)           COMMENT '创建人',
     `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     KEY `idx_hw_record_user` (`user_id`),
     KEY `idx_hw_record_material` (`material_id`),
-    KEY `idx_hw_record_user_date` (`user_id`, `study_date`)
+    KEY `idx_hw_record_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='学习记录' ROW_FORMAT=DYNAMIC;
 
 -- =============================================================
@@ -585,18 +659,69 @@ CREATE TABLE IF NOT EXISTS `homeai_audit_log` (
 -- 初始化数据：默认账单分类
 -- =============================================================
 INSERT INTO `homeai_bill_category` (`id`, `name`, `icon`, `color`, `type`, `sort_order`, `is_default`, `is_enabled`)
+SELECT * FROM (
+    SELECT 'bill_cat_exp_food'   AS id, '餐饮' AS name, '🍜' AS icon, '#FF6B6B' AS color, 'expense' AS type, 1 AS sort_order, '1' AS is_default, '1' AS is_enabled
+    UNION ALL SELECT 'bill_cat_exp_traffic', '交通', '🚗', '#4ECDC4', 'expense', 2, '1', '1'
+    UNION ALL SELECT 'bill_cat_exp_shop',    '购物', '🛒', '#45B7D1', 'expense', 3, '1', '1'
+    UNION ALL SELECT 'bill_cat_exp_home',    '居住', '🏠', '#96CEB4', 'expense', 4, '1', '1'
+    UNION ALL SELECT 'bill_cat_exp_fun',     '娱乐', '🎮', '#FFEAA7', 'expense', 5, '1', '1'
+    UNION ALL SELECT 'bill_cat_exp_edu',     '教育', '📚', '#DDA0DD', 'expense', 6, '1', '1'
+    UNION ALL SELECT 'bill_cat_exp_med',     '医疗', '🏥', '#FF6B6B', 'expense', 7, '1', '1'
+    UNION ALL SELECT 'bill_cat_exp_other',   '其他支出', '📦', '#999999', 'expense', 99, '1', '1'
+    UNION ALL SELECT 'bill_cat_inc_salary',  '工资', '💰', '#2ECC71', 'income', 1, '1', '1'
+    UNION ALL SELECT 'bill_cat_inc_bonus',   '奖金', '🎯', '#F39C12', 'income', 2, '1', '1'
+    UNION ALL SELECT 'bill_cat_inc_finance', '理财', '📈', '#3498DB', 'income', 3, '1', '1'
+    UNION ALL SELECT 'bill_cat_inc_other',   '其他收入', '📦', '#999999', 'income', 99, '1', '1'
+) AS tmp
+WHERE NOT EXISTS (SELECT 1 FROM `homeai_bill_category` WHERE `is_default` = '1' LIMIT 1);
+
+-- =============================================================
+-- 初始化数据：默认计划分类
+-- =============================================================
+INSERT IGNORE INTO `homeai_plan_category` (`id`, `name`, `icon`, `color`, `sort_order`, `is_default`, `is_enabled`)
 VALUES
--- 支出分类
-(REPLACE(UUID(), '-', ''), '餐饮', '🍜', '#FF6B6B', 'expense', 1, '1', '1'),
-(REPLACE(UUID(), '-', ''), '交通', '🚗', '#4ECDC4', 'expense', 2, '1', '1'),
-(REPLACE(UUID(), '-', ''), '购物', '🛒', '#45B7D1', 'expense', 3, '1', '1'),
-(REPLACE(UUID(), '-', ''), '居住', '🏠', '#96CEB4', 'expense', 4, '1', '1'),
-(REPLACE(UUID(), '-', ''), '娱乐', '🎮', '#FFEAA7', 'expense', 5, '1', '1'),
-(REPLACE(UUID(), '-', ''), '教育', '📚', '#DDA0DD', 'expense', 6, '1', '1'),
-(REPLACE(UUID(), '-', ''), '医疗', '🏥', '#FF6B6B', 'expense', 7, '1', '1'),
-(REPLACE(UUID(), '-', ''), '其他支出', '📦', '#999999', 'expense', 99, '1', '1'),
--- 收入分类
-(REPLACE(UUID(), '-', ''), '工资', '💰', '#2ECC71', 'income', 1, '1', '1'),
-(REPLACE(UUID(), '-', ''), '奖金', '🎯', '#F39C12', 'income', 2, '1', '1'),
-(REPLACE(UUID(), '-', ''), '理财', '📈', '#3498DB', 'income', 3, '1', '1'),
-(REPLACE(UUID(), '-', ''), '其他收入', '📦', '#999999', 'income', 99, '1', '1');
+('plan_cat_work',   '工作', '💼', '#1890ff', 1, 1, 1),
+('plan_cat_study',  '学习', '📚', '#52c41a', 2, 1, 1),
+('plan_cat_life',   '生活', '🏠', '#faad14', 3, 1, 1),
+('plan_cat_sport',  '运动', '🏃', '#eb2f96', 4, 1, 1),
+('plan_cat_family', '家庭', '👨‍👩‍👧', '#722ed1', 5, 1, 1),
+('plan_cat_other',  '其他', '📦', '#999999', 99, 1, 1);
+
+-- =============================================================
+-- 初始化数据：默认学习分类
+-- =============================================================
+INSERT IGNORE INTO `homeai_learn_category` (`id`, `name`, `icon`, `color`, `sort_order`, `is_default`, `is_enabled`)
+VALUES
+('learn_cat_course',  '课程', '🎓', '#1890ff', 1, 1, 1),
+('learn_cat_book',    '书籍', '📚', '#52c41a', 2, 1, 1),
+('learn_cat_skill',   '技能', '🛠', '#faad14', 3, 1, 1),
+('learn_cat_exam',    '考试', '📝', '#eb2f96', 4, 1, 1),
+('learn_cat_other',   '其他', '📦', '#999999', 99, 1, 1);
+
+-- =============================================================
+-- 初始化数据：默认文件白名单
+-- =============================================================
+INSERT IGNORE INTO `homeai_file_whitelist` (`id`, `extension`, `category`, `sort_order`, `is_enabled`)
+VALUES
+('fw_jpg',  'jpg',  'image',   1, 1),
+('fw_jpeg', 'jpeg', 'image',   2, 1),
+('fw_png',  'png',  'image',   3, 1),
+('fw_gif',  'gif',  'image',   4, 1),
+('fw_bmp',  'bmp',  'image',   5, 1),
+('fw_pdf',  'pdf',  'doc',     10, 1),
+('fw_doc',  'doc',  'doc',     11, 1),
+('fw_docx', 'docx', 'doc',     12, 1),
+('fw_xls',  'xls',  'doc',     13, 1),
+('fw_xlsx', 'xlsx', 'doc',     14, 1),
+('fw_ppt',  'ppt',  'doc',     15, 1),
+('fw_pptx', 'pptx', 'doc',     16, 1),
+('fw_mp4',  'mp4',  'video',   20, 1),
+('fw_avi',  'avi',  'video',   21, 1),
+('fw_mov',  'mov',  'video',   22, 1),
+('fw_mkv',  'mkv',  'video',   23, 1),
+('fw_zip',  'zip',  'archive', 30, 1),
+('fw_rar',  'rar',  'archive', 31, 1),
+('fw_7z',   '7z',   'archive', 32, 1),
+('fw_txt',  'txt',  'text',    40, 1),
+('fw_csv',  'csv',  'text',    41, 1),
+('fw_md',   'md',   'text',    42, 1);

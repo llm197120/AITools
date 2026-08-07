@@ -41,6 +41,9 @@ public class StorageConvertTask implements Serializable {
     @Schema(description = "目标格式")
     private String targetFormat;
 
+    @Schema(description = "AI生成指令")
+    private String instruction;
+
     @Schema(description = "状态:PENDING/PROCESSING/COMPLETED/FAILED")
     private String status;
 

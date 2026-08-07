@@ -8,6 +8,14 @@
     <view class="header-info">
       <text class="name">{{ recipe.name }}</text>
       <text class="meta">{{ diffLabel(recipe.difficulty) }} · {{ recipe.cookTime }}分钟 · {{ recipe.servings }}人份</text>
+      <view class="header-actions">
+        <text class="fav-btn" @click="toggleFavorite">{{ isFavorited ? '❤️ 已收藏' : '🤍 收藏' }}</text>
+        <text class="edit-btn" @click="goEdit" v-if="canEdit">✏️ 编辑</text>
+        <text class="copy-btn" @click="copyIngredients" v-if="ingredients.length > 0">📋 复制食材</text>
+      </view>
+    </view>
+    <view v-if="recipe.videoUrl" class="video-section">
+      <video class="video" :src="recipe.videoUrl" controls></video>
     </view>
     <view class="section"><text class="section-title">食材清单</text></view>
     <view class="ingredient" v-for="i in ingredients" :key="i.id"><text>{{ i.name }}</text><text>{{ i.amount }}</text></view>
@@ -25,26 +33,58 @@
 
 <script lang="ts" setup>
 import { ref } from 'vue'
-import { get as getApi } from '../../pages-homeai/api/request'
+import { onLoad } from '@dcloudio/uni-app'
+import { get as getApi, post as postApi } from '../../pages-homeai/api/request'
+import { useUserStore } from '../../pages-homeai/stores/user'
 const recipe = ref<any>({})
 const ingredients = ref<any[]>([])
 const steps = ref<any[]>([])
+const userStore = useUserStore()
+const canEdit = ref(false)
+const isFavorited = ref(false)
+const recipeId = ref('')
 function diffLabel(d: any) {
   const map: Record<number, string> = { 1: '简单', 2: '简单', 3: '中等', 4: '中等', 5: '困难' }
   return map[Number(d)] || '中等'
 }
 onLoad(async (opts:any) => {
+  recipeId.value = opts.id
   const res = await getApi(`/recipe/${opts.id}`)
   recipe.value = res.recipe
   ingredients.value = res.ingredients || []
   steps.value = res.steps || []
+  isFavorited.value = !!res.isFavorited
+  canEdit.value = !!res.recipe && res.recipe.userId === userStore.userInfo?.id
 })
+
+async function toggleFavorite() {
+  const res: any = await postApi(`/recipe/${recipeId.value}/favorite`)
+  isFavorited.value = !!res?.favorited
+  uni.showToast({ title: isFavorited.value ? '已收藏' : '已取消收藏', icon: 'none' })
+}
+
+function goEdit() {
+  uni.navigateTo({ url: `/pages-homeai-more/recipe/add?id=${recipe.value.id}` })
+}
+
+function copyIngredients() {
+  const text = ingredients.value.map((x: any) => `${x.name} ${x.amount || ''}`.trim()).join('\n')
+  uni.setClipboardData({
+    data: text,
+    success: () => uni.showToast({ title: '食材已复制', icon: 'success' }),
+  })
+}
 </script>
 
 <style scoped>
 .page{min-height:100vh;background:#f5f5f5}
 .cover{width:100%;height:400rpx}
 .header-info{padding:24rpx;background:#fff}.name{font-size:36rpx;font-weight:700}.meta{font-size:24rpx;color:#999;margin-top:8rpx}
+.header-actions{display:flex;gap:20rpx;margin-top:12rpx;flex-wrap:wrap}
+.fav-btn{font-size:26rpx;color:#e74c3c}
+.edit-btn{font-size:26rpx;color:#667eea}.copy-btn{font-size:26rpx;color:#667eea}
+.video-section{padding:20rpx 24rpx;background:#fff;margin-top:2rpx}
+.video{width:100%;height:400rpx;border-radius:12rpx}
 .section{padding:24rpx 24rpx 12rpx}.section-title{font-size:28rpx;font-weight:600;color:#333}
 .ingredient{display:flex;justify-content:space-between;padding:16rpx 24rpx;background:#fff;border-bottom:1rpx solid #f0f0f0;font-size:28rpx}
 .step{display:flex;gap:16rpx;padding:20rpx 24rpx;background:#fff;margin-bottom:2rpx}

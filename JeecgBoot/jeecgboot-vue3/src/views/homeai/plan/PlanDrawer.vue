@@ -1,7 +1,6 @@
 <template>
   <BasicDrawer v-bind="$attrs" @register="registerDrawer" :title="isUpdate ? '编辑计划' : '新增计划'" width="40%">
     <BasicForm @register="registerForm" @submit="handleSubmit" />
-    <!-- 底部按钮 -->
     <template #footer>
       <a-button type="primary" @click="submit">保存</a-button>
       <a-button style="margin-left: 8px" @click="closeDrawer()">取消</a-button>
@@ -20,8 +19,27 @@
   const { createMessage } = useMessage();
   const isUpdate = ref(false);
   const recordId = ref('');
+  const categoryOptions = ref<{ label: string; value: string }[]>([]);
 
-  const [registerDrawer, { closeDrawer }] = useDrawerInner((data) => {
+  async function loadCategories() {
+    try {
+      const list: any[] = (await planApi.categories()) || [];
+      categoryOptions.value = list.map((c) => ({ label: c.name, value: c.name }));
+    } catch {
+      categoryOptions.value = [];
+    }
+  }
+
+  const [registerDrawer, { closeDrawer }] = useDrawerInner(async (data) => {
+    await loadCategories();
+    updateSchema({
+      field: 'category',
+      componentProps: {
+        options: categoryOptions.value,
+        placeholder: '请选择分类',
+        allowClear: true,
+      },
+    });
     isUpdate.value = data.isUpdate || false;
     recordId.value = data.record?.id || '';
     if (isUpdate.value && data.record) {
@@ -31,12 +49,21 @@
     }
   });
 
-  const [registerForm, { setFieldsValue, resetFields, submit }] = useForm({
+  const [registerForm, { setFieldsValue, resetFields, submit, updateSchema }] = useForm({
     labelWidth: 100,
     schemas: [
       { field: 'title', label: '标题', component: 'Input', required: true },
       { field: 'planDate', label: '日期', component: 'DatePicker', required: true, defaultValue: null },
-      { field: 'category', label: '分类', component: 'Input' },
+      {
+        field: 'category',
+        label: '分类',
+        component: 'Select',
+        componentProps: {
+          options: categoryOptions,
+          placeholder: '请选择分类',
+          allowClear: true,
+        },
+      },
       {
         field: 'priority',
         label: '优先级',

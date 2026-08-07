@@ -51,6 +51,7 @@ public class FamilyServiceImpl extends ServiceImpl<FamilyMapper, Family> impleme
         family.setName(name);
         family.setCreatorId(userId);
         family.setMemberCount(1);
+        family.setStatus("normal");
         family.setCreateTime(new Date());
         save(family);
 
@@ -85,13 +86,13 @@ public class FamilyServiceImpl extends ServiceImpl<FamilyMapper, Family> impleme
             throw new RuntimeException("无权解散该家庭");
         }
 
-        // 逻辑删除家庭（@TableLogic 字段不参与 updateById，需通过 update wrapper 显式设置）
+        // 解散：标记状态为已解散，保留家庭数据（不删除），成员关系清理
         update(new LambdaUpdateWrapper<Family>()
                 .eq(Family::getId, familyId)
-                .set(Family::getDelFlag, 1)
+                .set(Family::getStatus, "disbanded")
                 .set(Family::getDeletedAt, new Date()));
 
-        // 清理所有成员关系
+        // 清理所有成员关系，成员变为无家庭状态
         LambdaQueryWrapper<FamilyMember> query = new LambdaQueryWrapper<>();
         query.eq(FamilyMember::getFamilyId, familyId);
         List<FamilyMember> members = familyMemberService.list(query);

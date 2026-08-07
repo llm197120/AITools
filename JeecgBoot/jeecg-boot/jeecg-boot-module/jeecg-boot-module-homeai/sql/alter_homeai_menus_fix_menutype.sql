@@ -31,11 +31,11 @@ WHERE `id` IN (
     'homeai_menu_storage_history',  -- 处理记录
     'homeai_menu_bill_list',        -- 账单列表
     'homeai_menu_bill_category',    -- 消费分类
-    'homeai_menu_plan',             -- 计划管理
     'homeai_menu_recipe_list',      -- 菜谱列表
     'homeai_menu_learn_list'        -- 学习资料
 )
-AND `menu_type` = 0;
+AND `menu_type` = 0
+AND `component` NOT IN ('Layout', 'layouts/RouteView');
 
 -- =============================================================
 -- 二、修复按钮权限：menu_type ≠ 2 → 2

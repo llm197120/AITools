@@ -12,7 +12,7 @@ import org.jeecg.modules.homeai.ai.entity.AiConversation;
 import org.jeecg.modules.homeai.ai.entity.AiMessage;
 import org.jeecg.modules.homeai.ai.service.IAiConversationService;
 import org.jeecg.modules.homeai.ai.service.IAiMessageService;
-import org.jeecg.modules.homeai.config.HomeaiFileUrlUtil;
+import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.user.entity.WxUser;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +35,9 @@ public class AiConversationController {
 
     @Autowired
     private HomeaiSecurityUtil securityUtil;
+
+    @Autowired
+    private IHomeaiFileStorageService fileStorageService;
 
     /**
      * 小程序端用户 ID（仅 HomeAI JWT）
@@ -119,8 +122,8 @@ public class AiConversationController {
         // 兼容历史相对地址数据：统一转换为绝对访问地址
         if (messages != null) {
             for (AiMessage m : messages) {
-                if (m.getFileUrl() != null && !m.getFileUrl().startsWith("http")) {
-                    m.setFileUrl(HomeaiFileUrlUtil.toAbsoluteUrl(m.getFileUrl()));
+                if (m.getFileUrl() != null) {
+                    m.setFileUrl(fileStorageService.resolveAccessUrl(m.getFileUrl()));
                 }
             }
         }

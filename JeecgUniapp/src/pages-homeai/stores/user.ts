@@ -3,7 +3,16 @@ import { ref, computed } from 'vue'
 import { get as getApi, post as postApi } from '../api/request'
 
 export const useUserStore = defineStore('homeai-user', () => {
-  const userInfo = ref<any>(null)
+  const cachedUser = uni.getStorageSync('homeai_user')
+  let parsedUser: any = null
+  if (cachedUser) {
+    try {
+      parsedUser = JSON.parse(cachedUser)
+    } catch {
+      parsedUser = null
+    }
+  }
+  const userInfo = ref<any>(parsedUser)
   const token = ref<string>(uni.getStorageSync('homeai_token') || '')
   const isLogin = computed(() => !!token.value)
 

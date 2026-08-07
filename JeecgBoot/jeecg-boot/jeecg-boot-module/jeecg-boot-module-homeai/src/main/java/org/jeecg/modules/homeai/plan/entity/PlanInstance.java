@@ -39,4 +39,10 @@ public class PlanInstance implements Serializable {
     /** 冗余展示字段：是否全天 */
     @com.baomidou.mybatisplus.annotation.TableField(exist = false)
     private Integer isAllDay;
+    /** 冗余展示字段：所属用户 */
+    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    private String userId;
+    /** 冗余展示字段：重复规则 */
+    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    private String repeatRule;
 }
