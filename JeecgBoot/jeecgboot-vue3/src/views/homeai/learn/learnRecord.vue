@@ -1,5 +1,19 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
+    <a-card :bordered="false" style="margin-bottom: 16px">
+      <a-space>
+        <a-select v-model:value="days" style="width: 140px" @change="reloadAll">
+          <a-select-option :value="7">近 7 日</a-select-option>
+          <a-select-option :value="30">近 30 日</a-select-option>
+          <a-select-option :value="90">近 90 日</a-select-option>
+          <a-select-option :value="0">全部</a-select-option>
+        </a-select>
+        <a-input v-model:value="filterUserId" placeholder="用户ID（可选）" style="width: 220px" allow-clear @pressEnter="reloadAll" />
+        <a-button type="primary" @click="reloadAll">查询</a-button>
+        <a-button preIcon="ant-design:download-outlined" @click="exportStats">导出统计</a-button>
+      </a-space>
+    </a-card>
+
     <a-row :gutter="16" style="margin-bottom: 16px">
       <a-col :span="6">
         <a-card title="学习记录总数" :bordered="false">
@@ -23,9 +37,22 @@
       </a-col>
     </a-row>
 
-    <a-card title="近30日学习趋势" :bordered="false" style="margin-bottom: 16px">
+    <a-card :title="trendTitle" :bordered="false" style="margin-bottom: 16px">
       <div ref="chartRef" style="height: 320px"></div>
     </a-card>
+
+    <a-row :gutter="16" style="margin-bottom: 16px">
+      <a-col :span="12">
+        <a-card title="按分类" :bordered="false">
+          <BasicTable :dataSource="byCategory" :columns="categoryColumns" :pagination="false" row-key="categoryId" size="small" />
+        </a-card>
+      </a-col>
+      <a-col :span="12">
+        <a-card title="按用户排行" :bordered="false">
+          <BasicTable :dataSource="byUser" :columns="userColumns" :pagination="false" row-key="userId" size="small" />
+        </a-card>
+      </a-col>
+    </a-row>
 
     <BasicTable @register="registerTable">
       <template #tableTitle>
@@ -40,19 +67,42 @@
         </template>
       </template>
     </BasicTable>
-  </div>
+  </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-learn-record" setup>
-  import { ref, onMounted, Ref } from 'vue';
+  import { PageWrapper } from '/@/components/Page';
+  import { computed, ref, onMounted, Ref } from 'vue';
   import { BasicTable, useTable } from '/@/components/Table';
   import { defHttp } from '/@/utils/http/axios';
   import { learnApi } from '/@/api/homeai';
   import { useECharts } from '/@/hooks/web/useECharts';
+  import { useMethods } from '/@/hooks/system/useMethods';
 
+  const { handleExportXlsx } = useMethods();
+  const days = ref(30);
+  const filterUserId = ref('');
   const stats = ref({ totalRecords: 0, totalDurationMinutes: 0, activeUserCount: 0, activeDayCount: 0 });
+  const byCategory = ref<any[]>([]);
+  const byUser = ref<any[]>([]);
   const chartRef = ref<HTMLDivElement | null>(null);
   const { setOptions } = useECharts(chartRef as Ref<HTMLDivElement>);
+
+  const trendTitle = computed(() => (days.value > 0 ? `近${days.value}日学习趋势` : '学习趋势（需选择近 N 日）'));
+
+  const categoryColumns = [
+    { title: '分类', dataIndex: 'categoryName', width: 140 },
+    { title: '资料数', dataIndex: 'materialCount', width: 80 },
+    { title: '记录数', dataIndex: 'recordCount', width: 80 },
+    { title: '时长(分钟)', dataIndex: 'totalDuration', width: 100 },
+  ];
+  const userColumns = [
+    { title: '昵称', dataIndex: 'nickname', width: 120 },
+    { title: '用户ID', dataIndex: 'userId', width: 160 },
+    { title: '记录数', dataIndex: 'recordCount', width: 80 },
+    { title: '时长(分钟)', dataIndex: 'durationMinutes', width: 100 },
+    { title: '活跃天', dataIndex: 'activeDays', width: 80 },
+  ];
 
   const [registerTable, { reload }] = useTable({
     title: '学习记录',
@@ -69,32 +119,46 @@
     showTableSetting: true,
     showIndexColumn: true,
     formConfig: {
-      schemas: [
-        { field: 'userId', label: '用户ID', component: 'Input' },
-      ],
+      schemas: [{ field: 'userId', label: '用户ID', component: 'Input' }],
     },
   });
 
   async function loadStats() {
     try {
-      stats.value = (await defHttp.get({ url: '/homeai/learn/admin/stats' })) as any;
+      stats.value = (await learnApi.adminStats({
+        days: days.value,
+        userId: filterUserId.value || undefined,
+      })) as any;
     } catch {
-      // 使用默认值
+      stats.value = { totalRecords: 0, totalDurationMinutes: 0, activeUserCount: 0, activeDayCount: 0 };
     }
   }
 
   async function loadTrend() {
+    if (days.value <= 0) {
+      setOptions({ title: { text: '请选择近 7/30/90 日查看趋势', left: 'center', top: 'center' } });
+      return;
+    }
     try {
-      const trend: any[] = (await learnApi.adminStatsTrend(30)) || [];
+      const trend: any[] = (await learnApi.adminStatsTrend(days.value)) || [];
       setOptions({
         tooltip: { trigger: 'axis' },
         legend: { data: ['记录数', '时长(分钟)'] },
         grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
         xAxis: { type: 'category', data: trend.map((t) => t.date) },
-        yAxis: [{ type: 'value', name: '记录数' }, { type: 'value', name: '分钟' }],
+        yAxis: [
+          { type: 'value', name: '记录数' },
+          { type: 'value', name: '分钟' },
+        ],
         series: [
           { name: '记录数', type: 'bar', data: trend.map((t) => t.recordCount || 0) },
-          { name: '时长(分钟)', type: 'line', yAxisIndex: 1, smooth: true, data: trend.map((t) => t.durationMinutes || 0) },
+          {
+            name: '时长(分钟)',
+            type: 'line',
+            yAxisIndex: 1,
+            smooth: true,
+            data: trend.map((t) => t.durationMinutes || 0),
+          },
         ],
       });
     } catch {
@@ -102,8 +166,49 @@
     }
   }
 
+  async function loadDims() {
+    try {
+      byCategory.value =
+        (await learnApi.adminStatsByCategory({
+          days: days.value,
+          userId: filterUserId.value || undefined,
+        })) || [];
+    } catch {
+      byCategory.value = [];
+    }
+    try {
+      byUser.value = (await learnApi.adminStatsByUser(days.value > 0 ? days.value : 30)) || [];
+      if (filterUserId.value) {
+        byUser.value = byUser.value.filter((u) => u.userId === filterUserId.value);
+      }
+    } catch {
+      byUser.value = [];
+    }
+  }
+
+  async function reloadAll() {
+    await Promise.all([loadStats(), loadTrend(), loadDims()]);
+  }
+
+  function exportStats() {
+    handleExportXlsx('学习统计导出', learnApi.adminStatsExport, {
+      days: days.value,
+      userId: filterUserId.value || undefined,
+    });
+  }
+
+  async function showLearnRemindMeta() {
+    try {
+      const meta: any = await defHttp.get({ url: '/homeai/config/wechat-learn-remind' });
+      // 仅控制台输出，避免每次进页弹 toast
+      console.info('[学习提醒模板联调]', meta);
+    } catch {
+      // ignore
+    }
+  }
+
   onMounted(() => {
-    loadStats();
-    loadTrend();
+    reloadAll();
+    showLearnRemindMeta();
   });
 </script>

@@ -33,6 +33,10 @@ VALUES
 INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `icon`, `sort_no`, `status`, `del_flag`, `create_time`)
 VALUES ('homeai_menu_family', 'homeai_menu_root', '家庭管理', '/homeai/family', '/views/homeai/family/index', 1, 'homeai:family:list', 1, 'ant-design:team-outlined', 2.0, 1, 0, NOW());
 
+-- 综合统计（计划完成率 + 学习时长）
+INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `icon`, `sort_no`, `status`, `del_flag`, `create_time`)
+VALUES ('homeai_menu_dashboard', 'homeai_menu_root', '综合统计', '/homeai/dashboard/crossStats', '/views/homeai/dashboard/crossStats', 1, 'homeai:dashboard:view', 1, 'ant-design:dashboard-outlined', 2.5, 1, 0, NOW());
+
 -- 家庭管理 - 按钮权限
 INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `sort_no`, `status`, `del_flag`, `create_time`)
 VALUES
@@ -85,7 +89,9 @@ VALUES
 ('homeai_menu_storage_whitelist','homeai_menu_storage', '文件白名单',   '/homeai/storage/fileWhitelist',   '/views/homeai/storage/fileWhitelist',   1, 'homeai:config:whitelist:list',   1, 'ant-design:safety-outlined',      5.0, 1, 0, NOW());
 
 INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `sort_no`, `status`, `del_flag`, `create_time`) VALUES
-('homeai_btn_whitelist_edit', 'homeai_menu_storage_whitelist', '保存配置', NULL, NULL, 0, 'homeai:config:whitelist:edit', 2, 1.0, 1, 0, NOW());
+('homeai_btn_whitelist_edit', 'homeai_menu_storage_whitelist', '保存配置', NULL, NULL, 0, 'homeai:config:whitelist:edit', 2, 1.0, 1, 0, NOW()),
+('homeai_btn_storage_restore', 'homeai_menu_storage_files', '恢复', NULL, NULL, 0, 'homeai:storage:restore', 2, 2.0, 1, 0, NOW()),
+('homeai_btn_storage_permDel', 'homeai_menu_storage_files', '彻底删除', NULL, NULL, 0, 'homeai:storage:deletePermanently', 2, 3.0, 1, 0, NOW());
 
 -- =============================================================
 -- 6. 账单管理（Phase 5）
@@ -107,7 +113,7 @@ VALUES
 ('homeai_menu_plan_list',       'homeai_menu_plan', '计划列表', '/homeai/plan/planList',     '/views/homeai/plan/planList',     1, 'homeai:plan:list',          1, 'ant-design:unordered-list-outlined', 1.0, 1, 0, NOW()),
 ('homeai_menu_plan_category',   'homeai_menu_plan', '计划分类', '/homeai/plan/planCategory', '/views/homeai/plan/planCategory', 1, 'homeai:plan:category:list', 1, 'ant-design:tags-outlined',  2.0, 1, 0, NOW()),
 ('homeai_menu_plan_config',     'homeai_menu_plan', '计划配置', '/homeai/plan/planConfig',   '/views/homeai/plan/planConfig',   1, 'homeai:config:plan:list',   1, 'ant-design:setting-outlined', 3.0, 1, 0, NOW()),
-('homeai_menu_plan_audit',      'homeai_menu_plan', '操作审计', '/homeai/plan/auditLog',     '/views/homeai/plan/auditLog',     1, 'homeai:plan:list',          1, 'ant-design:audit-outlined',   4.0, 1, 0, NOW());
+('homeai_menu_plan_audit',      'homeai_menu_plan', '操作审计', '/homeai/plan/auditLog',     '/views/homeai/plan/auditLog',     1, 'homeai:audit:list',         1, 'ant-design:audit-outlined',   4.0, 1, 0, NOW());
 
 INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `sort_no`, `status`, `del_flag`, `create_time`) VALUES
 ('homeai_btn_plan_cat_add',    'homeai_menu_plan_category', '新增分类', NULL, NULL, 0, 'homeai:plan:category:add',    2, 1.0, 1, 0, NOW()),

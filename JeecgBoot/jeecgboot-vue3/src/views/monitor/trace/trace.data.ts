@@ -1,6 +1,5 @@
 import { BasicColumn } from '/@/components/Table';
 import dayjs from 'dayjs';
-import _get from 'lodash.get';
 import { h } from 'vue';
 import { Tag } from 'ant-design-vue';
 
@@ -17,8 +16,8 @@ export const columns: BasicColumn[] = [
     title: '请求方法',
     dataIndex: 'request.method',
     width: 20,
-    customRender({ record, column }) {
-      let value = _get(record, column.dataIndex!);
+    customRender({ record }) {
+      let value = record?.request?.method;
       let color = '';
       if (value === 'GET') {
         color = '#87d068';
@@ -39,16 +38,16 @@ export const columns: BasicColumn[] = [
     title: '请求URL',
     dataIndex: 'request.uri',
     width: 200,
-    customRender({ record, column }) {
-      return _get(record, column.dataIndex!);
+    customRender({ record }) {
+      return record?.request?.uri;
     },
   },
   {
     title: '响应状态',
     dataIndex: 'response.status',
     width: 50,
-    customRender({ record, column }) {
-      let value = _get(record, column.dataIndex!);
+    customRender({ record }) {
+      let value = record?.response?.status;
       let color = '';
       if (value < 200) {
         color = 'pink';
@@ -68,8 +67,8 @@ export const columns: BasicColumn[] = [
     title: '请求耗时',
     dataIndex: 'timeTaken',
     width: 50,
-    customRender({ record, column }) {
-      let value = _get(record, column.dataIndex!);
+    customRender({ record }) {
+      let value = record?.timeTaken;
       let color = 'red';
       if (value < 500) {
         color = 'green';

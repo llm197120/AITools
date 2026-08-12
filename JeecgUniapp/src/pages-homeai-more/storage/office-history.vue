@@ -1,5 +1,5 @@
-﻿<route lang="json5">
-{ style: { navigationBarTitleText: '处理历史' } }
+<route lang="json5">
+{ style: { navigationBarTitleText: '处理历史', navigationBarBackgroundColor: '#F3F2EE' } }
 </route>
 
 <template>
@@ -15,7 +15,7 @@
         <text class="status-text" :class="statusClass(task.status)">{{ statusLabel(task.status) }}</text>
       </view>
     </view>
-    <view v-if="tasks.length === 0" class="empty"><text>暂无处理记录</text></view>
+    <HomeEmpty v-if="tasks.length === 0" title="暂无处理记录" hint="格式转换或 AI 生成后会出现在这里" />
   </view>
 </template>
 
@@ -23,6 +23,7 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { get as getApi } from '../../pages-homeai/api/request'
+import HomeEmpty from '../../components/HomeEmpty.vue'
 
 const tasks = ref<any[]>([])
 
@@ -41,13 +42,12 @@ function statusClass(s: string) {
 </script>
 
 <style scoped>
-.history-page { min-height: 100vh; background: #f5f5f5; padding: 20rpx; }
-.history-item { display: flex; align-items: center; padding: 24rpx; background: #fff; border-radius: 12rpx; margin-bottom: 12rpx; gap: 16rpx; }
+.history-page { min-height: 100vh; background: var(--hai-bg); padding: 24rpx 32rpx 48rpx; box-sizing: border-box; }
+.history-item { display: flex; align-items: center; padding: 24rpx; background: var(--hai-card); border-radius: 24rpx; margin-bottom: 12rpx; gap: 16rpx; box-shadow: var(--hai-shadow); }
 .task-icon { font-size: 32rpx; width: 60rpx; text-align: center; }
 .task-info { flex: 1; }
-.task-name { font-size: 28rpx; color: #333; display: block; }
-.task-detail { font-size: 22rpx; color: #999; }
-.task-time { font-size: 20rpx; color: #bbb; }
-.s-ok { color: #27ae60; } .s-info { color: #2980b9; } .s-warn { color: #f39c12; } .s-err { color: #e74c3c; }
-.empty { text-align: center; padding: 100rpx 0; color: #999; }
+.task-name { font-size: 28rpx; color: var(--hai-text); display: block; }
+.task-detail { font-size: 22rpx; color: var(--hai-text-muted); }
+.task-time { font-size: 20rpx; color: var(--hai-text-muted); }
+.s-ok { color: var(--hai-success); } .s-info { color: var(--hai-primary); } .s-warn { color: #c9a227; } .s-err { color: var(--hai-danger); }
 </style>

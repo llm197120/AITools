@@ -193,10 +193,12 @@ CREATE TABLE IF NOT EXISTS `homeai_storage_folder` (
     `update_by`       VARCHAR(50)           COMMENT '更新人',
     `update_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `del_flag`        TINYINT      DEFAULT 0 COMMENT '删除状态(0-正常,1-已删除)',
+    `deleted_at`      DATETIME              COMMENT '删除时间',
     PRIMARY KEY (`id`),
     KEY `idx_hw_folder_family` (`family_id`),
     KEY `idx_hw_folder_user` (`user_id`),
-    KEY `idx_hw_folder_parent` (`parent_id`)
+    KEY `idx_hw_folder_parent` (`parent_id`),
+    KEY `idx_hw_folder_recycle` (`del_flag`, `deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文件夹' ROW_FORMAT=DYNAMIC;
 
 -- =============================================================
@@ -387,6 +389,7 @@ CREATE TABLE IF NOT EXISTS `homeai_plan_master` (
     `title`           VARCHAR(100) NOT NULL COMMENT '计划标题',
     `content`         TEXT                   COMMENT '计划内容',
     `category`        VARCHAR(20)  DEFAULT '生活' COMMENT '分类:工作/学习/生活/运动/家庭/其他',
+    `recipe_id`       VARCHAR(32)           COMMENT '关联菜谱ID',
     `priority`        VARCHAR(10)  DEFAULT 'normal' COMMENT '优先级:normal/important/urgent',
     `is_all_day`      VARCHAR(2)   DEFAULT '0' COMMENT '是否全天:1=全天 0=定时',
     `start_time`      TIME                   COMMENT '开始时间',

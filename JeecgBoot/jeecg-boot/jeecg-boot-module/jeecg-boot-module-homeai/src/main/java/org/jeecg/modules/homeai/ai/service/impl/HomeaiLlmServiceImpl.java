@@ -8,9 +8,11 @@ import org.jeecg.ai.handler.AIParams;
 import org.jeecg.ai.handler.LLMHandler;
 import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
+import org.jeecg.modules.homeai.ai.constant.HomeaiAiQuotaScene;
 import org.jeecg.modules.homeai.ai.entity.AiKeyConfig;
 import org.jeecg.modules.homeai.ai.service.IAiKeyConfigService;
 import org.jeecg.modules.homeai.ai.service.IAiQuotaService;
+import org.jeecg.modules.homeai.ai.service.IHomeaiAiQuotaPrecheckService;
 import org.jeecg.modules.homeai.ai.service.IHomeaiLlmService;
 import org.jeecg.modules.homeai.ai.util.HomeaiAiQuotaEstimateUtil;
 import org.jeecg.modules.homeai.ai.vo.HomeaiLlmResult;
@@ -18,7 +20,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Arrays;
-import java.util.Map;
 
 @Slf4j
 @Service
@@ -28,13 +29,16 @@ public class HomeaiLlmServiceImpl implements IHomeaiLlmService {
             "你是家庭办公文档助手。根据用户指令撰写结构清晰的中文文档正文，"
                     + "可使用 Markdown 标题与列表，不要输出多余解释或前后缀。";
 
-    private static final String QUOTA_SCENE = "storage:ai_generate";
+    private static final String QUOTA_SCENE = HomeaiAiQuotaScene.OFFICE_GENERATE;
 
     @Autowired
     private IAiKeyConfigService keyConfigService;
 
     @Autowired
     private IAiQuotaService quotaService;
+
+    @Autowired
+    private IHomeaiAiQuotaPrecheckService precheckService;
 
     @Autowired
     private LLMHandler llmHandler;
@@ -61,12 +65,11 @@ public class HomeaiLlmServiceImpl implements IHomeaiLlmService {
         String trimmed = instruction.trim();
         int estimatedInput = HomeaiAiQuotaEstimateUtil.estimateInputTokens(trimmed);
         int estimatedOutput = HomeaiAiQuotaEstimateUtil.estimateOutputTokens(trimmed);
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R25】LLM 层防御性统一预检-----------
         if (oConvertUtils.isNotEmpty(userId)) {
-            Map<String, Object> quotaCheck = quotaService.checkQuota(userId, estimatedInput, estimatedOutput);
-            if (!Boolean.TRUE.equals(quotaCheck.get("allowed"))) {
-                throw new JeecgBootException(String.valueOf(quotaCheck.get("message")));
-            }
+            precheckService.assertAllowed(userId, HomeaiAiQuotaScene.OFFICE_GENERATE, trimmed);
         }
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R25】LLM 层防御性统一预检-----------
 
         try {
             AIParams params = new AIParams();

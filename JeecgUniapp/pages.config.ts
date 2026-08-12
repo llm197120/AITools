@@ -4,9 +4,9 @@ export default defineUniPages({
   globalStyle: {
     navigationStyle: 'default',
     navigationBarTitleText: '家庭AI小工具',
-    navigationBarBackgroundColor: '#f8f8f8',
+    navigationBarBackgroundColor: '#F3F2EE',
     navigationBarTextStyle: 'black',
-    backgroundColor: '#000000',
+    backgroundColor: '#F3F2EE',
   },
   easycom: {
     autoscan: true,
@@ -17,10 +17,10 @@ export default defineUniPages({
     },
   },
   tabBar: {
-    color: '#aaa',
-    selectedColor: '#667eea',
-    backgroundColor: '#F8F8F8',
-    borderStyle: 'black',
+    color: '#8A857C',
+    selectedColor: '#1B4F8A',
+    backgroundColor: '#F3F2EE',
+    borderStyle: 'white',
     list: [
       {
         iconPath: 'static/tabbar/tabbar-home-2.png',
@@ -29,8 +29,8 @@ export default defineUniPages({
         text: '首页',
       },
       {
-        iconPath: 'static/tabbar/tabbar-demo-2.png',
-        selectedIconPath: 'static/tabbar/tabbar-demo.png',
+        iconPath: 'static/tabbar/tabbar-family-2.png',
+        selectedIconPath: 'static/tabbar/tabbar-family.png',
         pagePath: 'pages/homeai/family',
         text: '家庭',
       },

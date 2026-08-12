@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <BasicTable @register="registerTable">
       <template #tableTitle>
         <a-button preIcon="ant-design:reload-outlined" type="primary" @click="reload">刷新</a-button>
@@ -10,21 +10,29 @@
         </template>
       </template>
     </BasicTable>
-  </div>
+  </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-audit-log" setup>
+  import { PageWrapper } from '/@/components/Page';
   import { BasicTable, useTable } from '/@/components/Table';
   import { auditApi } from '/@/api/homeai';
 
   const moduleOptions = [
     { label: '计划', value: 'plan' },
     { label: '存储', value: 'storage' },
+    { label: '菜谱', value: 'recipe' },
+    { label: '学习', value: 'learn' },
     { label: 'AI', value: 'ai' },
   ];
 
   const actionOptions = [
-    { label: '补跑重复实例', value: 'roll_forward' },
+    { label: '补跑重复实例', value: 'plan_repeat_roll_forward' },
+    { label: '资料移入回收站', value: 'storage_move_recycle' },
+    { label: '资料恢复', value: 'storage_restore' },
+    { label: '资料彻底删除', value: 'storage_delete_permanently' },
+    { label: '菜谱彻底删除', value: 'recipe_delete_permanently' },
+    { label: '学习资料彻底删除', value: 'learn_delete_permanently' },
     { label: '生成文档', value: 'ai_generate' },
   ];
 

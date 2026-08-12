@@ -16,8 +16,8 @@ import org.jeecg.common.system.util.JwtUtil;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.RedisUtil;
 import org.jeecg.common.util.TokenUtils;
-import org.jeecg.modules.homeai.ai.service.IAiQuotaService;
-import org.jeecg.modules.homeai.ai.util.HomeaiAiQuotaEstimateUtil;
+import org.jeecg.modules.homeai.ai.constant.HomeaiAiQuotaScene;
+import org.jeecg.modules.homeai.ai.service.IHomeaiAiQuotaPrecheckService;
 import org.jeecg.modules.homeai.config.service.IHomeaiPlanConfigService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
@@ -53,7 +53,7 @@ public class StorageOfficeController {
     private RedisUtil redisUtil;
 
     @Autowired
-    private IAiQuotaService quotaService;
+    private IHomeaiAiQuotaPrecheckService precheckService;
 
     @Autowired
     private IHomeaiPlanConfigService planConfigService;
@@ -121,14 +121,15 @@ public class StorageOfficeController {
                                     HttpServletRequest request) {
         String userId = getUserId(request);
         if (userId == null) return Result.error("未登录");
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R25】Office 生成走统一预检-----------
         if (planConfigService.isAiDocPolishEnabled()) {
-            int estIn = HomeaiAiQuotaEstimateUtil.estimateInputTokens(instruction);
-            int estOut = HomeaiAiQuotaEstimateUtil.estimateOutputTokens(instruction);
-            Map<String, Object> quotaCheck = quotaService.checkQuota(userId, estIn, estOut);
-            if (!Boolean.TRUE.equals(quotaCheck.get("allowed"))) {
-                return Result.error(String.valueOf(quotaCheck.get("message")));
+            try {
+                precheckService.assertAllowed(userId, HomeaiAiQuotaScene.OFFICE_GENERATE, instruction);
+            } catch (org.jeecg.common.exception.JeecgBootException e) {
+                return Result.error(e.getMessage());
             }
         }
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R25】Office 生成走统一预检-----------
         StorageConvertTask task = taskService.submitGenerateTask(userId, fileId, instruction);
         return Result.OK(task);
     }
@@ -142,16 +143,9 @@ public class StorageOfficeController {
                                         HttpServletRequest request) {
         String userId = getUserId(request);
         if (userId == null) return Result.error("未登录");
-        int estIn = HomeaiAiQuotaEstimateUtil.estimateInputTokens(instruction);
-        int estOut = HomeaiAiQuotaEstimateUtil.estimateOutputTokens(instruction);
-        Map<String, Object> quota = quotaService.checkQuota(userId, estIn, estOut);
-        Map<String, Integer> defaultQuota = quotaService.getDefaultQuota();
-        quota.put("dailyLimit", defaultQuota.get("dailyLimit"));
-        quota.put("monthlyLimit", defaultQuota.get("monthlyLimit"));
-        quota.put("estimatedInputTokens", estIn);
-        quota.put("estimatedOutputTokens", estOut);
-        quota.put("aiDocPolishEnabled", planConfigService.isAiDocPolishEnabled());
-        return Result.OK(quota);
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R25】Office 预检委托统一服务-----------
+        return Result.OK(precheckService.precheck(userId, HomeaiAiQuotaScene.OFFICE_GENERATE, instruction));
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R25】Office 预检委托统一服务-----------
     }
 
     /**

@@ -61,6 +61,11 @@ public class StorageFolder implements Serializable {
     @Schema(description = "删除状态")
     private Integer delFlag;
 
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】文件夹回收站-----------
+    @Schema(description = "删除时间")
+    private Date deletedAt;
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】文件夹回收站-----------
+
     /** 子文件夹（非数据库字段） */
     @TableField(exist = false)
     private List<StorageFolder> children;

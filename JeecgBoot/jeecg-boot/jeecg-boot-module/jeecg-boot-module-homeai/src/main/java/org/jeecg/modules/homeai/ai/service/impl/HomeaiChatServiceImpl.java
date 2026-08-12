@@ -30,6 +30,7 @@ import org.jeecg.modules.homeai.ai.entity.AiKeyConfig;
 
 import org.jeecg.modules.homeai.ai.entity.AiMessage;
 
+import org.jeecg.modules.homeai.ai.constant.HomeaiAiQuotaScene;
 import org.jeecg.modules.homeai.ai.service.*;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -120,6 +121,12 @@ public class HomeaiChatServiceImpl implements IHomeaiChatService {
 
     @Autowired
 
+    private IHomeaiAiQuotaPrecheckService precheckService;
+
+
+
+    @Autowired
+
     private IHomeaiFileStorageService fileStorageService;
 
 
@@ -189,16 +196,13 @@ public class HomeaiChatServiceImpl implements IHomeaiChatService {
 
 
         int estimatedInput = content.length() / 2;
-
-        Map<String, Object> quotaCheck = quotaService.checkQuota(userId, estimatedInput, 500);
-
-        if (!Boolean.TRUE.equals(quotaCheck.get("allowed"))) {
-
-            throw new RuntimeException((String) quotaCheck.get("message"));
-
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R25】chat 发送走统一预检-----------
+        try {
+            precheckService.assertAllowed(userId, HomeaiAiQuotaScene.CHAT, content);
+        } catch (org.jeecg.common.exception.JeecgBootException e) {
+            throw new RuntimeException(e.getMessage());
         }
-
-
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R25】chat 发送走统一预检-----------
 
         String msgType = (!images.isEmpty()) ? "image" : (!files.isEmpty()) ? "file" : "text";
 

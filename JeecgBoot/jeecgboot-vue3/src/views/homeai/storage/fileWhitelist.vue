@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <a-alert
       type="info"
       show-icon
@@ -26,10 +26,11 @@
         </template>
       </template>
     </BasicTable>
-  </div>
+  </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-file-whitelist" setup>
+  import { PageWrapper } from '/@/components/Page';
   import { onMounted, ref } from 'vue';
   import { BasicTable, useTable } from '/@/components/Table';
   import { configApi } from '/@/api/homeai';

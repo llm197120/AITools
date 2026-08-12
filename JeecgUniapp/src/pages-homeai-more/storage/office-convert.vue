@@ -1,5 +1,5 @@
-﻿<route lang="json5">
-{ style: { navigationBarTitleText: '格式转换' } }
+<route lang="json5">
+{ style: { navigationBarTitleText: '格式转换', navigationBarBackgroundColor: '#F3F2EE' } }
 </route>
 
 <template>
@@ -12,7 +12,7 @@
       <text class="section-title">选择目标格式：</text>
       <view class="format-item" v-for="rule in targets" :key="rule.id" @click="startConvert(rule)">
         <text>{{ rule.sourceFormat }} → {{ rule.targetFormat }}</text>
-        <wd-icon name="arrow-right" size="14px" color="#ccc"></wd-icon>
+        <wd-icon name="arrow-right" size="14px" color="#A39E94"></wd-icon>
       </view>
     </view>
   </view>
@@ -52,8 +52,8 @@ async function startConvert(rule: any) {
 </script>
 
 <style scoped>
-.convert-page { min-height: 100vh; background: #f5f5f5; padding: 30rpx; }
-.file-info-card { padding: 30rpx; background: #fff; border-radius: 12rpx; font-size: 28rpx; margin-bottom: 30rpx; }
-.section-title { font-size: 26rpx; color: #666; margin-bottom: 16rpx; display: block; }
-.format-item { display: flex; justify-content: space-between; padding: 28rpx; background: #fff; border-radius: 12rpx; margin-bottom: 12rpx; font-size: 28rpx; }
+.convert-page { min-height: 100vh; background: var(--hai-bg); padding: 24rpx 32rpx 48rpx; box-sizing: border-box; }
+.file-info-card { padding: 30rpx; background: var(--hai-card); border-radius: 28rpx; font-size: 28rpx; margin-bottom: 30rpx; color: var(--hai-text); box-shadow: var(--hai-shadow); }
+.section-title { font-size: 26rpx; color: var(--hai-text-secondary); margin-bottom: 16rpx; display: block; }
+.format-item { display: flex; justify-content: space-between; padding: 28rpx; background: var(--hai-card); border-radius: 24rpx; margin-bottom: 12rpx; font-size: 28rpx; color: var(--hai-text); box-shadow: var(--hai-shadow); }
 </style>

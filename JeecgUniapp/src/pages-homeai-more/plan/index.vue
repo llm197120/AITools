@@ -1,9 +1,9 @@
-﻿<route lang="json5">
-{ style: { navigationBarTitleText: '日常计划' } }
+<route lang="json5">
+{ style: { navigationBarTitleText: '日常计划', navigationBarBackgroundColor: '#F3F2EE' } }
 </route>
 
 <template>
-  <view class="page">
+  <view class="hai-page">
     <view class="month-bar">
       <text class="nav-btn" @click="prevMonth">‹</text>
       <text class="month-label">{{ yearMonthLabel }}</text>
@@ -39,7 +39,9 @@
       @click="goDetail(p)"
     >
       <view class="plan-left">
-        <view class="check" :class="{ checked: p.status === 'completed' }" @click.stop="togglePlan(p)"></view>
+        <view class="check-hit" @click.stop="togglePlan(p)">
+          <view class="check" :class="{ checked: p.status === 'completed' }"></view>
+        </view>
         <view>
           <text class="plan-title">{{ p.title }}</text>
           <text class="plan-cat">{{ p.category || '-' }} · {{ statusLabel(p.status) }}</text>
@@ -48,7 +50,13 @@
       <view class="priority-dot" :class="p.priority || 'normal'"></view>
     </view>
 
-    <view v-if="plans.length === 0" class="empty">当日暂无计划</view>
+    <HomeEmpty
+      v-if="plans.length === 0"
+      title="当日暂无计划"
+      hint="安排一条计划，开始今天"
+      action-text="+ 新增"
+      @action="goAdd"
+    />
   </view>
 </template>
 
@@ -56,6 +64,10 @@
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { planApi } from '../../pages-homeai/api/index'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+import HomeEmpty from '../../components/HomeEmpty.vue'
+
+useHomeaiPageGuard()
 
 const weekLabels = ['日', '一', '二', '三', '四', '五', '六']
 const selectedDate = ref(new Date().toISOString().substring(0, 10))
@@ -159,37 +171,45 @@ onShow(async () => {
 </script>
 
 <style scoped>
-.page { min-height: 100vh; background: #f5f5f5; padding: 20rpx; padding-bottom: 40rpx; }
-.month-bar { display: flex; align-items: center; justify-content: center; gap: 40rpx; padding: 16rpx 0 24rpx; }
-.nav-btn { font-size: 40rpx; color: #667eea; padding: 0 20rpx; }
-.month-label { font-size: 32rpx; font-weight: 600; color: #333; }
+/* page shell: .hai-page */
+.month-bar { display: flex; align-items: center; justify-content: center; gap: 40rpx; padding: 8rpx 0 24rpx; }
+.nav-btn { font-size: 40rpx; color: var(--hai-primary); padding: 0 20rpx; }
+.month-label { font-family: var(--hai-serif); font-size: 32rpx; font-weight: 700; color: var(--hai-text); }
 .week-head { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; margin-bottom: 8rpx; }
-.week-cell { font-size: 22rpx; color: #999; }
-.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8rpx; background: #fff; border-radius: 16rpx; padding: 16rpx; margin-bottom: 20rpx; }
-.day-cell { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 12rpx; position: relative; }
+.week-cell { font-size: 22rpx; color: var(--hai-text-muted); }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8rpx; background: var(--hai-card); border-radius: var(--hai-radius); padding: 20rpx; margin-bottom: 24rpx; box-shadow: var(--hai-shadow); }
+.day-cell { aspect-ratio: 1; min-height: 72rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 16rpx; position: relative; }
 .day-cell.empty { visibility: hidden; }
-.day-cell.selected { background: #667eea; }
-.day-cell.selected .day-num { color: #fff; }
-.day-cell.today:not(.selected) { border: 2rpx solid #667eea; }
-.day-num { font-size: 26rpx; color: #333; }
-.dot { width: 8rpx; height: 8rpx; border-radius: 50%; background: #667eea; margin-top: 4rpx; }
-.dot.expired { background: #bbb; }
-.day-cell.selected .dot { background: #fff; }
-.day-cell.hasExpired:not(.selected) .day-num { color: #aaa; }
-.day-cell.expiredOnly:not(.selected) { background: #f0f0f0; }
-.list-header { display: flex; justify-content: space-between; align-items: center; padding: 8rpx 8rpx 16rpx; font-size: 26rpx; color: #666; }
-.add-link { color: #667eea; }
-.plan-item { display: flex; align-items: center; justify-content: space-between; padding: 24rpx; background: #fff; border-radius: 12rpx; margin-bottom: 12rpx; }
-.plan-item.done .plan-title { text-decoration: line-through; color: #999; }
+.day-cell.selected { background: var(--hai-primary); }
+.day-cell.selected .day-num { color: var(--hai-on-primary); }
+.day-cell.today:not(.selected) { border: 2rpx solid var(--hai-primary); background: var(--hai-primary-soft); }
+.day-num { font-size: 26rpx; color: var(--hai-text); }
+.dot { width: 8rpx; height: 8rpx; border-radius: 50%; background: var(--hai-primary); margin-top: 4rpx; }
+.dot.expired { background: var(--hai-text-tertiary); }
+.day-cell.selected .dot { background: var(--hai-card); }
+.day-cell.hasExpired:not(.selected) .day-num { color: var(--hai-text-muted); }
+.day-cell.expiredOnly:not(.selected) { background: var(--hai-border); }
+.list-header { display: flex; justify-content: space-between; align-items: center; padding: 8rpx 8rpx 16rpx; font-size: 26rpx; color: var(--hai-text-secondary); }
+.add-link { color: var(--hai-primary); }
+.plan-item { display: flex; align-items: center; justify-content: space-between; padding: 20rpx 28rpx; background: var(--hai-card); border-radius: var(--hai-radius-md); margin-bottom: 16rpx; box-shadow: var(--hai-shadow); }
+.plan-item.done .plan-title { text-decoration: line-through; color: var(--hai-text-muted); }
 .plan-item.expired { opacity: 0.6; }
-.plan-left { display: flex; align-items: center; gap: 16rpx; flex: 1; }
-.check { width: 32rpx; height: 32rpx; border: 2rpx solid #ccc; border-radius: 50%; }
-.check.checked { background: #52c41a; border-color: #52c41a; }
-.plan-title { font-size: 28rpx; color: #333; display: block; }
-.plan-cat { font-size: 22rpx; color: #999; display: block; }
+.plan-left { display: flex; align-items: center; gap: 8rpx; flex: 1; min-width: 0; }
+.check-hit {
+  width: 88rpx;
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin: -12rpx 0 -12rpx -16rpx;
+}
+.check { width: 40rpx; height: 40rpx; border: 2rpx solid var(--hai-text-tertiary); border-radius: 50%; }
+.check.checked { background: var(--hai-success); border-color: var(--hai-success); }
+.plan-title { font-size: 28rpx; color: var(--hai-text); display: block; }
+.plan-cat { font-size: 22rpx; color: var(--hai-text-muted); display: block; }
 .priority-dot { width: 16rpx; height: 16rpx; border-radius: 50%; flex-shrink: 0; }
-.priority-dot.normal { background: #999; }
-.priority-dot.important { background: #f39c12; }
-.priority-dot.urgent { background: #e74c3c; }
-.empty { text-align: center; color: #999; padding: 40rpx; font-size: 26rpx; }
+.priority-dot.normal { background: var(--hai-text-muted); }
+.priority-dot.important { background: var(--hai-warning); }
+.priority-dot.urgent { background: var(--hai-danger); }
 </style>

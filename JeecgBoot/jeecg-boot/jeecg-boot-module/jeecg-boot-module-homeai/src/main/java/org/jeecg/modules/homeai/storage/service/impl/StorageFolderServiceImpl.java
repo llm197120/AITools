@@ -2,6 +2,8 @@ package org.jeecg.modules.homeai.storage.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.util.oConvertUtils;
@@ -18,9 +20,13 @@ import org.jeecg.modules.homeai.storage.util.StorageVisibilityQueryUtil;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -188,11 +194,111 @@ public class StorageFolderServiceImpl extends ServiceImpl<StorageFolderMapper, S
             deleteFolderCascade(child.getId());
         }
         fileService.softDeleteByFolderId(folderId);
-        resourceFamilyService.deleteByFolderId(folderId);
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】文件夹软删保留家庭关联与 deleted_at-----------
+        // 家庭关联保留至彻底删除，便于回收站恢复后可见性不丢
+        Date now = new Date();
         update(new LambdaUpdateWrapper<StorageFolder>()
                 .eq(StorageFolder::getId, folderId)
-                .set(StorageFolder::getDelFlag, 1));
+                .set(StorageFolder::getDelFlag, 1)
+                .set(StorageFolder::getDeletedAt, now));
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】文件夹软删保留家庭关联与 deleted_at-----------
     }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】文件夹回收站-----------
+    @Override
+    public IPage<StorageFolder> pageRecycleBin(Page<StorageFolder> page, String keyword) {
+        return baseMapper.selectRecycleBinPage(page, keyword);
+    }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R24】用户侧文件夹回收站-----------
+    @Override
+    public IPage<StorageFolder> pageMyRecycleBin(Page<StorageFolder> page, String userId, String keyword) {
+        return baseMapper.selectMyRecycleBinPage(page, userId, keyword);
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R24】用户侧文件夹回收站-----------
+
+    @Override
+    public void restoreFolders(Collection<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        Set<String> folderIds = new LinkedHashSet<>();
+        for (String id : ids) {
+            if (oConvertUtils.isEmpty(id)) {
+                continue;
+            }
+            collectDeletedSubtree(id, folderIds);
+        }
+        // 父级若仍删除则一并恢复，避免恢复到“已删父级”
+        Set<String> withAncestors = new LinkedHashSet<>(folderIds);
+        for (String id : folderIds) {
+            collectDeletedAncestors(id, withAncestors);
+        }
+        for (String id : withAncestors) {
+            baseMapper.restoreById(id);
+        }
+        List<StorageFile> files = fileMapper.selectList(new LambdaQueryWrapper<StorageFile>()
+                .in(StorageFile::getFolderId, withAncestors)
+                .eq(StorageFile::getDelFlag, 1));
+        if (!files.isEmpty()) {
+            List<String> fileIds = files.stream().map(StorageFile::getId).collect(Collectors.toList());
+            fileService.restoreFiles(fileIds);
+        }
+    }
+
+    @Override
+    public void deleteFoldersPermanently(Collection<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        Set<String> folderIds = new LinkedHashSet<>();
+        for (String id : ids) {
+            if (oConvertUtils.isEmpty(id)) {
+                continue;
+            }
+            collectDeletedSubtree(id, folderIds);
+        }
+        if (folderIds.isEmpty()) {
+            return;
+        }
+        List<StorageFile> files = fileMapper.selectList(new LambdaQueryWrapper<StorageFile>()
+                .in(StorageFile::getFolderId, folderIds)
+                .eq(StorageFile::getDelFlag, 1));
+        if (!files.isEmpty()) {
+            fileService.deletePermanently(files.stream().map(StorageFile::getId).collect(Collectors.toList()));
+        }
+        for (String folderId : folderIds) {
+            resourceFamilyService.deleteByFolderId(folderId);
+        }
+        baseMapper.deletePermanentlyByIds(folderIds);
+    }
+
+    private void collectDeletedSubtree(String folderId, Set<String> out) {
+        if (!out.add(folderId)) {
+            return;
+        }
+        List<StorageFolder> children = baseMapper.selectDeletedChildren(folderId);
+        if (children == null) {
+            return;
+        }
+        for (StorageFolder child : children) {
+            collectDeletedSubtree(child.getId(), out);
+        }
+    }
+
+    private void collectDeletedAncestors(String folderId, Set<String> out) {
+        StorageFolder cur = getById(folderId);
+        Set<String> guard = new HashSet<>();
+        while (cur != null && oConvertUtils.isNotEmpty(cur.getParentId()) && guard.add(cur.getParentId())) {
+            StorageFolder parent = getById(cur.getParentId());
+            if (parent == null || parent.getDelFlag() == null || parent.getDelFlag() != 1) {
+                break;
+            }
+            out.add(parent.getId());
+            cur = parent;
+        }
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】文件夹回收站-----------
 
     private int getParentLevel(String parentId) {
         StorageFolder parent = getById(parentId);

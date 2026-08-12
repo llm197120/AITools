@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <!-- 默认配额配置卡片 -->
     <a-row :gutter="16" style="margin-bottom: 16px">
       <a-col :span="6">
@@ -51,7 +51,7 @@
         </template>
       </template>
     </BasicTable>
-  </div>
+  </PageWrapper>
   <BasicModal @register="registerModal" title="配置用户额度" width="480px">
     <BasicForm @register="registerForm" @submit="handleSubmit" />
     <template #footer>
@@ -62,14 +62,19 @@
 </template>
 
 <script lang="ts" name="homeai-ai-quota" setup>
+  import { PageWrapper } from '/@/components/Page';
   import { ref, onMounted } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { BasicModal, useModal } from '/@/components/Modal';
   import { BasicForm, useForm } from '/@/components/Form';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { quotaApi } from '/@/api/homeai';
+  import { useUserLabel } from '../hooks/useUserLabel';
+  import { quotaStrokeColor } from '../hooks/homeaiStatusColors';
 
   const { createMessage } = useMessage();
+  const { userOptions, loadUserOptions, resolveUserLabel } = useUserLabel();
+  loadUserOptions();
   const defaultQuota = ref({
     dailyLimit: 10000,
     monthlyLimit: 200000,
@@ -82,7 +87,12 @@
     api: quotaApi.getUserQuotaPage,
     columns: [
       { title: '用户', dataIndex: 'nickname', width: 140 },
-      { title: '用户ID', dataIndex: 'userId', width: 180 },
+      {
+        title: '用户ID',
+        dataIndex: 'userId',
+        width: 180,
+        customRender: ({ text }: any) => resolveUserLabel(text),
+      },
       { title: '每日限额', dataIndex: 'dailyLimit', width: 100 },
       { title: '每月限额', dataIndex: 'monthlyLimit', width: 110 },
       { title: '今日消耗', dataIndex: 'dailyUsage', key: 'dailyUsage', width: 250 },
@@ -101,7 +111,18 @@
     },
     formConfig: {
       schemas: [
-        { field: 'userId', label: '用户ID', component: 'Input' },
+        {
+          field: 'userId',
+          label: '用户',
+          component: 'Select',
+          componentProps: {
+            options: userOptions,
+            allowClear: true,
+            showSearch: true,
+            optionFilterProp: 'label',
+            placeholder: '请选择用户',
+          },
+        },
       ],
     },
   });
@@ -112,10 +133,7 @@
   }
 
   function getColor(used: number, total: number): { '0%': string; '100%': string } {
-    const pct = getPercent(used, total);
-    if (pct >= 90) return { '0%': '#ff4d4f', '100%': '#ff7875' };
-    if (pct >= 70) return { '0%': '#faad14', '100%': '#ffc53d' };
-    return { '0%': '#52c41a', '100%': '#73d13d' };
+    return quotaStrokeColor(getPercent(used, total));
   }
 
   async function loadDefaultQuota() {

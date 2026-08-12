@@ -129,6 +129,14 @@ export default async ({ command, mode }: ConfigEnv): Promise<UserConfig> => {
             const packageToChunk: Record<string, string> = {
               vue: 'vue-vendor',
               'vue-router': 'vue-vendor',
+              'ant-design-vue': 'antd-vue-vendor',
+              '@ant-design/icons-vue': 'antd-vue-vendor',
+              'vxe-table': 'vxe-table-vendor',
+              'vxe-pc-ui': 'vxe-table-vendor',
+              'vxe-table-plugin-antd': 'vxe-table-vendor',
+              'xe-utils': 'vxe-table-vendor',
+              echarts: 'echarts-vendor',
+              zrender: 'echarts-vendor',
               'emoji-mart-vue-fast': 'emoji-mart-vue-fast',
             };
             return packageToChunk[pkgName];

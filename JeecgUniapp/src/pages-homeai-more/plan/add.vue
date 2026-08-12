@@ -1,49 +1,50 @@
-﻿<route lang="json5">{ style: { navigationBarTitleText: '新增计划' } }</route>
+﻿<route lang="json5">{ style: { navigationBarTitleText: '新增计划', navigationBarBackgroundColor: '#F3F2EE' } }</route>
 <template>
-  <view class="plan-add">
-    <input class="title-input" v-model="form.title" placeholder="计划标题..." />
-    <textarea class="content-input" v-model="form.content" placeholder="详细内容（可选）" />
-    <view class="row">
+  <HomeFormCard>
+    <input class="home-form-input" v-model="form.title" placeholder="计划标题..." />
+    <textarea class="home-form-textarea" v-model="form.content" placeholder="详细内容（可选）" />
+    <view class="home-form-row">
       <text>日期</text>
       <picker mode="date" :value="form.planDate" @change="(e: any) => (form.planDate = e.detail.value)">
-        <text>{{ form.planDate }}</text>
+        <text class="home-form-value">{{ form.planDate }}</text>
       </picker>
     </view>
-    <view class="row">
+    <view class="home-form-row">
       <text>优先级</text>
       <picker :range="priorityLabels" @change="onPriorityChange">
-        <text>{{ priorityLabels[priorityIndex] }}</text>
+        <text class="home-form-value">{{ priorityLabels[priorityIndex] }}</text>
       </picker>
     </view>
-    <view class="row">
+    <view class="home-form-row">
       <text>分类</text>
       <picker :range="categoryNames" @change="onCategoryChange">
-        <text>{{ form.category || '请选择' }}</text>
+        <text class="home-form-value">{{ form.category || '请选择' }}</text>
       </picker>
     </view>
-    <view class="row">
+    <view class="home-form-row">
       <text>全天</text>
       <switch :checked="form.isAllDay === 1" @change="(e: any) => (form.isAllDay = e.detail.value ? 1 : 0)" />
     </view>
-    <view class="row">
+    <view class="home-form-row">
       <text>重复</text>
       <picker :range="repeatLabels" @change="onRepeatChange">
-        <text>{{ repeatLabels[repeatIndex] }}</text>
+        <text class="home-form-value">{{ repeatLabels[repeatIndex] }}</text>
       </picker>
     </view>
-    <view class="row">
+    <view class="home-form-row">
       <text>提前提醒(分钟)</text>
       <picker :range="['不提醒','15分钟','30分钟','60分钟']" @change="onRemindChange">
-        <text>{{ form.remindMinutes === 0 ? '不提醒' : form.remindMinutes + '分钟' }}</text>
+        <text class="home-form-value">{{ form.remindMinutes === 0 ? '不提醒' : form.remindMinutes + '分钟' }}</text>
       </picker>
     </view>
-    <wd-button size="large" type="primary" @click="save">保存</wd-button>
-  </view>
+    <wd-button size="large" type="primary" block @click="save">保存</wd-button>
+  </HomeFormCard>
 </template>
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { planApi, configApi } from '../../pages-homeai/api/index'
+import HomeFormCard from '../../components/HomeFormCard.vue'
 
 const priorityLabels = ['普通', '重要', '紧急']
 const priorityValues = ['normal', 'important', 'urgent']
@@ -126,9 +127,3 @@ async function save() {
   setTimeout(() => uni.navigateBack(), 800)
 }
 </script>
-<style scoped>
-.plan-add { padding: 30rpx; min-height: 100vh; background: #f5f5f5; }
-.title-input { width: 100%; font-size: 32rpx; padding: 20rpx; background: #fff; border-radius: 12rpx; margin-bottom: 20rpx; box-sizing: border-box; }
-.content-input { width: 100%; min-height: 150rpx; font-size: 28rpx; padding: 20rpx; background: #fff; border-radius: 12rpx; margin-bottom: 20rpx; box-sizing: border-box; }
-.row { display: flex; justify-content: space-between; align-items: center; padding: 24rpx 20rpx; background: #fff; border-radius: 12rpx; margin-bottom: 16rpx; font-size: 28rpx; }
-</style>

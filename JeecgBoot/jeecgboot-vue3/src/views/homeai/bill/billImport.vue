@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <a-card :bordered="false" style="margin-bottom: 16px">
       <a-space>
         <a-radio-group v-model:value="fileType">
@@ -26,6 +26,8 @@
       style="margin-bottom: 16px"
     />
 
+    <a-empty v-if="rows.length === 0" description="请选择文件并解析账单" style="margin-top: 24px" />
+
     <BasicTable
       v-if="rows.length > 0"
       :dataSource="rows"
@@ -39,12 +41,21 @@
         <template v-if="column.key === 'status'">
           <a-tag :color="record.duplicate ? 'orange' : 'green'">{{ record.duplicate ? '重复' : '新增' }}</a-tag>
         </template>
+        <template v-else-if="column.dataIndex === 'type'">
+          <span :class="record.type === 'income' ? 'hai-text-success' : 'hai-text-danger'">{{
+            record.type === 'income' ? '收入' : '支出'
+          }}</span>
+        </template>
+        <template v-else-if="column.dataIndex === 'amount'">
+          <span :class="record.type === 'income' ? 'hai-amount-income' : 'hai-amount-expense'">{{ record.amount }}</span>
+        </template>
       </template>
     </BasicTable>
-  </div>
+  </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-bill-import" setup>
+  import { PageWrapper } from '/@/components/Page';
   import { ref, computed } from 'vue';
   import { BasicTable } from '/@/components/Table';
   import { useMessage } from '/@/hooks/web/useMessage';
@@ -61,7 +72,7 @@
 
   const columns = [
     { title: '日期', dataIndex: 'billDate', width: 110 },
-    { title: '类型', dataIndex: 'type', width: 70, customRender: ({ text }: any) => (text === 'income' ? '收入' : '支出') },
+    { title: '类型', dataIndex: 'type', width: 70 },
     { title: '分类', dataIndex: 'categoryName', width: 100 },
     { title: '金额', dataIndex: 'amount', width: 100 },
     { title: '支付方式', dataIndex: 'paymentMethod', width: 100 },

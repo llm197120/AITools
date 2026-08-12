@@ -1,0 +1,54 @@
+/* HomeAI 管理端语义色 — 对齐小程序暖灰深蓝体系（Same Brand, Different Density）
+ *
+ * 品牌策略（第 19 轮确认）：
+ * - B 端 chrome（按钮 / Tab / 链接主色）保持 Jeecg / Ant Design 默认 `#1890ff`
+ * - HomeAI 仅在「数据语义」层使用 `--hai-admin-*`（金额、状态、页壳暖灰底）
+ * - 不在此文件覆盖 Ant Design Vue theme.token.primary，避免与系统页割裂
+ */
+:root {
+  --hai-admin-primary: #1b4f8a;
+  --hai-admin-primary-soft: rgba(27, 79, 138, 0.08);
+  --hai-admin-danger: #c45c4a;
+  --hai-admin-success: #3e6e58;
+  --hai-admin-warning: #d4a017;
+  --hai-admin-text: #2c271f;
+  --hai-admin-text-secondary: #8a857c;
+  --hai-admin-border: #ece9e2;
+  --hai-admin-bg: #f3f2ee;
+}
+
+.homeai-page-body {
+  background: var(--hai-admin-bg);
+  min-height: 100%;
+}
+
+.hai-amount-expense,
+.hai-text-danger {
+  color: var(--hai-admin-danger) !important;
+}
+
+.hai-amount-income,
+.hai-text-success {
+  color: var(--hai-admin-success) !important;
+}
+
+.hai-text-primary {
+  color: var(--hai-admin-primary) !important;
+}
+
+.hai-text-muted {
+  color: var(--hai-admin-text-secondary) !important;
+}
+
+.hai-text-warning {
+  color: var(--hai-admin-warning) !important;
+}
+
+/* 工具栏容器：与 BasicTable 标题区视觉对齐 */
+.homeai-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}

@@ -1,5 +1,5 @@
-﻿<route lang="json5">
-{ style: { navigationBarTitleText: 'AI文件生成' } }
+<route lang="json5">
+{ style: { navigationBarTitleText: 'AI文件生成', navigationBarBackgroundColor: '#F3F2EE' } }
 </route>
 
 <template>
@@ -106,14 +106,14 @@ async function generate() {
 </script>
 
 <style scoped>
-.generate-page { min-height: 100vh; background: #f5f5f5; padding: 30rpx; }
-.quota-bar { font-size: 24rpx; color: #666; background: #fff; padding: 16rpx 20rpx; border-radius: 12rpx; margin-bottom: 20rpx; line-height: 1.5; }
-.section-title { font-size: 26rpx; color: #666; margin-bottom: 16rpx; display: block; }
-.type-row { display: flex; gap: 20rpx; margin-bottom: 30rpx; }
-.type-btn { flex: 1; text-align: center; padding: 20rpx; background: #fff; border-radius: 12rpx; font-size: 28rpx; color: #666; }
-.type-btn.active { background: #667eea; color: #fff; }
-.desc-input { width: 100%; min-height: 200rpx; padding: 20rpx; background: #fff; border-radius: 12rpx; font-size: 28rpx; margin-bottom: 30rpx; }
+.generate-page { min-height: 100vh; background: var(--hai-bg); padding: 24rpx 32rpx 48rpx; box-sizing: border-box; }
+.quota-bar { font-size: 24rpx; color: var(--hai-text-secondary); background: var(--hai-card); padding: 16rpx 20rpx; border-radius: 24rpx; margin-bottom: 20rpx; line-height: 1.5; box-shadow: var(--hai-shadow); }
+.section-title { font-size: 26rpx; color: var(--hai-text-secondary); margin-bottom: 16rpx; display: block; }
+.type-row { display: flex; gap: 16rpx; margin-bottom: 30rpx; }
+.type-btn { flex: 1; text-align: center; padding: 22rpx; background: var(--hai-card); border-radius: 999rpx; font-size: 28rpx; color: var(--hai-text-secondary); box-shadow: var(--hai-shadow); }
+.type-btn.active { background: var(--hai-primary); color: var(--hai-on-primary); }
+.desc-input { width: 100%; min-height: 200rpx; padding: 24rpx; background: var(--hai-card); border-radius: 28rpx; font-size: 28rpx; margin-bottom: 30rpx; color: var(--hai-text); box-shadow: var(--hai-shadow); box-sizing: border-box; }
 .template-scroll { white-space: nowrap; margin-bottom: 40rpx; }
-.template-item { display: inline-block; padding: 16rpx 30rpx; background: #fff; border-radius: 10rpx; margin-right: 16rpx; font-size: 26rpx; }
-.template-item .selected { color: #667eea; font-weight: 600; }
+.template-item { display: inline-block; padding: 16rpx 30rpx; background: var(--hai-card); border-radius: 24rpx; margin-right: 16rpx; font-size: 26rpx; color: var(--hai-text-secondary); box-shadow: var(--hai-shadow); }
+.template-item .selected { color: var(--hai-primary); font-weight: 600; }
 </style>

@@ -43,6 +43,14 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
 
   const currentFolder = ref<StorageFolderNode | null>(null)
 
+  const PAGE_SIZE = 20
+
+  const pageNo = ref(1)
+
+  const hasMore = ref(true)
+
+  const loadingMore = ref(false)
+
 
 
   const subFolders = computed(() => getChildFolders(folderTree.value, getFolderId()))
@@ -50,6 +58,68 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
   const breadcrumbs = computed(() => buildBreadcrumb(folderTree.value, getFolderId()))
 
   const canCreateFolder = computed(() => canCreateSubFolder(currentFolder.value))
+
+
+
+  function unwrapFilePage(page: any): { records: any[]; total?: number } {
+
+    if (!page) return { records: [] }
+
+    if (Array.isArray(page)) return { records: page }
+
+    const records = page.records || page.list || []
+
+    return { records: Array.isArray(records) ? records : [], total: page.total }
+
+  }
+
+
+
+  async function fetchFiles(reset = false) {
+
+    if (loadingMore.value) return
+
+    if (!reset && !hasMore.value) return
+
+    loadingMore.value = true
+
+    try {
+
+      const nextPage = reset ? 1 : pageNo.value + 1
+
+      const fid = getFolderId()
+
+      const page = fid
+
+        ? await storageApi.folderFiles(fid, nextPage, PAGE_SIZE)
+
+        : await storageApi.rootFiles(nextPage, PAGE_SIZE)
+
+      const { records, total } = unwrapFilePage(page)
+
+      const normalized = normalizeStorageFiles(records)
+
+      files.value = reset ? normalized : files.value.concat(normalized)
+
+      pageNo.value = nextPage
+
+      if (typeof total === 'number') {
+
+        hasMore.value = files.value.length < total
+
+      } else {
+
+        hasMore.value = normalized.length >= PAGE_SIZE
+
+      }
+
+    } finally {
+
+      loadingMore.value = false
+
+    }
+
+  }
 
 
 
@@ -65,21 +135,25 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
 
       currentFolder.value = fid ? findFolderNode(folderTree.value, fid) : null
 
-      if (fid) {
+      pageNo.value = 1
 
-        files.value = normalizeStorageFiles((await storageApi.folderFiles(fid)) || [])
+      hasMore.value = true
 
-      } else {
-
-        files.value = normalizeStorageFiles((await storageApi.rootFiles()) || [])
-
-      }
+      await fetchFiles(true)
 
     } finally {
 
       loading.value = false
 
     }
+
+  }
+
+
+
+  async function loadMore() {
+
+    await fetchFiles(false)
 
   }
 
@@ -605,6 +679,12 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
     canCreateFolder,
 
     refresh,
+
+    loadMore,
+
+    hasMore,
+
+    loadingMore,
 
     enterFolder,
 

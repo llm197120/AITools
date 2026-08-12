@@ -24,4 +24,6 @@ export const learnApi = {
   activeSession: () => get<any>('/learn/session/active'),
   addRecord: (materialId: string, duration: number, notes?: string) =>
     post('/learn/record', { data: { materialId, duration, recordType: 'timer', notes } }),
+  goal: () => get<any>('/learn/goal'),
+  setGoal: (minutes: number) => put('/learn/goal', { params: { minutes: String(minutes) } }),
 }

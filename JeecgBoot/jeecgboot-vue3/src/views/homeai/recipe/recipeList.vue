@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <a-tabs v-model:activeKey="activeTab" @change="onTabChange">
       <a-tab-pane key="list" tab="菜谱列表" />
       <a-tab-pane key="recycle" tab="回收站" />
@@ -8,14 +8,14 @@
       <template #tableTitle>
         <a-button v-if="activeTab === 'list'" preIcon="ant-design:plus-outlined" type="primary" @click="handleAdd">新增</a-button>
         <a-upload v-if="activeTab === 'list'" name="file" :showUploadList="false" :customRequest="(file) => handleImportXls(file, recipeApi.importExcel, reload)">
-          <a-button preIcon="ant-design:import-outlined" type="primary">导入</a-button>
+          <a-button preIcon="ant-design:import-outlined">导入</a-button>
         </a-upload>
-        <a-button v-if="activeTab === 'list'" preIcon="ant-design:download-outlined" type="primary" @click="handleDownloadTemplate">下载模板</a-button>
-        <a-button v-if="activeTab === 'list'" preIcon="ant-design:export-outlined" type="primary" @click="handleExportXls('菜谱列表', recipeApi.exportXls)">导出</a-button>
+        <a-button v-if="activeTab === 'list'" preIcon="ant-design:download-outlined" @click="handleDownloadTemplate">下载模板</a-button>
+        <a-button v-if="activeTab === 'list'" preIcon="ant-design:export-outlined" @click="handleExportXls('菜谱列表', recipeApi.exportXls)">导出</a-button>
         <a-button v-if="activeTab === 'list' && selectedRowKeys.length > 0" preIcon="ant-design:delete-outlined" type="primary" danger @click="handleBatchMoveToRecycleBin">
           移入回收站({{ selectedRowKeys.length }})
         </a-button>
-        <a-button v-if="activeTab === 'recycle' && selectedRowKeys.length > 0" preIcon="ant-design:undo-outlined" type="primary" @click="handleBatchRestore">
+        <a-button v-if="activeTab === 'recycle' && selectedRowKeys.length > 0" preIcon="ant-design:undo-outlined" @click="handleBatchRestore">
           恢复({{ selectedRowKeys.length }})
         </a-button>
         <a-button v-if="activeTab === 'recycle' && selectedRowKeys.length > 0" preIcon="ant-design:delete-outlined" type="primary" danger @click="handleBatchDeletePermanently">
@@ -29,13 +29,17 @@
         <template v-if="column.key === 'difficulty'">
           <a-tag :color="difficultyColor(record.difficulty)">{{ difficultyLabel(record.difficulty) }}</a-tag>
         </template>
+        <template v-else-if="column.key === 'userId' || column.dataIndex === 'userId'">
+          {{ resolveUserLabel(record.userId) }}
+        </template>
       </template>
     </BasicTable>
     <RecipeDrawer @register="registerDrawer" @success="handleSuccess" />
-  </div>
+  </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-recipe-list" setup>
+  import { PageWrapper } from '/@/components/Page';
   import { computed, ref, onMounted } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
@@ -43,10 +47,13 @@
   import { useMethods } from '/@/hooks/system/useMethods';
   import { recipeApi } from '/@/api/homeai';
   import RecipeDrawer from './RecipeDrawer.vue';
+  import { useUserLabel } from '../hooks/useUserLabel';
+  import { recipeDifficultyColor } from '../hooks/homeaiStatusColors';
 
   const { createMessage, createConfirm } = useMessage();
   const { handleExportXls, handleImportXls } = useMethods();
   const [registerDrawer, { openDrawer }] = useDrawer();
+  const { userOptions, loadUserOptions, resolveUserLabel } = useUserLabel();
   const selectedRowKeys = ref<string[]>([]);
   const activeTab = ref('list');
 
@@ -58,10 +65,7 @@
   }
 
   function difficultyColor(v: number | string | null | undefined) {
-    const n = Number(v);
-    if (n <= 2) return '#27ae60';
-    if (n === 3) return '#f39c12';
-    return '#e74c3c';
+    return recipeDifficultyColor(v);
   }
   const categoryOptions = ref<{ label: string; value: string }[]>([]);
   const categoryNameMap = ref<Record<string, string>>({});
@@ -76,10 +80,6 @@
       categoryNameMap.value = {};
     }
   }
-
-  onMounted(() => {
-    loadCategoryOptions();
-  });
 
   const rowSelection = computed(() => ({
     selectedRowKeys: selectedRowKeys.value,
@@ -99,8 +99,15 @@
     },
     { title: '难度', dataIndex: 'difficulty', key: 'difficulty', width: 70 },
     { title: '烹饪时间(分)', dataIndex: 'cookTime', width: 90 },
+    {
+      title: '可见性',
+      dataIndex: 'visibility',
+      width: 90,
+      customRender: ({ text }: any) =>
+        text === 'public' ? '公开' : text === 'family' ? '家庭' : text === 'private' ? '仅自己' : text || '-',
+    },
     { title: '浏览数', dataIndex: 'viewCount', width: 70 },
-    { title: '用户', dataIndex: 'userId', width: 160 },
+    { title: '用户', dataIndex: 'userId', key: 'userId', width: 160 },
   ];
 
   const [registerTable, { reload }] = useTable({
@@ -116,9 +123,13 @@
       schemas: [
         { field: 'name', label: '菜名', component: 'Input', colProps: { span: 8 } },
         { field: 'categoryId', label: '分类', component: 'Select', colProps: { span: 8 }, componentProps: { options: categoryOptions, allowClear: true, placeholder: '请选择分类' } },
-        { field: 'userId', label: '用户ID', component: 'Input', colProps: { span: 8 } },
+        { field: 'userId', label: '用户', component: 'Select', colProps: { span: 8 }, componentProps: { options: userOptions, allowClear: true, showSearch: true, optionFilterProp: 'label', placeholder: '请选择用户' } },
       ],
     },
+  });
+
+  onMounted(async () => {
+    await Promise.all([loadCategoryOptions(), loadUserOptions()]);
   });
 
   function onTabChange(key: string) {

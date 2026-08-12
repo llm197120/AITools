@@ -2,12 +2,13 @@
 {
   style: {
     navigationBarTitleText: '新增菜谱',
+    navigationBarBackgroundColor: '#F3F2EE',
   },
 }
 </route>
 
 <template>
-  <view class="page">
+  <HomeFormCard>
     <!-- 封面 -->
     <view class="cover-block" @click="chooseCover">
       <image v-if="form.coverUrl" class="cover-img" :src="form.coverUrl" mode="aspectFill" />
@@ -52,6 +53,7 @@
         <view class="radio-group">
           <view :class="'radio '+(form.visibility==='private'?'active':'')" @click="form.visibility='private'">仅自己</view>
           <view :class="'radio '+(form.visibility==='family'?'active':'')" @click="form.visibility='family'">家庭共享</view>
+          <view :class="'radio '+(form.visibility==='public'?'active':'')" @click="form.visibility='public'">公开</view>
         </view>
       </view>
     </view>
@@ -104,15 +106,20 @@
       <textarea class="tips-input" v-model="form.tips" placeholder="添加小贴士（可选）" />
     </view>
 
-    <wd-button size="large" type="primary" :loading="saving" @click="submit">保存</wd-button>
+    <wd-button size="large" type="primary" block :loading="saving" @click="submit">保存</wd-button>
     <view style="height: 40rpx"></view>
-  </view>
+  </HomeFormCard>
 </template>
 
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi, put as putApi, getServerBaseUrl } from '../../pages-homeai/api/request'
+import { formatQuantityUnit, parseAmountToQuantityUnit } from '../../pages-homeai/utils/recipeIngredient'
+import { useHomeaiFilePick } from '../../pages-homeai/utils/useHomeaiFilePick'
+import HomeFormCard from '../../components/HomeFormCard.vue'
+
+const { pickImages } = useHomeaiFilePick()
 
 const editId = ref('')
 const saving = ref(false)
@@ -168,7 +175,10 @@ async function loadDetail(id: string) {
   }
   const cat = categories.value.find((c: any) => c.id === r.categoryId)
   currentCategoryName.value = cat?.name || ''
-  ingredients.value = (res.ingredients || []).map((x: any) => ({ name: x.name, amount: x.amount }))
+  ingredients.value = (res.ingredients || []).map((x: any) => ({
+    name: x.name,
+    amount: formatQuantityUnit(x.quantity, x.unit, x.amount),
+  }))
   ingredients.value.push({ name: '', amount: '' })
   steps.value = (res.steps || []).map((x: any) => ({ description: x.description, imageUrl: x.imageUrl }))
 }
@@ -217,19 +227,16 @@ function uploadFile(filePath: string, url: string): Promise<string> {
 }
 
 function chooseCover() {
-  uni.chooseImage({
-    count: 1,
-    success: async (r) => {
-      if (!r.tempFilePaths || !r.tempFilePaths[0]) return
-      uni.showLoading({ title: '上传中...' })
-      try {
-        form.value.coverUrl = await uploadFile(r.tempFilePaths[0], '/homeai/recipe/cover')
-        uni.hideLoading()
-      } catch (e: any) {
-        uni.hideLoading()
-        uni.showToast({ title: e.message || '封面上传失败', icon: 'none' })
-      }
-    },
+  pickImages({ count: 1 }).then(async (files) => {
+    if (!files[0]) return
+    uni.showLoading({ title: '上传中...' })
+    try {
+      form.value.coverUrl = await uploadFile(files[0].path, '/homeai/recipe/cover')
+      uni.hideLoading()
+    } catch (e: any) {
+      uni.hideLoading()
+      uni.showToast({ title: e.message || '封面上传失败', icon: 'none' })
+    }
   })
 }
 
@@ -252,19 +259,16 @@ function chooseVideo() {
 }
 
 function chooseStepImage(i: number) {
-  uni.chooseImage({
-    count: 1,
-    success: async (r) => {
-      if (!r.tempFilePaths || !r.tempFilePaths[0]) return
-      uni.showLoading({ title: '上传中...' })
-      try {
-        steps.value[i].imageUrl = await uploadFile(r.tempFilePaths[0], '/homeai/recipe/step-image')
-        uni.hideLoading()
-      } catch (e: any) {
-        uni.hideLoading()
-        uni.showToast({ title: e.message || '图片上传失败', icon: 'none' })
-      }
-    },
+  pickImages({ count: 1 }).then(async (files) => {
+    if (!files[0]) return
+    uni.showLoading({ title: '上传中...' })
+    try {
+      steps.value[i].imageUrl = await uploadFile(files[0].path, '/homeai/recipe/step-image')
+      uni.hideLoading()
+    } catch (e: any) {
+      uni.hideLoading()
+      uni.showToast({ title: e.message || '图片上传失败', icon: 'none' })
+    }
   })
 }
 
@@ -273,12 +277,21 @@ async function submit() {
     uni.showToast({ title: '请输入菜名', icon: 'none' })
     return
   }
+  if (!form.value.categoryId) {
+    uni.showToast({ title: '请选择分类', icon: 'none' })
+    return
+  }
   saving.value = true
   const data = {
     ...form.value,
     cookTime: parseInt(String(form.value.cookTime)) || 30,
     servings: parseInt(String(form.value.servings)) || 2,
-    ingredients: ingredients.value.filter((x: any) => x.name),
+    ingredients: ingredients.value
+      .filter((x: any) => x.name)
+      .map((x: any) => {
+        const { quantity, unit } = parseAmountToQuantityUnit(x.amount || '')
+        return { name: x.name, quantity, unit }
+      }),
     steps: steps.value
       .filter((x: any) => x.description)
       .map((x: any, i: number) => ({ description: x.description, imageUrl: x.imageUrl || null, stepNum: i + 1 })),
@@ -303,17 +316,13 @@ async function submit() {
 </script>
 
 <style scoped>
-.page {
-  min-height: 100vh;
-  background: #f5f5f5;
-  padding: 20rpx 20rpx 40rpx;
-}
 .cover-block {
   height: 320rpx;
-  border-radius: 16rpx;
+  border-radius: var(--hai-radius);
   overflow: hidden;
   margin-bottom: 20rpx;
-  background: #fff;
+  background: var(--hai-card);
+  box-shadow: var(--hai-shadow);
 }
 .cover-img {
   width: 100%;
@@ -331,19 +340,21 @@ async function submit() {
 }
 .cover-tip {
   font-size: 24rpx;
-  color: #999;
+  color: var(--hai-text-muted);
   margin-top: 12rpx;
 }
 .form-card {
-  background: #fff;
-  border-radius: 16rpx;
+  background: var(--hai-card);
+  border-radius: var(--hai-radius);
   padding: 24rpx;
   margin-bottom: 20rpx;
+  box-shadow: var(--hai-shadow);
 }
 .card-title {
   font-size: 30rpx;
   font-weight: 600;
   margin-bottom: 20rpx;
+  color: var(--hai-text);
 }
 .form-group {
   margin-bottom: 20rpx;
@@ -357,17 +368,18 @@ async function submit() {
 }
 .label {
   font-size: 26rpx;
-  color: #666;
+  color: var(--hai-text-secondary);
   margin-bottom: 12rpx;
   display: block;
 }
 .input {
   height: 72rpx;
   padding: 0 20rpx;
-  background: #f8f8f8;
-  border-radius: 10rpx;
+  background: var(--hai-bg);
+  border-radius: 12rpx;
   font-size: 28rpx;
   width: 100%;
+  color: var(--hai-text);
 }
 .input.small {
   flex: 1;
@@ -377,26 +389,29 @@ async function submit() {
   height: 72rpx;
   line-height: 72rpx;
   padding: 0 20rpx;
-  background: #f8f8f8;
-  border-radius: 10rpx;
+  background: var(--hai-bg);
+  border-radius: 12rpx;
   font-size: 28rpx;
-  color: #333;
+  color: var(--hai-text);
 }
 .radio-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 12rpx;
 }
 .radio {
   flex: 1;
+  min-width: 140rpx;
   text-align: center;
   padding: 16rpx;
-  background: #f8f8f8;
-  border-radius: 10rpx;
+  background: var(--hai-bg);
+  border-radius: 12rpx;
   font-size: 26rpx;
+  color: var(--hai-text-secondary);
 }
 .radio.active {
-  background: #667eea;
-  color: #fff;
+  background: var(--hai-primary);
+  color: var(--hai-on-primary);
 }
 .ing-row {
   display: flex;
@@ -405,7 +420,7 @@ async function submit() {
   margin-bottom: 12rpx;
 }
 .del-btn {
-  color: #e74c3c;
+  color: var(--hai-danger);
   font-size: 28rpx;
   padding: 8rpx;
 }
@@ -415,14 +430,14 @@ async function submit() {
   margin-top: 12rpx;
 }
 .add-btn {
-  color: #667eea;
+  color: var(--hai-primary);
   font-size: 26rpx;
   padding: 12rpx 0;
   display: block;
 }
 .step-item {
-  border: 1rpx solid #f0f0f0;
-  border-radius: 12rpx;
+  border: 1rpx solid var(--hai-border);
+  border-radius: var(--hai-radius-md);
   padding: 16rpx;
   margin-bottom: 16rpx;
 }
@@ -437,8 +452,8 @@ async function submit() {
   height: 44rpx;
   line-height: 44rpx;
   text-align: center;
-  background: #667eea;
-  color: #fff;
+  background: var(--hai-primary);
+  color: var(--hai-on-primary);
   border-radius: 50%;
   font-size: 22rpx;
 }
@@ -447,11 +462,11 @@ async function submit() {
   gap: 16rpx;
 }
 .op-btn {
-  color: #667eea;
+  color: var(--hai-primary);
   font-size: 28rpx;
 }
 .op-btn.danger {
-  color: #e74c3c;
+  color: var(--hai-danger);
 }
 .step-img-block {
   margin-bottom: 12rpx;
@@ -459,16 +474,16 @@ async function submit() {
 .step-img {
   width: 100%;
   height: 220rpx;
-  border-radius: 10rpx;
+  border-radius: 12rpx;
 }
 .step-img-empty {
   height: 120rpx;
-  background: #f8f8f8;
-  border-radius: 10rpx;
+  background: var(--hai-bg);
+  border-radius: 12rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #999;
+  color: var(--hai-text-muted);
   font-size: 26rpx;
 }
 .step-input {
@@ -476,32 +491,34 @@ async function submit() {
   min-height: 100rpx;
   font-size: 28rpx;
   padding: 12rpx;
-  background: #f8f8f8;
-  border-radius: 10rpx;
+  background: var(--hai-bg);
+  border-radius: 12rpx;
   box-sizing: border-box;
+  color: var(--hai-text);
 }
 .video-upload {
   height: 140rpx;
-  background: #f8f8f8;
-  border-radius: 12rpx;
+  background: var(--hai-bg);
+  border-radius: var(--hai-radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #667eea;
+  color: var(--hai-primary);
   font-size: 28rpx;
 }
 .video-preview {
   width: 100%;
   height: 360rpx;
-  border-radius: 12rpx;
+  border-radius: var(--hai-radius-md);
 }
 .tips-input {
   width: 100%;
   min-height: 120rpx;
   font-size: 28rpx;
   padding: 12rpx;
-  background: #f8f8f8;
-  border-radius: 10rpx;
+  background: var(--hai-bg);
+  border-radius: 12rpx;
   box-sizing: border-box;
+  color: var(--hai-text);
 }
 </style>

@@ -1,9 +1,9 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <BasicTable @register="registerTable">
       <template #tableTitle>
         <a-button type="primary" preIcon="ant-design:plus-outlined" @click="handleAdd"> 新增</a-button>
-        <a-button type="primary" preIcon="ant-design:export-outlined" @click="onExportXls"> 导出</a-button>
+        <a-button preIcon="ant-design:export-outlined" @click="onExportXls"> 导出</a-button>
       </template>
       <template #action="{ record }">
         <TableAction :actions="getTableAction(record)" />
@@ -24,20 +24,23 @@
       </template>
     </BasicTable>
     <KeyConfigDrawer @register="registerDrawer" @success="reload" />
-  </div>
+  </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-ai-key" setup>
+  import { PageWrapper } from '/@/components/Page';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
-  import { defHttp } from '/@/utils/http/axios';
+  import { useMessage } from '/@/hooks/web/useMessage';
+  import { keyConfigApi } from '/@/api/homeai';
   import KeyConfigDrawer from './KeyConfigDrawer.vue';
 
+  const { createConfirm, createMessage } = useMessage();
   const [registerDrawer, { openDrawer }] = useDrawer();
 
   const [registerTable, { reload }] = useTable({
     title: 'AI密钥配置',
-    api: (params: any) => defHttp.get({ url: '/homeai/ai/key-config/list', params }),
+    api: (params) => keyConfigApi.list(params),
     columns: [
       { title: '提供商', dataIndex: 'provider', width: 120 },
       { title: '模型名', dataIndex: 'modelName', width: 150 },
@@ -59,7 +62,7 @@
     },
   });
 
-  function getTableAction(record: any) {
+  function getTableAction(record: Recordable) {
     return [
       {
         icon: 'ant-design:eye-outlined',
@@ -80,18 +83,26 @@
     openDrawer(true, { isUpdate: false });
   }
 
-  async function handleDelete(record: any) {
-    await defHttp.delete({ url: `/homeai/ai/key-config/${record.id}` });
+  function handleDelete(record: Recordable) {
+    createConfirm({
+      iconType: 'warning',
+      title: '确认删除',
+      content: `确定删除密钥配置「${record.provider || record.modelName || record.id}」吗？`,
+      onOk: async () => {
+        await keyConfigApi.delete(String(record.id));
+        createMessage.success('删除成功');
+        reload();
+      },
+    });
+  }
+
+  async function toggleStatus(record: Recordable, checked: boolean) {
+    await keyConfigApi.toggleStatus(String(record.id), checked ? '1' : '0');
     reload();
   }
 
-  async function toggleStatus(record: any, checked: boolean) {
-    await defHttp.put({ url: `/homeai/ai/key-config/${record.id}/status`, params: { isEnabled: checked ? '1' : '0' } }, { joinParamsToUrl: true });
-    reload();
-  }
-
-  async function setDefault(record: any) {
-    await defHttp.put({ url: `/homeai/ai/key-config/${record.id}/default` });
+  async function setDefault(record: Recordable) {
+    await keyConfigApi.setDefault(String(record.id));
     reload();
   }
 

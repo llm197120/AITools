@@ -1,9 +1,12 @@
 # 项目介绍
 
-JeecgUniapp 是`JeecgBoot低代码平台`的配套`APP移动框架`，项目采用 Uniapp、Vue3.0、Vite、 Wot-design-uni、TypeScript 等最新技术栈，包括二次封装组件、路由拦截、请求拦截等功能。实现了与 `JeecgBoot` 完美对接:
-目前已经实现登录、用户信息、通讯录、公告、移动首页、九宫格、聊天、Online表单、仪表盘等功能，提供了丰富的组件!
+**家庭AI小工具**（基于 JeecgBoot UniApp）——面向家庭场景的移动端应用。技术栈：UniApp、Vue3、Vite、Wot-design-uni、TypeScript；与 JeecgBoot 后端对接，含路由/请求拦截与二次封装组件。
 
-当前最新版本： 3.0.0（发布日期：2025-03-10）
+**底部 Tab：** 首页 / 家庭 / 我的（个人中心）
+
+**业务模块：** AI 对话、家庭管理、菜谱、账单、计划、学习资料、资料存储等。
+
+当前版本基于 JeecgBoot UniApp 3.0.0 定制。
 
 
 [![AUR](https://img.shields.io/badge/license-Apache%20License%202.0-blue.svg)](https://github.com/zhangdaiscott/jeecg-boot/blob/master/LICENSE)

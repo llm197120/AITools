@@ -1,9 +1,9 @@
-﻿<route lang="json5">
-{ style: { navigationBarTitleText: '统计分析' } }
+<route lang="json5">
+{ style: { navigationBarTitleText: '统计分析', navigationBarBackgroundColor: '#F3F2EE' } }
 </route>
 
 <template>
-  <view class="page">
+  <view class="hai-page">
     <view class="month-select">
       <text @click="changeMonth(-1)">◀</text>
       <text class="month">{{ currentMonth }}</text>
@@ -73,22 +73,22 @@ onShow(loadStats)
 </script>
 
 <style scoped>
-.page { min-height: 100vh; background: #f5f5f5; padding: 20rpx; }
-.month-select { display: flex; justify-content: center; align-items: center; gap: 40rpx; padding: 30rpx; font-size: 32rpx; font-weight: 600; color: #333; }
+/* page shell: .hai-page */
+.month-select { display: flex; justify-content: center; align-items: center; gap: 40rpx; padding: 30rpx; font-size: 32rpx; font-weight: 600; color: var(--hai-text); }
 .stats { display: flex; gap: 16rpx; margin-bottom: 30rpx; }
-.stat-item { flex: 1; background: #fff; border-radius: 12rpx; padding: 30rpx; text-align: center; }
-.s-label { font-size: 22rpx; color: #999; }
-.s-value { font-size: 36rpx; font-weight: 700; display: block; margin-top: 8rpx; }
-.red { color: #e74c3c; }
-.green { color: #27ae60; }
-.section-title { font-size: 28rpx; font-weight: 600; margin-bottom: 16rpx; padding: 0 8rpx; }
-.cat-list { background: #fff; border-radius: 16rpx; padding: 16rpx 24rpx; }
-.cat-row { display: flex; align-items: center; gap: 16rpx; padding: 20rpx 0; border-bottom: 1rpx solid #f5f5f5; }
+.stat-item { flex: 1; background: var(--hai-card); border-radius: 24rpx; padding: 30rpx; text-align: center; box-shadow: var(--hai-shadow); }
+.s-label { font-size: 22rpx; color: var(--hai-text-muted); }
+.s-value { font-size: 36rpx; font-weight: 700; display: block; margin-top: 8rpx; color: var(--hai-text); }
+.red { color: var(--hai-danger); }
+.green { color: var(--hai-success); }
+.section-title { font-size: 28rpx; font-weight: 600; margin-bottom: 16rpx; padding: 0 8rpx; color: var(--hai-text); }
+.cat-list { background: var(--hai-card); border-radius: 28rpx; padding: 16rpx 24rpx; box-shadow: var(--hai-shadow); }
+.cat-row { display: flex; align-items: center; gap: 16rpx; padding: 20rpx 0; border-bottom: 1rpx solid var(--hai-border); }
 .cat-row:last-child { border-bottom: none; }
 .cat-icon { font-size: 32rpx; width: 40rpx; }
 .cat-bar-wrap { flex: 1; }
-.cat-name { font-size: 24rpx; color: #666; display: block; margin-bottom: 8rpx; }
-.cat-bar-bg { height: 12rpx; background: #f0f0f0; border-radius: 6rpx; overflow: hidden; }
-.cat-bar { height: 100%; background: #667eea; border-radius: 6rpx; }
-.cat-amt { font-size: 26rpx; font-weight: 600; color: #333; min-width: 120rpx; text-align: right; }
+.cat-name { font-size: 24rpx; color: var(--hai-text-secondary); display: block; margin-bottom: 8rpx; }
+.cat-bar-bg { height: 12rpx; background: var(--hai-border); border-radius: 6rpx; overflow: hidden; }
+.cat-bar { height: 100%; background: var(--hai-primary); border-radius: 6rpx; }
+.cat-amt { font-size: 26rpx; font-weight: 600; color: var(--hai-text); min-width: 120rpx; text-align: right; }
 </style>

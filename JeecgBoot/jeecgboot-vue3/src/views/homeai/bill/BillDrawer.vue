@@ -1,7 +1,6 @@
 <template>
   <BasicDrawer v-bind="$attrs" @register="registerDrawer" :title="isUpdate ? '编辑账单' : '新增账单'" width="40%">
     <BasicForm @register="registerForm" @submit="handleSubmit" />
-    <!-- 底部按钮 -->
     <template #footer>
       <a-button type="primary" @click="submit">保存</a-button>
       <a-button style="margin-left: 8px" @click="closeDrawer()">取消</a-button>
@@ -20,8 +19,23 @@
   const { createMessage } = useMessage();
   const isUpdate = ref(false);
   const recordId = ref('');
+  const categoryOptions = ref<{ label: string; value: string }[]>([]);
 
-  const [registerDrawer, { closeDrawer }] = useDrawerInner((data) => {
+  async function loadCategories() {
+    try {
+      const res: any = await billApi.categoryList({ pageNo: 1, pageSize: 200 });
+      const records = res?.records || res || [];
+      categoryOptions.value = (records as any[]).map((c) => ({
+        label: c.name || c.categoryName || c.id,
+        value: c.id,
+      }));
+    } catch {
+      categoryOptions.value = [];
+    }
+  }
+
+  const [registerDrawer, { closeDrawer }] = useDrawerInner(async (data) => {
+    await loadCategories();
     isUpdate.value = data.isUpdate || false;
     recordId.value = data.record?.id || '';
     if (isUpdate.value && data.record) {
@@ -49,7 +63,19 @@
         defaultValue: 'expense',
       },
       { field: 'amount', label: '金额', component: 'InputNumber', required: true },
-      { field: 'categoryId', label: '分类ID', component: 'Input' },
+      {
+        field: 'categoryId',
+        label: '分类',
+        component: 'Select',
+        required: true,
+        componentProps: {
+          options: categoryOptions,
+          allowClear: true,
+          showSearch: true,
+          optionFilterProp: 'label',
+          placeholder: '请选择分类',
+        },
+      },
       {
         field: 'paymentMethod',
         label: '支付方式',

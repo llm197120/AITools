@@ -41,7 +41,10 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
     /** 完全公开的接口（无需任何 token） */
     private static final List<String> PUBLIC_PATHS = Arrays.asList(
             "/homeai/user/login",
-            "/homeai/user/refresh-token"
+            "/homeai/user/refresh-token",
+            //update-begin---author:admin ---date:2026-08-12 for：【HomeAI】订阅模板公开配置-----------
+            "/homeai/config/wechat-public"
+            //update-end---author:admin ---date:2026-08-12 for：【HomeAI】订阅模板公开配置-----------
     );
 
     private static final List<String> ADMIN_PREFIXES = Arrays.asList(
@@ -84,6 +87,7 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
             "/homeai/plan/admin/completion",
             "/homeai/plan/admin/calendar",
             "/homeai/plan/admin/date",
+            "/homeai/dashboard/plan-learn",
             "/homeai/recipe/add",
             "/homeai/recipe/exportXls",
             "/homeai/recipe/importExcel",
@@ -101,11 +105,20 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
             "/homeai/learn/deletePermanently",
             "/homeai/learn/upload",
             "/homeai/learn/category/list",
+            //update-begin---author:copilot ---date:2026-08-12 for：【第15轮】学习按分类统计-----------
+            "/homeai/learn/admin",
+            //update-end---author:copilot ---date:2026-08-12 for：【第15轮】学习按分类统计-----------
             "/homeai/ai/key-config",
             "/homeai/ai/conversations/list",
             "/homeai/storage/folder-list",
             "/homeai/storage/file-list",
-            "/homeai/storage/office/list"
+            "/homeai/storage/office/list",
+            //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22】资料回收站与审计管理端入口-----------
+            "/homeai/storage/recycleBin",
+            "/homeai/storage/restore",
+            "/homeai/storage/deletePermanently",
+            "/homeai/audit"
+            //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】资料回收站与审计管理端入口-----------
     );
 
     @Lazy
@@ -251,6 +264,16 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
         }
         if (path.equals("/homeai/learn/category") && ("POST".equals(m) || "PUT".equals(m))) return true;
         if (path.equals("/homeai/config/file-whitelist") && "PUT".equals(m)) return true;
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】存储配额配置管理端-----------
+        if (path.equals("/homeai/config/storage") && ("PUT".equals(m) || "GET".equals(m))) return true;
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R30】家庭级配额覆盖管理端-----------
+        if (path.startsWith("/homeai/config/storage/family/")) return true;
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R30】家庭级配额覆盖管理端-----------
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R31】学习提醒模板联调管理端-----------
+        if (path.equals("/homeai/config/wechat-learn-remind") && "GET".equals(m)) return true;
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R31】学习提醒模板联调管理端-----------
+        if (path.equals("/homeai/config/plan") && ("PUT".equals(m) || "GET".equals(m))) return true;
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】存储配额配置管理端-----------
         return false;
     }
 

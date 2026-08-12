@@ -209,7 +209,7 @@ export const usePermissionStore = defineStore('app-permission', {
         // 后台菜单构建
         case PermissionModeEnum.BACK:
           const { createMessage, createWarningModal } = useMessage();
-          console.log(" --- 构建后台路由菜单 --- ")
+          if (import.meta.env.DEV) console.log(' --- 构建后台路由菜单 --- ');
           // 菜单加载提示
           // createMessage.loading({
           //   content: t('sys.app.menuLoading'),
@@ -257,6 +257,8 @@ export const usePermissionStore = defineStore('app-permission', {
             // }
           } catch (error) {
             console.error(error);
+            // 菜单/权限加载失败时给用户可见反馈，避免仅控制台静默失败
+            createMessage.error('菜单加载失败，请刷新重试');
           }
           // 组件地址前加斜杠处理  author: lsq date:2021-09-08
           routeList = addSlashToRouteComponent(routeList);

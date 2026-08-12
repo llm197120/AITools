@@ -402,6 +402,23 @@ homeai:
     # 私有 Bucket 时使用预签名 URL 访问（默认 2 小时有效）
     private-bucket: true
     presign-expire-seconds: 7200
+  #update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R31】微信订阅消息-----------
+  wechat:
+    appid: ""
+    secret: ""
+    plan-remind-template-id: ""
+    learn-remind-template-id: ""
+    # 与微信后台订阅消息关键词对齐（字段名置空则跳过该项）
+    # 推荐模板形态：thing1 提醒事项 / number2 已学分钟 / number3 目标分钟 / time4 日期
+    learn-remind-title-field: thing1
+    learn-remind-progress-field: number2
+    learn-remind-goal-field: number3
+    learn-remind-date-field: time4
+    learn-remind-title-text: 每日学习目标
+  learn:
+    remind-enabled: true
+    remind-cron: "0 0 20 * * ?"
+  #update-end---author:admin ---date:2026-08-12 for：【HomeAI-R31】微信订阅消息-----------
 #cas单点登录
 cas:
   prefixUrl: http://cas.example.org:8443/cas

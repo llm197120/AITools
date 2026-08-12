@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <a-alert
       type="info"
       show-icon
@@ -28,10 +28,11 @@
         </a-form-item>
       </a-form>
     </a-card>
-  </div>
+  </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-plan-config" setup>
+  import { PageWrapper } from '/@/components/Page';
   import { onMounted, reactive, ref } from 'vue';
   import { configApi } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';

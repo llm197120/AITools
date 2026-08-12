@@ -2,12 +2,18 @@ package org.jeecg.modules.homeai.storage.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
+import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileWhitelistService;
+import org.jeecg.modules.homeai.config.service.IHomeaiStorageConfigService;
+import org.jeecg.modules.homeai.family.entity.FamilyMember;
+import org.jeecg.modules.homeai.family.service.IFamilyMemberService;
 import org.jeecg.modules.homeai.storage.constant.StorageVisibility;
 import org.jeecg.modules.homeai.storage.util.StorageFileNameUtil;
 import org.jeecg.modules.homeai.storage.util.StorageVisibilityQueryUtil;
@@ -19,14 +25,40 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.ImageType;
+import org.apache.pdfbox.rendering.PDFRenderer;
+
+import javax.imageio.ImageIO;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.util.*;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, StorageFile>
         implements IStorageFileService {
 
+    /** 第 21 轮缩略图 POC：仅常见位图；webp 等无 ImageIO 插件时自动跳过 */
+    private static final Set<String> THUMB_IMAGE_EXTS = Set.of("jpg", "jpeg", "png", "gif", "bmp");
+    private static final int THUMB_MAX_EDGE = 200;
 
     @Autowired
     private IHomeaiFileWhitelistService whitelistService;
@@ -37,33 +69,47 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
     @Autowired
     private IStorageResourceFamilyService resourceFamilyService;
 
+    @Autowired
+    private IHomeaiStorageConfigService storageConfigService;
+
+    @Autowired
+    private IFamilyMemberService familyMemberService;
+
     @Override
     public List<StorageFile> getFilesByFolder(String folderId) {
-        LambdaQueryWrapper<StorageFile> query = new LambdaQueryWrapper<>();
-        query.eq(StorageFile::getFolderId, folderId)
-                .eq(StorageFile::getDelFlag, 0)
-                .orderByDesc(StorageFile::getCreateTime);
-        return list(query);
+        return list(folderFilesQuery(folderId));
     }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R21】资料列表分页-----------
+    @Override
+    public IPage<StorageFile> pageFilesByFolder(Page<StorageFile> page, String folderId) {
+        return page(page, folderFilesQuery(folderId));
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R21】资料列表分页-----------
 
     @Override
     public List<StorageFile> getRootFiles(String userId, String familyId) {
-        LambdaQueryWrapper<StorageFile> query = new LambdaQueryWrapper<>();
-        query.eq(StorageFile::getDelFlag, 0)
-                .and(w -> w.isNull(StorageFile::getFolderId).or().eq(StorageFile::getFolderId, ""));
-        StorageVisibilityQueryUtil.applyReadableFileFilter(query, userId, familyId);
-        query.orderByDesc(StorageFile::getCreateTime);
-        return list(query);
+        return list(rootFilesQuery(userId, familyId));
     }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R21】资料列表分页-----------
+    @Override
+    public IPage<StorageFile> pageRootFiles(Page<StorageFile> page, String userId, String familyId) {
+        return page(page, rootFilesQuery(userId, familyId));
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R21】资料列表分页-----------
 
     @Override
     public List<StorageFile> getAllRootFiles() {
-        LambdaQueryWrapper<StorageFile> query = new LambdaQueryWrapper<>();
-        query.eq(StorageFile::getDelFlag, 0)
-                .and(w -> w.isNull(StorageFile::getFolderId).or().eq(StorageFile::getFolderId, ""))
-                .orderByDesc(StorageFile::getCreateTime);
-        return list(query);
+        return list(allRootFilesQuery());
     }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R21】资料列表分页-----------
+    @Override
+    public IPage<StorageFile> pageAllRootFiles(Page<StorageFile> page) {
+        return page(page, allRootFilesQuery());
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R21】资料列表分页-----------
 
     @Override
     public StorageFile uploadFile(String userId, String familyId, String folderId,
@@ -78,6 +124,34 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
         } catch (IOException e) {
             throw new RuntimeException(e.getMessage(), e);
         }
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】上传前用户空间配额校验-----------
+        long incoming = file.getSize() > 0 ? file.getSize() : 0L;
+        long used = sumUsedBytesByUser(userId);
+        long limit = storageConfigService.getDefaultUserLimitBytes();
+        if (used + incoming > limit) {
+            throw new JeecgBootException("存储空间不足：已用 "
+                    + formatBytes(used) + " / 上限 " + formatBytes(limit)
+                    + "，本次还需 " + formatBytes(incoming));
+        }
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】上传前用户空间配额校验-----------
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R28】上传前家庭空间配额校验-----------
+        String checkFamilyId = familyId;
+        if (oConvertUtils.isEmpty(checkFamilyId)) {
+            FamilyMember member = familyMemberService.getByUserId(userId);
+            checkFamilyId = member != null ? member.getFamilyId() : null;
+        }
+        if (oConvertUtils.isNotEmpty(checkFamilyId)) {
+            long familyUsed = sumUsedBytesByFamily(checkFamilyId);
+            //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R30】家庭级配额覆盖-----------
+            long familyLimit = storageConfigService.getFamilyLimitBytes(checkFamilyId);
+            //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R30】家庭级配额覆盖-----------
+            if (familyUsed + incoming > familyLimit) {
+                throw new JeecgBootException("家庭存储空间不足：已用 "
+                        + formatBytes(familyUsed) + " / 上限 " + formatBytes(familyLimit)
+                        + "，本次还需 " + formatBytes(incoming));
+            }
+        }
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R28】上传前家庭空间配额校验-----------
         // storedName：OSS/磁盘实际文件名（UUID），与 originalName 分字段存储
         String storedName = UUID.randomUUID().toString().replace("-", "") + (ext.isEmpty() ? "" : "." + ext);
         String objectKey = StorageFileNameUtil.buildObjectKey(userId, storedName);
@@ -98,9 +172,137 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
         sf.setDownloadCount(0);
         sf.setCreateTime(new Date());
         sf.setUpdateTime(new Date());
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R21/R22】上传生成缩略图（图片/PDF）-----------
+        tryGenerateImageThumbnail(sf, file, userId);
+        tryGeneratePdfThumbnail(sf, file, userId);
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R21/R22】上传生成缩略图（图片/PDF）-----------
         save(sf);
         return sf;
     }
+
+    private LambdaQueryWrapper<StorageFile> folderFilesQuery(String folderId) {
+        LambdaQueryWrapper<StorageFile> query = new LambdaQueryWrapper<>();
+        query.eq(StorageFile::getFolderId, folderId)
+                .eq(StorageFile::getDelFlag, 0)
+                .orderByDesc(StorageFile::getCreateTime);
+        return query;
+    }
+
+    private LambdaQueryWrapper<StorageFile> rootFilesQuery(String userId, String familyId) {
+        LambdaQueryWrapper<StorageFile> query = new LambdaQueryWrapper<>();
+        query.eq(StorageFile::getDelFlag, 0)
+                .and(w -> w.isNull(StorageFile::getFolderId).or().eq(StorageFile::getFolderId, ""));
+        StorageVisibilityQueryUtil.applyReadableFileFilter(query, userId, familyId);
+        query.orderByDesc(StorageFile::getCreateTime);
+        return query;
+    }
+
+    private LambdaQueryWrapper<StorageFile> allRootFilesQuery() {
+        LambdaQueryWrapper<StorageFile> query = new LambdaQueryWrapper<>();
+        query.eq(StorageFile::getDelFlag, 0)
+                .and(w -> w.isNull(StorageFile::getFolderId).or().eq(StorageFile::getFolderId, ""))
+                .orderByDesc(StorageFile::getCreateTime);
+        return query;
+    }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R21】图片上传生成缩略图-----------
+    private void tryGenerateImageThumbnail(StorageFile sf, MultipartFile file, String userId) {
+        String ext = sf.getExtension() == null ? "" : sf.getExtension().toLowerCase(Locale.ROOT);
+        if (!THUMB_IMAGE_EXTS.contains(ext)) {
+            return;
+        }
+        Path temp = null;
+        try {
+            BufferedImage src = ImageIO.read(file.getInputStream());
+            if (src == null) {
+                return;
+            }
+            int w = src.getWidth();
+            int h = src.getHeight();
+            if (w <= 0 || h <= 0) {
+                return;
+            }
+            double scale = Math.min(1.0, (double) THUMB_MAX_EDGE / Math.max(w, h));
+            int tw = Math.max(1, (int) Math.round(w * scale));
+            int th = Math.max(1, (int) Math.round(h * scale));
+            BufferedImage thumb = new BufferedImage(tw, th, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = thumb.createGraphics();
+            try {
+                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                g.setColor(Color.WHITE);
+                g.fillRect(0, 0, tw, th);
+                g.drawImage(src, 0, 0, tw, th, null);
+            } finally {
+                g.dispose();
+            }
+            temp = Files.createTempFile("homeai-thumb-", ".jpg");
+            if (!ImageIO.write(thumb, "jpg", temp.toFile())) {
+                return;
+            }
+            String thumbStored = "thumb_" + UUID.randomUUID().toString().replace("-", "") + ".jpg";
+            String thumbKey = StorageFileNameUtil.buildObjectKey(userId, thumbStored);
+            sf.setThumbnailUrl(fileStorageService.storeLocalFile(temp, thumbKey));
+        } catch (Exception e) {
+            log.warn("图片缩略图生成失败，已跳过: name={}, err={}", sf.getOriginalName(), e.getMessage());
+        } finally {
+            if (temp != null) {
+                try {
+                    Files.deleteIfExists(temp);
+                } catch (IOException ignored) {
+                    // ignore
+                }
+            }
+        }
+    }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22】PDF 首帧缩略图-----------
+    private void tryGeneratePdfThumbnail(StorageFile sf, MultipartFile file, String userId) {
+        String ext = sf.getExtension() == null ? "" : sf.getExtension().toLowerCase(Locale.ROOT);
+        if (!"pdf".equals(ext) || oConvertUtils.isNotEmpty(sf.getThumbnailUrl())) {
+            return;
+        }
+        Path temp = null;
+        try (InputStream in = file.getInputStream(); PDDocument doc = PDDocument.load(in)) {
+            if (doc.getNumberOfPages() < 1) {
+                return;
+            }
+            PDFRenderer renderer = new PDFRenderer(doc);
+            BufferedImage src = renderer.renderImageWithDPI(0, 72, ImageType.RGB);
+            int w = src.getWidth();
+            int h = src.getHeight();
+            double scale = Math.min(1.0, (double) THUMB_MAX_EDGE / Math.max(w, h));
+            int tw = Math.max(1, (int) Math.round(w * scale));
+            int th = Math.max(1, (int) Math.round(h * scale));
+            BufferedImage thumb = new BufferedImage(tw, th, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = thumb.createGraphics();
+            try {
+                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                g.setColor(Color.WHITE);
+                g.fillRect(0, 0, tw, th);
+                g.drawImage(src, 0, 0, tw, th, null);
+            } finally {
+                g.dispose();
+            }
+            temp = Files.createTempFile("homeai-pdf-thumb-", ".jpg");
+            if (!ImageIO.write(thumb, "jpg", temp.toFile())) {
+                return;
+            }
+            String thumbStored = "thumb_" + UUID.randomUUID().toString().replace("-", "") + ".jpg";
+            String thumbKey = StorageFileNameUtil.buildObjectKey(userId, thumbStored);
+            sf.setThumbnailUrl(fileStorageService.storeLocalFile(temp, thumbKey));
+        } catch (Exception e) {
+            log.warn("PDF 缩略图生成失败，已跳过: name={}, err={}", sf.getOriginalName(), e.getMessage());
+        } finally {
+            if (temp != null) {
+                try {
+                    Files.deleteIfExists(temp);
+                } catch (IOException ignored) {
+                    // ignore
+                }
+            }
+        }
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】PDF 首帧缩略图-----------
 
     /** 优先使用客户端传入的原始文件名；storedName 单独生成，二者分字段落库 */
     private String resolveOriginalName(MultipartFile file, String fileName) {
@@ -120,11 +322,12 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
 
     @Override
     public void softDelete(String id) {
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22】软删保留家庭关联以便恢复-----------
         update(new LambdaUpdateWrapper<StorageFile>()
                 .eq(StorageFile::getId, id)
                 .set(StorageFile::getDelFlag, 1)
                 .set(StorageFile::getDeletedAt, new Date()));
-        resourceFamilyService.deleteByFileId(id);
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】软删保留家庭关联以便恢复-----------
     }
 
     @Override
@@ -132,18 +335,139 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
         if (oConvertUtils.isEmpty(folderId)) {
             return;
         }
-        List<StorageFile> files = list(new LambdaQueryWrapper<StorageFile>()
-                .eq(StorageFile::getFolderId, folderId)
-                .eq(StorageFile::getDelFlag, 0));
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22】软删保留家庭关联以便恢复-----------
         update(new LambdaUpdateWrapper<StorageFile>()
                 .eq(StorageFile::getFolderId, folderId)
                 .eq(StorageFile::getDelFlag, 0)
                 .set(StorageFile::getDelFlag, 1)
                 .set(StorageFile::getDeletedAt, new Date()));
-        for (StorageFile file : files) {
-            resourceFamilyService.deleteByFileId(file.getId());
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】软删保留家庭关联以便恢复-----------
+    }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22】资料文件回收站-----------
+    @Override
+    public IPage<StorageFile> pageRecycleBin(Page<StorageFile> page, String keyword) {
+        return baseMapper.selectRecycleBinPage(page, keyword);
+    }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R24】用户侧回收站-----------
+    @Override
+    public IPage<StorageFile> pageMyRecycleBin(Page<StorageFile> page, String userId, String keyword) {
+        return baseMapper.selectMyRecycleBinPage(page, userId, keyword);
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R24】用户侧回收站-----------
+
+    @Override
+    public void restoreFiles(Collection<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        for (String id : ids) {
+            if (oConvertUtils.isEmpty(id)) {
+                continue;
+            }
+            baseMapper.restoreById(id);
         }
     }
+
+    @Override
+    public void deletePermanently(Collection<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        for (String id : ids) {
+            if (oConvertUtils.isEmpty(id)) {
+                continue;
+            }
+            StorageFile sf = getById(id);
+            if (sf == null) {
+                // 无 TableLogic 时 getById 可读到已软删行；若仍为空则用原生条件再查一次
+                sf = getOne(new LambdaQueryWrapper<StorageFile>().eq(StorageFile::getId, id).last("LIMIT 1"), false);
+            }
+            if (sf != null) {
+                try {
+                    fileStorageService.deleteIfExists(sf.getFileUrl());
+                } catch (Exception e) {
+                    log.warn("彻底删除存储对象失败: id={}, err={}", id, e.getMessage());
+                }
+                try {
+                    fileStorageService.deleteIfExists(sf.getThumbnailUrl());
+                } catch (Exception e) {
+                    log.warn("彻底删除缩略图失败: id={}, err={}", id, e.getMessage());
+                }
+            }
+            resourceFamilyService.deleteByFileId(id);
+        }
+        baseMapper.deletePermanentlyByIds(ids);
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】资料文件回收站-----------
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】用户存储用量-----------
+    @Override
+    public long sumUsedBytesByUser(String userId) {
+        if (oConvertUtils.isEmpty(userId)) {
+            return 0L;
+        }
+        List<StorageFile> files = list(new LambdaQueryWrapper<StorageFile>()
+                .eq(StorageFile::getUserId, userId)
+                .eq(StorageFile::getDelFlag, 0)
+                .select(StorageFile::getFileSize));
+        long sum = 0L;
+        for (StorageFile f : files) {
+            if (f.getFileSize() != null) {
+                sum += f.getFileSize();
+            }
+        }
+        return sum;
+    }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R28】家庭存储用量-----------
+    @Override
+    public long sumUsedBytesByFamily(String familyId) {
+        if (oConvertUtils.isEmpty(familyId)) {
+            return 0L;
+        }
+        List<FamilyMember> members = familyMemberService.getByFamilyId(familyId);
+        if (members == null || members.isEmpty()) {
+            return 0L;
+        }
+        List<String> userIds = members.stream()
+                .map(FamilyMember::getUserId)
+                .filter(oConvertUtils::isNotEmpty)
+                .distinct()
+                .collect(Collectors.toList());
+        if (userIds.isEmpty()) {
+            return 0L;
+        }
+        List<StorageFile> files = list(new LambdaQueryWrapper<StorageFile>()
+                .in(StorageFile::getUserId, userIds)
+                .eq(StorageFile::getDelFlag, 0)
+                .select(StorageFile::getFileSize));
+        long sum = 0L;
+        for (StorageFile f : files) {
+            if (f.getFileSize() != null) {
+                sum += f.getFileSize();
+            }
+        }
+        return sum;
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R28】家庭存储用量-----------
+
+    private static String formatBytes(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        }
+        double kb = bytes / 1024.0;
+        if (kb < 1024) {
+            return String.format(Locale.ROOT, "%.1f KB", kb);
+        }
+        double mb = kb / 1024.0;
+        if (mb < 1024) {
+            return String.format(Locale.ROOT, "%.1f MB", mb);
+        }
+        return String.format(Locale.ROOT, "%.2f GB", mb / 1024.0);
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】用户存储用量-----------
 
     @Override
     public void toggleFavorite(String id) {

@@ -24,7 +24,9 @@ public class HomeaiAuditLogController {
 
     @GetMapping("/logs")
     @Operation(summary = "审计日志-分页查询(管理端)")
-    @RequiresPermissions("homeai:plan:list")
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22】审计独立权限码-----------
+    @RequiresPermissions("homeai:audit:list")
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】审计独立权限码-----------
     public Result<?> logs(@RequestParam(required = false) String module,
                           @RequestParam(required = false) String actionType,
                           @RequestParam(defaultValue = "1") int pageNo,

@@ -1,31 +1,44 @@
-﻿<route lang="json5">
-{ style: { navigationBarTitleText: '菜谱详情' } }
+<route lang="json5">
+{ style: { navigationBarTitleText: '菜谱详情', navigationBarBackgroundColor: '#F3F2EE' } }
 </route>
 
 <template>
-  <view class="page">
+  <view class="hai-page hai-page--flush">
     <image class="cover" :src="recipe.coverUrl || '/static/default-food.png'" mode="aspectFill"/>
-    <view class="header-info">
+    <view class="header-info hai-card">
       <text class="name">{{ recipe.name }}</text>
-      <text class="meta">{{ diffLabel(recipe.difficulty) }} · {{ recipe.cookTime }}分钟 · {{ recipe.servings }}人份</text>
+      <text class="meta">{{ diffLabel(recipe.difficulty) }} · {{ recipe.cookTime }}分钟 · {{ recipe.servings }}人份 · {{ visibilityLabel(recipe.visibility) }} · {{ recipe.viewCount || 0 }}次浏览</text>
       <view class="header-actions">
-        <text class="fav-btn" @click="toggleFavorite">{{ isFavorited ? '❤️ 已收藏' : '🤍 收藏' }}</text>
-        <text class="edit-btn" @click="goEdit" v-if="canEdit">✏️ 编辑</text>
-        <text class="copy-btn" @click="copyIngredients" v-if="ingredients.length > 0">📋 复制食材</text>
+        <view class="act" :class="{ danger: isFavorited }" @click="toggleFavorite">
+          <wd-icon name="heart" size="16px" :color="isFavorited ? '#C45C4A' : '#1B4F8A'" />
+          <text>{{ isFavorited ? '已收藏' : '收藏' }}</text>
+        </view>
+        <view class="act" @click="goEdit" v-if="canEdit">
+          <wd-icon name="edit" size="16px" color="#1B4F8A" />
+          <text>编辑</text>
+        </view>
+        <view class="act" @click="copyIngredients" v-if="ingredients.length > 0">
+          <wd-icon name="file-copy" size="16px" color="#1B4F8A" />
+          <text>复制食材</text>
+        </view>
       </view>
     </view>
-    <view v-if="recipe.videoUrl" class="video-section">
+    <view v-if="recipe.videoUrl" class="video-section hai-card">
       <video class="video" :src="recipe.videoUrl" controls></video>
     </view>
-    <view class="section"><text class="section-title">食材清单</text></view>
-    <view class="ingredient" v-for="i in ingredients" :key="i.id"><text>{{ i.name }}</text><text>{{ i.amount }}</text></view>
-    <view class="section"><text class="section-title">烹饪步骤</text></view>
-    <view class="step" v-for="s in steps" :key="s.id">
-      <text class="step-num">{{ s.stepNum }}</text>
-      <view><image v-if="s.imageUrl" :src="s.imageUrl" mode="aspectFill" class="step-img"/><text>{{ s.description }}</text></view>
+    <view class="section-head"><text class="hai-section-title">食材清单</text></view>
+    <view class="list-card hai-card">
+      <view class="ingredient" v-for="i in ingredients" :key="i.id"><text>{{ i.name }}</text><text class="amt">{{ i.amount }}</text></view>
     </view>
-    <view v-if="recipe.tips" class="section">
-      <text class="section-title">小贴士</text>
+    <view class="section-head"><text class="hai-section-title">烹饪步骤</text></view>
+    <view class="list-card hai-card">
+      <view class="step" v-for="s in steps" :key="s.id">
+        <text class="step-num">{{ s.stepNum }}</text>
+        <view class="step-body"><image v-if="s.imageUrl" :src="s.imageUrl" mode="aspectFill" class="step-img"/><text>{{ s.description }}</text></view>
+      </view>
+    </view>
+    <view v-if="recipe.tips" class="tips-card hai-card">
+      <text class="hai-section-title">小贴士</text>
       <text class="tips-text">{{ recipe.tips }}</text>
     </view>
   </view>
@@ -36,6 +49,7 @@ import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi } from '../../pages-homeai/api/request'
 import { useUserStore } from '../../pages-homeai/stores/user'
+import { formatQuantityUnit } from '../../pages-homeai/utils/recipeIngredient'
 const recipe = ref<any>({})
 const ingredients = ref<any[]>([])
 const steps = ref<any[]>([])
@@ -47,11 +61,19 @@ function diffLabel(d: any) {
   const map: Record<number, string> = { 1: '简单', 2: '简单', 3: '中等', 4: '中等', 5: '困难' }
   return map[Number(d)] || '中等'
 }
+function visibilityLabel(v?: string) {
+  if (v === 'public') return '公开'
+  if (v === 'family') return '家庭共享'
+  return '仅自己'
+}
 onLoad(async (opts:any) => {
   recipeId.value = opts.id
   const res = await getApi(`/recipe/${opts.id}`)
   recipe.value = res.recipe
-  ingredients.value = res.ingredients || []
+  ingredients.value = (res.ingredients || []).map((x: any) => ({
+    ...x,
+    amount: formatQuantityUnit(x.quantity, x.unit, x.amount),
+  }))
   steps.value = res.steps || []
   isFavorited.value = !!res.isFavorited
   canEdit.value = !!res.recipe && res.recipe.userId === userStore.userInfo?.id
@@ -68,7 +90,9 @@ function goEdit() {
 }
 
 function copyIngredients() {
-  const text = ingredients.value.map((x: any) => `${x.name} ${x.amount || ''}`.trim()).join('\n')
+  const text = ingredients.value
+    .map((x: any) => `${x.name} ${formatQuantityUnit(x.quantity, x.unit, x.amount)}`.trim())
+    .join('\n')
   uni.setClipboardData({
     data: text,
     success: () => uni.showToast({ title: '食材已复制', icon: 'success' }),
@@ -77,18 +101,115 @@ function copyIngredients() {
 </script>
 
 <style scoped>
-.page{min-height:100vh;background:#f5f5f5}
-.cover{width:100%;height:400rpx}
-.header-info{padding:24rpx;background:#fff}.name{font-size:36rpx;font-weight:700}.meta{font-size:24rpx;color:#999;margin-top:8rpx}
-.header-actions{display:flex;gap:20rpx;margin-top:12rpx;flex-wrap:wrap}
-.fav-btn{font-size:26rpx;color:#e74c3c}
-.edit-btn{font-size:26rpx;color:#667eea}.copy-btn{font-size:26rpx;color:#667eea}
-.video-section{padding:20rpx 24rpx;background:#fff;margin-top:2rpx}
-.video{width:100%;height:400rpx;border-radius:12rpx}
-.section{padding:24rpx 24rpx 12rpx}.section-title{font-size:28rpx;font-weight:600;color:#333}
-.ingredient{display:flex;justify-content:space-between;padding:16rpx 24rpx;background:#fff;border-bottom:1rpx solid #f0f0f0;font-size:28rpx}
-.step{display:flex;gap:16rpx;padding:20rpx 24rpx;background:#fff;margin-bottom:2rpx}
-.step-num{width:48rpx;height:48rpx;line-height:48rpx;text-align:center;background:#faad14;color:#fff;border-radius:50%;font-size:24rpx;flex-shrink:0}
-.step-img{width:100%;height:200rpx;border-radius:8rpx;margin-bottom:8rpx}
-.tips-text{font-size:26rpx;color:#666;padding:16rpx 24rpx;background:#fff;border-radius:12rpx}
+.hai-page--flush { padding-bottom: 48rpx; padding-top: 0; }
+.cover { width: 100%; height: 400rpx; }
+.header-info {
+  margin: -32rpx 32rpx 20rpx;
+  padding: 28rpx 28rpx 24rpx;
+  position: relative;
+  z-index: 1;
+}
+.name {
+  font-family: var(--hai-serif);
+  font-size: 40rpx;
+  font-weight: 700;
+  color: var(--hai-text);
+  display: block;
+}
+.meta {
+  font-size: 24rpx;
+  color: var(--hai-text-muted);
+  margin-top: 8rpx;
+  display: block;
+}
+.header-actions {
+  display: flex;
+  gap: 24rpx;
+  margin-top: 20rpx;
+  flex-wrap: wrap;
+}
+.act {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 26rpx;
+  color: var(--hai-primary);
+}
+.act.danger {
+  color: var(--hai-danger);
+}
+.video-section {
+  margin: 0 32rpx 20rpx;
+  padding: 16rpx;
+  overflow: hidden;
+}
+.video {
+  width: 100%;
+  height: 360rpx;
+  border-radius: var(--hai-radius-md);
+}
+.section-head {
+  padding: 8rpx 40rpx 16rpx;
+}
+.list-card {
+  margin: 0 32rpx 24rpx;
+  overflow: hidden;
+}
+.ingredient {
+  display: flex;
+  justify-content: space-between;
+  padding: 22rpx 28rpx;
+  border-bottom: 1rpx solid var(--hai-border);
+  font-size: 28rpx;
+  color: var(--hai-text);
+}
+.ingredient:last-child {
+  border-bottom: none;
+}
+.amt {
+  color: var(--hai-text-secondary);
+}
+.step {
+  display: flex;
+  gap: 16rpx;
+  padding: 22rpx 28rpx;
+  border-bottom: 1rpx solid var(--hai-border);
+}
+.step:last-child {
+  border-bottom: none;
+}
+.step-num {
+  width: 48rpx;
+  height: 48rpx;
+  line-height: 48rpx;
+  text-align: center;
+  background: var(--hai-primary);
+  color: var(--hai-on-primary);
+  border-radius: 50%;
+  font-size: 24rpx;
+  flex-shrink: 0;
+}
+.step-body {
+  flex: 1;
+  font-size: 28rpx;
+  color: var(--hai-text);
+  line-height: 1.5;
+}
+.step-img {
+  width: 100%;
+  height: 200rpx;
+  border-radius: 12rpx;
+  margin-bottom: 8rpx;
+}
+.tips-card {
+  margin: 0 32rpx 32rpx;
+  padding: 24rpx 28rpx;
+}
+.tips-text {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: var(--hai-text-secondary);
+  line-height: 1.5;
+}
 </style>

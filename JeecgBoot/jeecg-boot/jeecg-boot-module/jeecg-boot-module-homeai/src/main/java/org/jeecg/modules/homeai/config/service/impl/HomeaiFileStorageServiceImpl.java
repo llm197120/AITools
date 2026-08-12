@@ -148,9 +148,17 @@ public class HomeaiFileStorageServiceImpl implements IHomeaiFileStorageService {
 
     @Override
     public void applyAccessUrl(StorageFile file) {
-        if (file != null && oConvertUtils.isNotEmpty(file.getFileUrl())) {
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R21】缩略图 URL 同步签名/解析-----------
+        if (file == null) {
+            return;
+        }
+        if (oConvertUtils.isNotEmpty(file.getFileUrl())) {
             file.setFileUrl(resolveAccessUrl(file.getFileUrl()));
         }
+        if (oConvertUtils.isNotEmpty(file.getThumbnailUrl())) {
+            file.setThumbnailUrl(resolveAccessUrl(file.getThumbnailUrl()));
+        }
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R21】缩略图 URL 同步签名/解析-----------
     }
 
     @Override

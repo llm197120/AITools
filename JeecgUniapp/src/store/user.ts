@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useUserStore as useHomeaiUserStore } from '@/pages-homeai/stores/user'
 
 const initState = {
   token: '',
@@ -12,45 +13,77 @@ const initState = {
   phone: '',
   email: '',
   sex: 1,
-  birthday:'',
-  loginTenantId:0,
+  birthday: '',
+  loginTenantId: 0,
   // 本地存储时间
   localStorageTime: 0,
   // 组织编码名称
   orgCodeTxt: '',
 }
 
+/** 读取 HomeAI token，避免 Pinia 未就绪时抛错 */
+function getHomeaiToken(): string {
+  try {
+    return useHomeaiUserStore().token || uni.getStorageSync('homeai_token') || ''
+  } catch {
+    return uni.getStorageSync('homeai_token') || ''
+  }
+}
+
+/**
+ * Jeecg 遗留 user store：token / isLogined 代理到 HomeAI store，
+ * 避免 router、http、request 等仍读 @/store/user 时鉴权状态不一致。
+ */
 export const useUserStore = defineStore(
   'user',
   () => {
-    const userInfo = ref<IUserInfo>({ ...initState })
-    const setUserInfo = (val: IUserInfo) => {
-      if(val?.loginTenantId){
-        val.tenantId = val.loginTenantId;
+    // 仅此 ref 参与持久化；对外 userInfo 为带 HomeAI token 的计算属性
+    const userInfoRaw = ref<IUserInfo>({ ...initState })
+
+    /** 对外 userInfo：token 优先取 HomeAI */
+    const userInfo = computed(() => {
+      const homeaiToken = getHomeaiToken()
+      if (homeaiToken) {
+        return { ...userInfoRaw.value, token: homeaiToken }
       }
-      userInfo.value = val
+      return userInfoRaw.value
+    })
+
+    const setUserInfo = (val: IUserInfo) => {
+      if (val?.loginTenantId) {
+        val.tenantId = val.loginTenantId
+      }
+      userInfoRaw.value = val
     }
     const clearUserInfo = () => {
-      userInfo.value = { ...initState }
+      userInfoRaw.value = { ...initState }
+      // 同步清理 HomeAI 登录态
+      try {
+        useHomeaiUserStore().logout()
+      } catch {
+        // ignore
+      }
     }
     const getUserInfo = () => {
       return userInfo.value
     }
     const editUserInfo = (options) => {
-      userInfo.value = { ...userInfo.value, ...options }
+      userInfoRaw.value = { ...userInfoRaw.value, ...options }
     }
     const setTenant = (tenantId) => {
-      userInfo.value.tenantId = tenantId;
+      userInfoRaw.value.tenantId = tenantId
     }
     const getTenant = () => {
-      return userInfo.value.tenantId;
+      return userInfoRaw.value.tenantId
     }
-    // 一般没有reset需求，不需要的可以删除
     const reset = () => {
-      userInfo.value = { ...initState }
+      userInfoRaw.value = { ...initState }
     }
-    const isLogined = computed(() => !!userInfo.value.token)
+    /** 已登录：HomeAI token 或遗留 token 任一存在即可 */
+    const isLogined = computed(() => !!getHomeaiToken() || !!userInfoRaw.value.token)
+
     return {
+      userInfoRaw,
       userInfo,
       setUserInfo,
       getUserInfo,
@@ -63,7 +96,9 @@ export const useUserStore = defineStore(
     }
   },
   {
-    // 如果需要持久化就写 true, 不需要持久化就写 false（或者去掉这个配置项）
-    persist: true,
+    // 只持久化原始状态，避免把 computed userInfo 写入 storage
+    persist: {
+      paths: ['userInfoRaw'],
+    },
   },
 )

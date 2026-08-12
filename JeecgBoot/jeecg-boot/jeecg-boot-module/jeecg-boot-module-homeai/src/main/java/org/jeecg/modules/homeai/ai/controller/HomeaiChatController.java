@@ -9,6 +9,7 @@ import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileWhitelistService;
 import org.jeecg.modules.homeai.ai.service.IHomeaiChatService;
 import org.jeecg.modules.homeai.ai.service.IAiQuotaService;
+import org.jeecg.modules.homeai.ai.service.IHomeaiAiQuotaPrecheckService;
 import org.jeecg.modules.homeai.user.entity.WxUser;
 import org.jeecg.modules.homeai.user.service.IWxUserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,9 @@ public class HomeaiChatController {
 
     @Autowired
     private IAiQuotaService quotaService;
+
+    @Autowired
+    private IHomeaiAiQuotaPrecheckService precheckService;
 
     @Autowired
     private IWxUserService wxUserService;
@@ -99,18 +103,16 @@ public class HomeaiChatController {
     }
 
     /**
-     * 检查Token配额
+     * 检查Token配额（兼容旧前端；推荐使用 /homeai/ai/quota/precheck）
      */
     @GetMapping("/quota")
-    public Result<?> checkQuota(HttpServletRequest request) {
+    public Result<?> checkQuota(@RequestParam(required = false) String content,
+                                HttpServletRequest request) {
         String userId = getUserId(request);
         if (userId == null) return Result.error("未登录");
-
-        Map<String, Object> quota = quotaService.checkQuota(userId, 0, 0);
-        Map<String, Integer> defaultQuota = quotaService.getDefaultQuota();
-        quota.put("dailyLimit", defaultQuota.get("dailyLimit"));
-        quota.put("monthlyLimit", defaultQuota.get("monthlyLimit"));
-        return Result.OK(quota);
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R25】chat 配额走统一预检-----------
+        return Result.OK(precheckService.precheck(userId, "chat", content));
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R25】chat 配额走统一预检-----------
     }
 
     /**

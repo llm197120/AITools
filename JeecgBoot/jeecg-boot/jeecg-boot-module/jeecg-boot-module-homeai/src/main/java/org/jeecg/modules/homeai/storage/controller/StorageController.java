@@ -18,9 +18,12 @@ import org.jeecg.common.system.util.JwtUtil;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.RedisUtil;
 import org.jeecg.common.util.TokenUtils;
+import org.jeecg.modules.homeai.audit.service.IHomeaiAuditLogService;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
+import org.jeecg.modules.homeai.config.service.IHomeaiStorageConfigService;
 import org.jeecg.modules.homeai.family.entity.Family;
 import org.jeecg.modules.homeai.family.service.IFamilyService;
 import org.jeecg.modules.homeai.storage.constant.StorageVisibility;
@@ -39,6 +42,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -80,6 +84,19 @@ public class StorageController {
 
     @Autowired
     private IFamilyService familyService;
+
+    @Autowired
+    private org.jeecg.modules.homeai.family.service.IFamilyMemberService familyMemberService;
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22】资料审计埋点-----------
+    @Autowired
+    private IHomeaiAuditLogService auditLogService;
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】资料审计埋点-----------
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】存储配额配置-----------
+    @Autowired
+    private IHomeaiStorageConfigService storageConfigService;
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】存储配额配置-----------
 
     /**
      * 从 Token 解析用户ID
@@ -301,7 +318,18 @@ public class StorageController {
             return Result.error("无权删除该文件夹");
         }
         folderService.deleteFolderCascade(id);
-        return Result.OK("删除成功");
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】文件夹移入回收站审计-----------
+        auditLogService.record(
+                userId,
+                "storage_folder_move_recycle",
+                "storage",
+                id,
+                "文件夹移入回收站：" + (folder.getName() != null ? folder.getName() : id),
+                Collections.singletonMap("folderId", id),
+                "success",
+                clientIp(request));
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】文件夹移入回收站审计-----------
+        return Result.OK("已移入回收站");
     }
     //update-end---author:admin ---date:2026-07-31  for：修复删除文件夹失效问题（@TableLogic 字段不参与 updateById）-----------
 
@@ -411,11 +439,25 @@ public class StorageController {
     //update-begin---author:admin ---date:2026-08-05  for：根目录文件列表与重命名-----------
     /**
      * 根目录文件列表（folderId 为空）
+     * 传入 pageNo+pageSize 时返回分页；否则保持全量 List（兼容旧客户端）
      */
     @GetMapping("/files/root")
-    public Result<?> getRootFiles(HttpServletRequest request) {
+    public Result<?> getRootFiles(HttpServletRequest request,
+                                  @RequestParam(required = false) Integer pageNo,
+                                  @RequestParam(required = false) Integer pageSize) {
         String userId = getUserId(request);
         if (userId == null) return Result.error("未登录");
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R21】根目录文件分页-----------
+        if (pageNo != null && pageSize != null) {
+            Page<StorageFile> pageReq = new Page<>(pageNo, pageSize);
+            IPage<StorageFile> page = isStorageAdmin(request)
+                    ? fileService.pageAllRootFiles(pageReq)
+                    : fileService.pageRootFiles(pageReq, userId, resolveUserFamilyId(userId));
+            resourceFamilyService.enrichFiles(page.getRecords());
+            resolveFileUrls(page.getRecords());
+            return Result.OK(page);
+        }
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R21】根目录文件分页-----------
         List<StorageFile> files;
         if (isStorageAdmin(request)) {
             files = fileService.getAllRootFiles();
@@ -461,9 +503,12 @@ public class StorageController {
 
     /**
      * 文件夹内文件列表
+     * 传入 pageNo+pageSize 时返回分页；否则保持全量 List（兼容旧客户端）
      */
     @GetMapping("/folders/{folderId}/files")
-    public Result<?> getFiles(@PathVariable String folderId, HttpServletRequest request) {
+    public Result<?> getFiles(@PathVariable String folderId, HttpServletRequest request,
+                              @RequestParam(required = false) Integer pageNo,
+                              @RequestParam(required = false) Integer pageSize) {
         StorageFolder folder = folderService.getById(folderId);
         if (folder == null) return Result.error("文件夹不存在");
         String userId = getUserId(request);
@@ -473,6 +518,14 @@ public class StorageController {
                 && !isStorageAdmin(request)) {
             return Result.error("无权查看该文件夹");
         }
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R21】文件夹文件分页-----------
+        if (pageNo != null && pageSize != null) {
+            IPage<StorageFile> page = fileService.pageFilesByFolder(new Page<>(pageNo, pageSize), folderId);
+            resourceFamilyService.enrichFiles(page.getRecords());
+            resolveFileUrls(page.getRecords());
+            return Result.OK(page);
+        }
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R21】文件夹文件分页-----------
         List<StorageFile> files = fileService.getFilesByFolder(folderId);
         resourceFamilyService.enrichFiles(files);
         resolveFileUrls(files);
@@ -551,7 +604,7 @@ public class StorageController {
     }
 
     /**
-     * 删除文件
+     * 删除文件（进回收站）
      */
     @DeleteMapping("/files/{id}")
     public Result<?> deleteFile(@PathVariable String id, HttpServletRequest request) {
@@ -563,8 +616,246 @@ public class StorageController {
             return Result.error("无权删除该文件");
         }
         fileService.softDelete(id);
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22】资料移入回收站审计-----------
+        auditLogService.record(
+                userId,
+                "storage_move_recycle",
+                "storage",
+                id,
+                "移入回收站：" + (sf.getOriginalName() != null ? sf.getOriginalName() : id),
+                Collections.singletonMap("fileId", id),
+                "success",
+                clientIp(request));
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】资料移入回收站审计-----------
         return Result.OK("删除成功");
     }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22/R23】资料回收站 API（文件+文件夹）-----------
+    @GetMapping("/recycleBin")
+    @Operation(summary = "资料存储-回收站(管理端)")
+    @RequiresPermissions("homeai:storage:file:list")
+    public Result<?> recycleBin(@RequestParam(required = false) String keyword,
+                                @RequestParam(defaultValue = "file") String type,
+                                @RequestParam(defaultValue = "1") int pageNo,
+                                @RequestParam(defaultValue = "10") int pageSize) {
+        if ("folder".equalsIgnoreCase(type)) {
+            IPage<StorageFolder> page = folderService.pageRecycleBin(new Page<>(pageNo, pageSize), keyword);
+            resourceFamilyService.enrichFolders(page.getRecords());
+            return Result.OK(page);
+        }
+        IPage<StorageFile> page = fileService.pageRecycleBin(new Page<>(pageNo, pageSize), keyword);
+        resourceFamilyService.enrichFiles(page.getRecords());
+        resolveFileUrls(page.getRecords());
+        return Result.OK(page);
+    }
+
+    @PutMapping("/restore")
+    @Operation(summary = "资料存储-从回收站恢复(管理端)")
+    @RequiresPermissions("homeai:storage:restore")
+    public Result<?> restore(@RequestBody JsonNode body, HttpServletRequest request) {
+        List<String> fileIds = extractIdList(body, "fileIds");
+        List<String> folderIds = extractIdList(body, "folderIds");
+        if (body != null && body.isArray()) {
+            fileIds = extractIdList(body, null);
+        }
+        if (fileIds.isEmpty() && folderIds.isEmpty()) {
+            return Result.error("请选择要恢复的文件或文件夹");
+        }
+        if (!folderIds.isEmpty()) {
+            folderService.restoreFolders(folderIds);
+            auditLogService.record(
+                    getUserId(request),
+                    "storage_folder_restore",
+                    "storage",
+                    folderIds.size() == 1 ? folderIds.get(0) : null,
+                    "恢复文件夹 " + folderIds.size() + " 个",
+                    Collections.singletonMap("folderIds", folderIds),
+                    "success",
+                    clientIp(request));
+        }
+        if (!fileIds.isEmpty()) {
+            fileService.restoreFiles(fileIds);
+            auditLogService.record(
+                    getUserId(request),
+                    "storage_restore",
+                    "storage",
+                    fileIds.size() == 1 ? fileIds.get(0) : null,
+                    "恢复文件 " + fileIds.size() + " 个",
+                    Collections.singletonMap("ids", fileIds),
+                    "success",
+                    clientIp(request));
+        }
+        return Result.OK("恢复成功");
+    }
+
+    @DeleteMapping("/deletePermanently")
+    @Operation(summary = "资料存储-彻底删除(管理端)")
+    @RequiresPermissions("homeai:storage:deletePermanently")
+    public Result<?> deletePermanently(@RequestBody JsonNode body, HttpServletRequest request) {
+        List<String> fileIds = extractIdList(body, "fileIds");
+        List<String> folderIds = extractIdList(body, "folderIds");
+        if (body != null && body.isArray()) {
+            fileIds = extractIdList(body, null);
+        }
+        if (fileIds.isEmpty() && folderIds.isEmpty()) {
+            return Result.error("请选择要彻底删除的文件或文件夹");
+        }
+        if (!folderIds.isEmpty()) {
+            folderService.deleteFoldersPermanently(folderIds);
+            auditLogService.record(
+                    getUserId(request),
+                    "storage_folder_delete_permanently",
+                    "storage",
+                    folderIds.size() == 1 ? folderIds.get(0) : null,
+                    "彻底删除文件夹 " + folderIds.size() + " 个",
+                    Collections.singletonMap("folderIds", folderIds),
+                    "success",
+                    clientIp(request));
+        }
+        if (!fileIds.isEmpty()) {
+            fileService.deletePermanently(fileIds);
+            auditLogService.record(
+                    getUserId(request),
+                    "storage_delete_permanently",
+                    "storage",
+                    fileIds.size() == 1 ? fileIds.get(0) : null,
+                    "彻底删除文件 " + fileIds.size() + " 个",
+                    Collections.singletonMap("ids", fileIds),
+                    "success",
+                    clientIp(request));
+        }
+        return Result.OK("彻底删除成功");
+    }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R24】小程序用户侧回收站-----------
+    @GetMapping("/my/recycleBin")
+    @Operation(summary = "资料存储-我的回收站")
+    public Result<?> myRecycleBin(@RequestParam(required = false) String keyword,
+                                  @RequestParam(defaultValue = "file") String type,
+                                  @RequestParam(defaultValue = "1") int pageNo,
+                                  @RequestParam(defaultValue = "20") int pageSize,
+                                  HttpServletRequest request) {
+        String userId = getUserId(request);
+        if (userId == null) {
+            return Result.error("未登录");
+        }
+        if ("folder".equalsIgnoreCase(type)) {
+            IPage<StorageFolder> page = folderService.pageMyRecycleBin(new Page<>(pageNo, pageSize), userId, keyword);
+            resourceFamilyService.enrichFolders(page.getRecords());
+            return Result.OK(page);
+        }
+        IPage<StorageFile> page = fileService.pageMyRecycleBin(new Page<>(pageNo, pageSize), userId, keyword);
+        resourceFamilyService.enrichFiles(page.getRecords());
+        resolveFileUrls(page.getRecords());
+        return Result.OK(page);
+    }
+
+    @PutMapping("/my/restore")
+    @Operation(summary = "资料存储-恢复我的回收站项")
+    public Result<?> myRestore(@RequestBody JsonNode body, HttpServletRequest request) {
+        String userId = getUserId(request);
+        if (userId == null) {
+            return Result.error("未登录");
+        }
+        List<String> fileIds = filterOwnedFileIds(extractIdList(body, "fileIds"), userId);
+        List<String> folderIds = filterOwnedFolderIds(extractIdList(body, "folderIds"), userId);
+        if (body != null && body.isArray()) {
+            fileIds = filterOwnedFileIds(extractIdList(body, null), userId);
+        }
+        if (fileIds.isEmpty() && folderIds.isEmpty()) {
+            return Result.error("无可恢复的项目（仅能恢复自己删除的）");
+        }
+        if (!folderIds.isEmpty()) {
+            folderService.restoreFolders(folderIds);
+        }
+        if (!fileIds.isEmpty()) {
+            fileService.restoreFiles(fileIds);
+        }
+        return Result.OK("恢复成功");
+    }
+
+    @DeleteMapping("/my/deletePermanently")
+    @Operation(summary = "资料存储-彻底删除我的回收站项")
+    public Result<?> myDeletePermanently(@RequestBody JsonNode body, HttpServletRequest request) {
+        String userId = getUserId(request);
+        if (userId == null) {
+            return Result.error("未登录");
+        }
+        List<String> fileIds = filterOwnedFileIds(extractIdList(body, "fileIds"), userId);
+        List<String> folderIds = filterOwnedFolderIds(extractIdList(body, "folderIds"), userId);
+        if (body != null && body.isArray()) {
+            fileIds = filterOwnedFileIds(extractIdList(body, null), userId);
+        }
+        if (fileIds.isEmpty() && folderIds.isEmpty()) {
+            return Result.error("无可删除的项目（仅能删除自己的）");
+        }
+        if (!folderIds.isEmpty()) {
+            folderService.deleteFoldersPermanently(folderIds);
+        }
+        if (!fileIds.isEmpty()) {
+            fileService.deletePermanently(fileIds);
+        }
+        return Result.OK("彻底删除成功");
+    }
+
+    private List<String> filterOwnedFileIds(List<String> ids, String userId) {
+        List<String> owned = new ArrayList<>();
+        if (ids == null) {
+            return owned;
+        }
+        for (String id : ids) {
+            StorageFile sf = fileService.getOne(
+                    new LambdaQueryWrapper<StorageFile>().eq(StorageFile::getId, id).last("LIMIT 1"), false);
+            if (sf != null && userId.equals(sf.getUserId()) && Integer.valueOf(1).equals(sf.getDelFlag())) {
+                owned.add(id);
+            }
+        }
+        return owned;
+    }
+
+    private List<String> filterOwnedFolderIds(List<String> ids, String userId) {
+        List<String> owned = new ArrayList<>();
+        if (ids == null) {
+            return owned;
+        }
+        for (String id : ids) {
+            StorageFolder folder = folderService.getById(id);
+            if (folder != null && userId.equals(folder.getUserId()) && Integer.valueOf(1).equals(folder.getDelFlag())) {
+                owned.add(id);
+            }
+        }
+        return owned;
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R24】小程序用户侧回收站-----------
+
+    private List<String> extractIdList(JsonNode body, String field) {
+        List<String> ids = new ArrayList<>();
+        if (body == null || body.isNull()) {
+            return ids;
+        }
+        JsonNode arr = field == null ? body : body.get(field);
+        if (arr == null || !arr.isArray()) {
+            return ids;
+        }
+        for (JsonNode n : arr) {
+            if (n != null && !n.isNull() && oConvertUtils.isNotEmpty(n.asText())) {
+                ids.add(n.asText());
+            }
+        }
+        return ids;
+    }
+
+    private String clientIp(HttpServletRequest r) {
+        if (r == null) {
+            return null;
+        }
+        String ip = r.getHeader("X-Forwarded-For");
+        if (oConvertUtils.isNotEmpty(ip)) {
+            return ip.split(",")[0].trim();
+        }
+        return r.getRemoteAddr();
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22/R23】资料回收站 API（文件+文件夹）-----------
 
     /**
      * 收藏/取消收藏
@@ -702,18 +993,73 @@ public class StorageController {
                 countByUser.merge(f.getUserId(), 1L, Long::sum);
             }
         }
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】统计附带配额-----------
+        long limitBytes = storageConfigService.getDefaultUserLimitBytes();
+        int warnPercent = storageConfigService.getWarnPercent();
         java.util.List<java.util.Map<String, Object>> perUser = new java.util.ArrayList<>();
         for (String uid : sizeByUser.keySet()) {
+            long used = sizeByUser.get(uid);
             java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
             row.put("userId", uid);
             row.put("fileCount", countByUser.getOrDefault(uid, 0L));
-            row.put("totalSize", sizeByUser.get(uid));
+            row.put("totalSize", used);
+            row.put("limitBytes", limitBytes);
+            row.put("usedPercent", limitBytes > 0 ? Math.min(100, used * 100.0 / limitBytes) : 0);
+            row.put("overWarn", limitBytes > 0 && used * 100.0 / limitBytes >= warnPercent);
             perUser.add(row);
         }
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R28】家庭维度统计-----------
+        long familyLimitBytes = storageConfigService.getDefaultFamilyLimitBytes();
+        java.util.List<Family> families = familyService.list(new LambdaQueryWrapper<Family>()
+                .eq(Family::getDelFlag, 0)
+                .ne(Family::getStatus, "disbanded"));
+        java.util.List<java.util.Map<String, Object>> perFamily = new java.util.ArrayList<>();
+        for (Family fam : families) {
+            if (fam == null || oConvertUtils.isEmpty(fam.getId())) {
+                continue;
+            }
+            long used = fileService.sumUsedBytesByFamily(fam.getId());
+            //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R30】家庭级配额覆盖-----------
+            long thisFamilyLimit = storageConfigService.getFamilyLimitBytes(fam.getId());
+            boolean customLimit = storageConfigService.hasFamilyLimitOverride(fam.getId());
+            //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R30】家庭级配额覆盖-----------
+            java.util.List<org.jeecg.modules.homeai.family.entity.FamilyMember> memberList =
+                    familyMemberService.getByFamilyId(fam.getId());
+            java.util.Set<String> memberIds = new java.util.HashSet<>();
+            if (memberList != null) {
+                for (org.jeecg.modules.homeai.family.entity.FamilyMember m : memberList) {
+                    if (m != null && oConvertUtils.isNotEmpty(m.getUserId())) {
+                        memberIds.add(m.getUserId());
+                    }
+                }
+            }
+            long fileCount = 0L;
+            for (StorageFile f : files) {
+                if (f.getUserId() != null && memberIds.contains(f.getUserId())) {
+                    fileCount++;
+                }
+            }
+            java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("familyId", fam.getId());
+            row.put("familyName", fam.getName());
+            row.put("fileCount", fileCount);
+            row.put("totalSize", used);
+            row.put("limitBytes", thisFamilyLimit);
+            row.put("customLimit", customLimit);
+            row.put("usedPercent", thisFamilyLimit > 0 ? Math.min(100, used * 100.0 / thisFamilyLimit) : 0);
+            row.put("overWarn", thisFamilyLimit > 0 && used * 100.0 / thisFamilyLimit >= warnPercent);
+            perFamily.add(row);
+        }
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R28】家庭维度统计-----------
         java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("totalFiles", files.size());
         result.put("totalSize", totalSize);
+        result.put("defaultUserLimitBytes", limitBytes);
+        result.put("defaultFamilyLimitBytes", familyLimitBytes);
+        result.put("warnPercent", warnPercent);
         result.put("perUser", perUser);
+        result.put("perFamily", perFamily);
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】统计附带配额-----------
         return Result.OK(result);
     }
 

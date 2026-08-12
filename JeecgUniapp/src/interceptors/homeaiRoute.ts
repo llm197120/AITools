@@ -20,16 +20,26 @@ export const homeaiRouteInterceptor = {
       },
     })
 
+    const blockNavigateIfNeeded = ({ url }: { url: string }) => {
+      const path = url.split('?')[0]
+      if (shouldBlockHomeaiNavigate(path)) {
+        uni.showToast({ title: '请先登录', icon: 'none' })
+        uni.switchTab({ url: HOMEAI_PROFILE_TAB })
+        return false
+      }
+      return true
+    }
+
     uni.addInterceptor('navigateTo', {
-      invoke({ url }: { url: string }) {
-        const path = url.split('?')[0]
-        if (shouldBlockHomeaiNavigate(path)) {
-          uni.showToast({ title: '请先登录', icon: 'none' })
-          uni.switchTab({ url: HOMEAI_PROFILE_TAB })
-          return false
-        }
-        return true
-      },
+      invoke: blockNavigateIfNeeded,
+    })
+
+    uni.addInterceptor('redirectTo', {
+      invoke: blockNavigateIfNeeded,
+    })
+
+    uni.addInterceptor('reLaunch', {
+      invoke: blockNavigateIfNeeded,
     })
   },
 }

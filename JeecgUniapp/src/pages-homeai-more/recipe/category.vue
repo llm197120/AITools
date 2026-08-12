@@ -1,6 +1,6 @@
-<route lang="json5">{ style: { navigationBarTitleText: '分类浏览' } }</route>
+<route lang="json5">{ style: { navigationBarTitleText: '分类浏览', navigationBarBackgroundColor: '#F3F2EE' } }</route>
 <template>
-  <view class="page">
+  <view class="hai-page">
     <scroll-view scroll-x class="cat-scroll">
       <text
         v-for="c in categories"
@@ -64,13 +64,13 @@ onLoad(async (opts: any) => {
 })
 </script>
 <style scoped>
-.page { min-height: 100vh; background: #f5f5f5; padding: 20rpx; }
+/* page shell: .hai-page */
 .cat-scroll { white-space: nowrap; margin-bottom: 20rpx; }
-.cat-tab { display: inline-block; padding: 16rpx 28rpx; background: #fff; border-radius: 32rpx; margin-right: 12rpx; font-size: 26rpx; }
-.cat-tab.active { background: #fa709a; color: #fff; }
+.cat-tab { display: inline-block; padding: 16rpx 28rpx; background: var(--hai-card); border-radius: 32rpx; margin-right: 12rpx; font-size: 26rpx; color: var(--hai-text-secondary); box-shadow: var(--hai-shadow); }
+.cat-tab.active { background: var(--hai-primary); color: var(--hai-on-primary); }
 .grid { display: flex; flex-wrap: wrap; gap: 16rpx; }
-.card { width: calc(50% - 8rpx); background: #fff; border-radius: 12rpx; overflow: hidden; }
+.card { width: calc(50% - 8rpx); background: var(--hai-card); border-radius: 24rpx; overflow: hidden; box-shadow: var(--hai-shadow); }
 .cover { width: 100%; height: 200rpx; }
-.name { font-size: 26rpx; padding: 12rpx 16rpx 4rpx; display: block; }
-.meta { font-size: 22rpx; color: #999; padding: 0 16rpx 16rpx; display: block; }
+.name { font-size: 26rpx; padding: 12rpx 16rpx 4rpx; display: block; color: var(--hai-text); }
+.meta { font-size: 22rpx; color: var(--hai-text-muted); padding: 0 16rpx 16rpx; display: block; }
 </style>

@@ -27,3 +27,41 @@ jobs:
         working-directory: JeecgBoot/jeecg-boot
         run: mvn -B clean package -Pdocker -pl jeecg-module-system/jeecg-system-start -am -DskipTests
 
+  frontend-admin:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: JeecgBoot/jeecgboot-vue3
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('JeecgBoot/jeecgboot-vue3/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Unit test (homeai smoke)
+        run: pnpm test -- tests/homeai tests/test.spec.ts
+
+      # 与 deploy/frontend-nginx 推荐的 build:docker:prod 对齐（读 .env.docker.prod）
+      - name: Build admin frontend
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: pnpm run build:docker:prod

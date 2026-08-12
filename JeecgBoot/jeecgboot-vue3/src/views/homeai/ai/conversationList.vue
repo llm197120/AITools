@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <BasicTable @register="registerTable" :rowSelection="rowSelection">
       <template #tableTitle>
         <a-button v-if="selectedRowKeys.length > 0" preIcon="ant-design:delete-outlined" type="primary" danger @click="handleBatchDelete">
@@ -15,6 +15,9 @@
         </template>
         <template v-if="column.key === 'messageCount'">
           <a-badge :count="record.messageCount" :number-style="{ backgroundColor: '#52c41a' }" />
+        </template>
+        <template v-else-if="column.key === 'userId' || column.dataIndex === 'userId'">
+          {{ resolveUserLabel(record.userId) }}
         </template>
       </template>
     </BasicTable>
@@ -32,17 +35,20 @@
         <a-empty v-else description="暂无消息" />
       </a-spin>
     </BasicModal>
-  </div>
+  </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-ai-conversations" setup>
-  import { computed, ref } from 'vue';
+  import { PageWrapper } from '/@/components/Page';
+  import { computed, ref, onMounted } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { BasicModal, useModal } from '/@/components/Modal';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { conversationApi } from '/@/api/homeai';
+  import { useUserLabel } from '../hooks/useUserLabel';
 
   const { createMessage, createConfirm } = useMessage();
+  const { loadUserOptions, resolveUserLabel } = useUserLabel();
   const [registerMsgModal, { openModal: openMsgModal }] = useModal();
   const selectedRowKeys = ref<string[]>([]);
   const messages = ref<any[]>([]);
@@ -60,7 +66,7 @@
     api: (params: any) => conversationApi.list(params),
     columns: [
       { title: '对话标题', dataIndex: 'title', width: 250 },
-      { title: '用户ID', dataIndex: 'userId', width: 160 },
+      { title: '用户', dataIndex: 'userId', key: 'userId', width: 160 },
       { title: '模型', dataIndex: 'modelName', key: 'modelName', width: 120 },
       { title: '消息数', dataIndex: 'messageCount', key: 'messageCount', width: 80 },
       { title: '创建时间', dataIndex: 'createTime', width: 180 },
@@ -81,6 +87,10 @@
         { field: 'userId', label: '用户ID', component: 'Input' },
       ],
     },
+  });
+
+  onMounted(() => {
+    loadUserOptions();
   });
 
   function getTableAction(record: any) {

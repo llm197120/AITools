@@ -1,9 +1,9 @@
-<route lang="json5">{ style: { navigationBarTitleText: '编辑账单' } }</route>
+<route lang="json5">{ style: { navigationBarTitleText: '编辑账单', navigationBarBackgroundColor: '#F3F2EE' } }</route>
 <template>
-  <view class="bill-edit">
+  <HomeFormCard>
     <view class="type-switch">
       <view class="type-btn" :class="{ active: form.type === 'expense' }" @click="switchType('expense')">支出</view>
-      <view class="type-btn" :class="{ active: form.type === 'income' }" @click="switchType('income')">收入</view>
+      <view class="type-btn" :class="{ active: form.type === 'income', income: form.type === 'income' }" @click="switchType('income')">收入</view>
     </view>
     <view class="amount-input">
       <text class="currency">¥</text>
@@ -33,14 +33,15 @@
         <input class="remark-input" v-model="form.remark" placeholder="可选" />
       </view>
     </view>
-    <wd-button size="large" type="primary" :loading="saving" @click="save">保存</wd-button>
-    <wd-button size="large" type="error" plain custom-class="delete-btn" @click="remove">删除此账单</wd-button>
-  </view>
+    <wd-button size="large" type="primary" block :loading="saving" @click="save">保存</wd-button>
+    <wd-button size="large" type="error" plain block custom-class="delete-btn" @click="remove">删除此账单</wd-button>
+  </HomeFormCard>
 </template>
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { billApi } from '../../pages-homeai/api/bill'
+import HomeFormCard from '../../components/HomeFormCard.vue'
 
 const entryId = ref('')
 const saving = ref(false)
@@ -125,20 +126,21 @@ function remove() {
 }
 </script>
 <style scoped>
-.bill-edit { padding: 30rpx; min-height: 100vh; background: #f5f5f5; }
-.type-switch { display: flex; gap: 20rpx; margin-bottom: 30rpx; }
-.type-btn { flex: 1; text-align: center; padding: 20rpx; background: #fff; border-radius: 12rpx; font-size: 28rpx; }
-.type-btn.active { background: #667eea; color: #fff; }
-.amount-input { text-align: center; padding: 40rpx 0; }
-.currency { font-size: 48rpx; color: #999; }
-.amount { display: inline-block; width: 300rpx; font-size: 64rpx; text-align: center; border-bottom: 2rpx solid #eee; margin-left: 12rpx; }
-.category-grid { display: flex; flex-wrap: wrap; gap: 16rpx; margin-bottom: 30rpx; }
-.cat-item { padding: 16rpx 24rpx; background: #fff; border-radius: 10rpx; font-size: 26rpx; width: calc(25% - 12rpx); }
-.cat-item.selected { background: #667eea20; border: 1rpx solid #667eea; }
-.cat-name { display: block; margin-top: 4rpx; text-align: center; }
-.extra { background: #fff; border-radius: 12rpx; margin-bottom: 30rpx; }
-.extra-item { display: flex; justify-content: space-between; align-items: center; padding: 24rpx; border-bottom: 1rpx solid #f0f0f0; font-size: 28rpx; }
+.type-switch { display: flex; gap: 16rpx; margin-bottom: 24rpx; }
+.type-btn { flex: 1; text-align: center; padding: 22rpx; background: var(--hai-card); border-radius: 999rpx; font-size: 28rpx; color: var(--hai-text-secondary); box-shadow: var(--hai-shadow); }
+.type-btn.active { background: var(--hai-primary); color: var(--hai-on-primary); }
+.type-btn.active.income { background: var(--hai-success); }
+.amount-input { text-align: center; padding: 48rpx 0; background: var(--hai-card); border-radius: var(--hai-radius); margin-bottom: 24rpx; box-shadow: var(--hai-shadow); }
+.currency { font-size: 48rpx; color: var(--hai-text-muted); }
+.amount { display: inline-block; width: 300rpx; font-size: 64rpx; text-align: center; border-bottom: 2rpx solid var(--hai-border); margin-left: 12rpx; color: var(--hai-text); }
+.category-grid { display: flex; flex-wrap: wrap; gap: 16rpx; margin-bottom: 24rpx; }
+.cat-item { padding: 20rpx 16rpx; background: var(--hai-card); border-radius: var(--hai-radius-sm); font-size: 26rpx; width: calc(25% - 12rpx); box-sizing: border-box; text-align: center; box-shadow: var(--hai-shadow); border: 1rpx solid transparent; }
+.cat-item.selected { background: var(--hai-primary-soft); border-color: var(--hai-primary); }
+.cat-name { display: block; margin-top: 6rpx; text-align: center; font-size: 22rpx; color: var(--hai-text-secondary); }
+.extra { background: var(--hai-card); border-radius: var(--hai-radius); margin-bottom: 32rpx; overflow: hidden; box-shadow: var(--hai-shadow); }
+.extra-item { display: flex; justify-content: space-between; align-items: center; padding: 28rpx; border-bottom: 1rpx solid var(--hai-border); font-size: 28rpx; color: var(--hai-text); }
+.extra-item:last-child { border-bottom: none; }
 .remark-row { gap: 20rpx; }
-.remark-input { flex: 1; text-align: right; font-size: 28rpx; }
+.remark-input { flex: 1; text-align: right; font-size: 28rpx; color: var(--hai-text); }
 .delete-btn { margin-top: 24rpx; }
 </style>

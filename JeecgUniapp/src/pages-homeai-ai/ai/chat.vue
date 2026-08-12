@@ -1,7 +1,8 @@
-﻿<route lang="json5">
+<route lang="json5">
 {
   style: {
     navigationBarTitleText: 'AI对话',
+    navigationBarBackgroundColor: '#F3F2EE',
   },
 }
 </route>
@@ -57,12 +58,12 @@
         </view>
       </view>
       <view class="input-row">
-        <wd-icon name="attachment" size="22px" color="#999" class="attach-btn" @click="showAttachmentPicker"></wd-icon>
+        <wd-icon name="attachment" size="22px" color="#8A857C" class="attach-btn" @click="showAttachmentPicker"></wd-icon>
         <input class="text-input" v-model="inputText" type="text" placeholder="输入消息..."
           :disabled="quotaExhausted" confirm-type="send" @confirm="sendMessage" />
-        <wd-button v-if="!quotaExhausted" size="small" :disabled="!inputText.trim() || isStreaming"
+        <wd-button v-if="!quotaExhausted" size="medium" type="primary" :disabled="!inputText.trim() || isStreaming"
           @click="sendMessage">发送</wd-button>
-        <wd-button v-else size="small" disabled>已用完</wd-button>
+        <wd-button v-else size="medium" disabled>已用完</wd-button>
       </view>
     </view>
   </view>
@@ -72,7 +73,13 @@
 import { ref, nextTick } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi, del as delApi, getServerBaseUrl } from '../../pages-homeai/api/request'
-import { preloadWhitelist, validateUploadFile } from '../../pages-homeai/utils/fileWhitelist'
+import { validateUploadFile } from '../../pages-homeai/utils/fileWhitelist'
+import { useHomeaiFilePick } from '../../pages-homeai/utils/useHomeaiFilePick'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+
+useHomeaiPageGuard()
+
+const { preload: preloadFilePick, showPickMenu } = useHomeaiFilePick()
 
 const conversationId = ref('')
 const messages = ref<any[]>([])
@@ -98,7 +105,7 @@ onLoad(async (options: any) => {
 })
 
 onShow(() => {
-  preloadWhitelist()
+  preloadFilePick()
 })
 
 async function loadMessages() {
@@ -220,12 +227,171 @@ async function reloadAssistantFromServer(aiMsgIdx: number): Promise<boolean> {
   return false
 }
 
+/**
+ * SSE 降级策略：
+ * 1. 优先检测 RequestTask.onChunkReceived（或 wx.canIUse）是否可用；
+ * 2. 支持则 enableChunked=true 流式拼接；不支持则 enableChunked=false，依赖 success 整包解析；
+ * 3. 若流式请求 fail 且错误像「不支持 chunked」，自动用同一条占位消息（aiMsgIdx）重试一次非流式，避免重复插入用户/AI 消息。
+ */
+function supportsChunkedTransfer(): boolean {
+  try {
+    if (typeof uni !== 'undefined' && typeof (uni as any).canIUse === 'function') {
+      if ((uni as any).canIUse('RequestTask.onChunkReceived')) return true
+    }
+  } catch (_) {
+    // ignore
+  }
+  try {
+    // #ifdef MP-WEIXIN
+    if (typeof wx !== 'undefined' && typeof wx.canIUse === 'function') {
+      if (wx.canIUse('RequestTask.onChunkReceived')) return true
+    }
+    // #endif
+  } catch (_) {
+    // ignore
+  }
+  // H5 / App 等多数端对 enableChunked 支持不稳定，默认走非流式整包
+  return false
+}
+
+function isChunkedUnsupportedError(err: any): boolean {
+  const msg = String(err?.errMsg || err?.message || err || '').toLowerCase()
+  return (
+    msg.includes('chunk') ||
+    msg.includes('enablechunked') ||
+    msg.includes('onchunkreceived') ||
+    msg.includes('not support') ||
+    msg.includes('不支持')
+  )
+}
+
+function finishAssistantMessage(aiMsgIdx: number) {
+  if (aiMsgIdx >= 0 && aiMsgIdx < messages.value.length) {
+    messages.value[aiMsgIdx].isStreaming = false
+  }
+  isStreaming.value = false
+}
+
+async function handleChatSuccess(
+  res: any,
+  aiMsgIdx: number,
+  sseBufferRef: { value: string },
+  usedChunked: boolean,
+) {
+  const statusCode = res?.statusCode
+  if (statusCode && statusCode >= 400) {
+    finishAssistantMessage(aiMsgIdx)
+    messages.value[aiMsgIdx].content = '请求失败，请检查登录状态或稍后重试'
+    return
+  }
+  // 流式已拼过内容时，success 整包再解析会导致重复；只做收尾
+  const alreadyHasContent = !!messages.value[aiMsgIdx]?.content
+  if (!(usedChunked && alreadyHasContent)) {
+    const body = chunkToString(res?.data)
+    if (body) {
+      // 若返回的是普通 JSON 错误而非 SSE
+      if (body.trim().startsWith('{') && body.includes('"success"')) {
+        try {
+          const json = JSON.parse(body)
+          if (!json.success) {
+            messages.value[aiMsgIdx].content = json.message || '请求失败'
+            finishAssistantMessage(aiMsgIdx)
+            return
+          }
+        } catch (_) {
+          // 继续按 SSE 解析
+        }
+      }
+      sseBufferRef.value += body
+    }
+    sseBufferRef.value = consumeSseBuffer(sseBufferRef.value + '\n\n', aiMsgIdx)
+    sseBufferRef.value = ''
+  }
+  finishAssistantMessage(aiMsgIdx)
+  if (!messages.value[aiMsgIdx].content) {
+    const loaded = await reloadAssistantFromServer(aiMsgIdx)
+    if (!loaded) {
+      messages.value[aiMsgIdx].content = '未收到 AI 回复，请检查 AI 密钥配置或稍后重试'
+    }
+  }
+  scrollToBottom()
+}
+
+// 停止生成用的请求句柄（需在 startChatRequest 之前声明，供降级重试更新）
+const currentTask = ref<any>(null)
+
+/** 发起一次聊天请求；allowRetryNonChunked 为 true 时，流式失败可降级重试一次 */
+function startChatRequest(
+  requestData: Record<string, unknown>,
+  token: string,
+  aiMsgIdx: number,
+  enableChunked: boolean,
+  allowRetryNonChunked: boolean,
+) {
+  const sseBufferRef = { value: '' }
+  let retriedNonChunked = false
+
+  const requestTask = uni.request({
+    url: getAppBaseUrl() + '/homeai/ai/chat/send',
+    method: 'POST',
+    header: {
+      'X-Access-Token': token,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    data: requestData,
+    enableChunked,
+    responseType: 'text',
+    ...(enableChunked
+      ? {
+          onChunkReceived: (res: any) => {
+            try {
+              const chunk = chunkToString(res?.data)
+              if (!chunk) return
+              sseBufferRef.value += chunk
+              sseBufferRef.value = consumeSseBuffer(sseBufferRef.value, aiMsgIdx)
+              scrollToBottom()
+            } catch (_) {
+              // 忽略单次解析错误
+            }
+          },
+        }
+      : {}),
+    success: async (res) => {
+      await handleChatSuccess(res, aiMsgIdx, sseBufferRef, enableChunked)
+    },
+    fail: (err) => {
+      console.error('请求失败', err)
+      // 流式失败且像不支持 chunked：清空占位内容后同一 aiMsgIdx 重试非流式，不新增消息
+      if (
+        enableChunked &&
+        allowRetryNonChunked &&
+        !retriedNonChunked &&
+        isChunkedUnsupportedError(err)
+      ) {
+        retriedNonChunked = true
+        if (messages.value[aiMsgIdx]) {
+          messages.value[aiMsgIdx].content = ''
+          messages.value[aiMsgIdx].isStreaming = true
+        }
+        isStreaming.value = true
+        const fallbackTask = startChatRequest(requestData, token, aiMsgIdx, false, false)
+        currentTask.value = fallbackTask
+        return
+      }
+      showReconnect.value = true
+      finishAssistantMessage(aiMsgIdx)
+    },
+  })
+
+  return requestTask
+}
+
 async function sendMessage() {
   const content = inputText.value.trim()
   if (!content) return
 
-  // Token 预检
-  const quota = await getApi('/ai/chat/quota')
+  // Token 预检（R25：按场景 + 文本长度估算）
+  const quota = await getApi('/ai/quota/precheck', { scene: 'chat', text: content })
   if (!quota.allowed) {
     uni.showToast({ title: quota.message || 'Token 不足', icon: 'none' })
     quotaExhausted.value = true
@@ -256,9 +422,7 @@ async function sendMessage() {
   scrollToBottom()
 
   try {
-    // 使用 uni.request enableChunked 接收 SSE 流式响应
     const token = uni.getStorageSync('homeai_token')
-    let sseBuffer = '' // SSE 行缓冲区，处理跨 chunk 断行
 
     // 本地图片先上传，换取服务器可访问地址
     const imageUrls: string[] = []
@@ -285,7 +449,7 @@ async function sendMessage() {
         console.error('图片上传失败', e)
       }
     }
-    
+
     const requestData: Record<string, unknown> = {
       conversationId: conversationId.value,
       content: content,
@@ -298,89 +462,18 @@ async function sendMessage() {
       requestData.files = fileUrls
     }
 
-    const requestTask = uni.request({
-      url: getAppBaseUrl() + '/homeai/ai/chat/send',
-      method: 'POST',
-      header: {
-        'X-Access-Token': token,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      data: requestData,
-      enableChunked: true,
-      responseType: 'text',
-      // 实时流式接收
-      onChunkReceived: (res) => {
-        try {
-          const chunk = chunkToString((res as any).data)
-          if (!chunk) return
-          sseBuffer += chunk
-          sseBuffer = consumeSseBuffer(sseBuffer, aiMsgIdx)
-          scrollToBottom()
-        } catch (_) {
-          // 忽略单次解析错误
-        }
-      },
-      success: async (res) => {
-        const statusCode = (res as any).statusCode
-        if (statusCode && statusCode >= 400) {
-          messages.value[aiMsgIdx].isStreaming = false
-          isStreaming.value = false
-          messages.value[aiMsgIdx].content = '请求失败，请检查登录状态或稍后重试'
-          return
-        }
-        const body = chunkToString((res as any).data)
-        if (body) {
-          // 若返回的是普通 JSON 错误而非 SSE
-          if (body.trim().startsWith('{') && body.includes('"success"')) {
-            try {
-              const json = JSON.parse(body)
-              if (!json.success) {
-                messages.value[aiMsgIdx].content = json.message || '请求失败'
-                messages.value[aiMsgIdx].isStreaming = false
-                isStreaming.value = false
-                return
-              }
-            } catch (_) {
-              // 继续按 SSE 解析
-            }
-          }
-          sseBuffer += body
-        }
-        sseBuffer = consumeSseBuffer(sseBuffer + '\n\n', aiMsgIdx)
-        sseBuffer = ''
-        messages.value[aiMsgIdx].isStreaming = false
-        isStreaming.value = false
-        if (!messages.value[aiMsgIdx].content) {
-          const loaded = await reloadAssistantFromServer(aiMsgIdx)
-          if (!loaded) {
-            messages.value[aiMsgIdx].content = '未收到 AI 回复，请检查 AI 密钥配置或稍后重试'
-          }
-        }
-        scrollToBottom()
-      },
-      fail: (err) => {
-        console.error('请求失败', err)
-        showReconnect.value = true
-        messages.value[aiMsgIdx].isStreaming = false
-        isStreaming.value = false
-      },
-    })
-
-    // 暂存 requestTask 用于停止
+    // 按端能力决定是否启用 chunked；不支持时走 success 整包解析
+    const useChunked = supportsChunkedTransfer()
+    const requestTask = startChatRequest(requestData, token, aiMsgIdx, useChunked, useChunked)
     currentTask.value = requestTask
-
   } catch (e) {
     console.error('发送消息失败', e)
-    messages.value[aiMsgIdx].isStreaming = false
-    isStreaming.value = false
+    finishAssistantMessage(aiMsgIdx)
   }
 
   selectedImages.value = []
   selectedFiles.value = []
 }
-
-// 停止生成
-const currentTask = ref<any>(null)
 
 async function stopGeneration() {
   try {
@@ -408,66 +501,39 @@ function resendLastMessage() {
   }
 }
 
-// 附件选择
+// 附件选择（R25：统一 useHomeaiFilePick）
 function showAttachmentPicker() {
-  uni.showActionSheet({
-    itemList: ['拍照', '从相册选择', '选择文件'],
-    success: (res) => {
-      if (res.tapIndex === 0) {
-        const sourceType: any = ['camera']
-        uni.chooseImage({
-          count: 9,
-          sourceType,
-          success: (r) => {
-            selectedImages.value.push(...r.tempFilePaths)
-          },
-        })
-      } else if (res.tapIndex === 1) {
-        const sourceType: any = ['album']
-        uni.chooseImage({
-          count: 9,
-          sourceType,
-          success: (r) => {
-            selectedImages.value.push(...r.tempFilePaths)
-          },
-        })
-      } else if (res.tapIndex === 2) {
-        // 选择文件
-        uni.chooseMessageFile({
-          count: 5,
-          type: 'all',
-          success: async (r) => {
-            for (const file of r.tempFiles) {
-              if (!(await validateUploadFile(file.path))) continue
-              // 上传文件到服务器
-              try {
-                const token = uni.getStorageSync('homeai_token')
-                const uploadRes = await uni.uploadFile({
-                  url: getAppBaseUrl() + '/homeai/ai/chat/upload',
-                  filePath: file.path,
-                  name: 'file',
-                  header: {
-                    'X-Access-Token': token,
-                  },
-                })
-                const data = JSON.parse(uploadRes.data)
-                if (data && data.result) {
-                  selectedFiles.value.push({
-                    name: file.name,
-                    url: data.result.storedUrl || data.result.url,
-                    size: file.size,
-                  })
-                }
-              } catch (e) {
-                console.error('文件上传失败', e)
-                uni.showToast({ title: '文件上传失败', icon: 'none' })
-              }
+  showPickMenu(
+    async (files, source) => {
+      if (source === 'file') {
+        for (const file of files) {
+          try {
+            const token = uni.getStorageSync('homeai_token')
+            const uploadRes = await uni.uploadFile({
+              url: getAppBaseUrl() + '/homeai/ai/chat/upload',
+              filePath: file.path,
+              name: 'file',
+              header: { 'X-Access-Token': token },
+            })
+            const data = JSON.parse(uploadRes.data)
+            if (data && data.result) {
+              selectedFiles.value.push({
+                name: file.name,
+                url: data.result.storedUrl || data.result.url,
+                size: file.size,
+              })
             }
-          },
-        })
+          } catch (e) {
+            console.error('文件上传失败', e)
+            uni.showToast({ title: '文件上传失败', icon: 'none' })
+          }
+        }
+      } else {
+        selectedImages.value.push(...files.map((f) => f.path))
       }
     },
-  })
+    { allowFile: true, imageCount: 9, fileCount: 5 },
+  )
 }
 
 function removeImage(index: number) {
@@ -488,7 +554,7 @@ function getAppBaseUrl(): string {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #f5f5f5;
+  background: var(--hai-bg);
 }
 .message-list {
   flex: 1;
@@ -510,7 +576,7 @@ function getAppBaseUrl(): string {
   height: 60rpx;
   border-radius: 50%;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(135deg, var(--hai-primary), var(--hai-primary-mid));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -524,21 +590,22 @@ function getAppBaseUrl(): string {
 .bubble {
   max-width: 70%;
   padding: 20rpx 24rpx;
-  border-radius: 16rpx;
+  border-radius: var(--hai-radius-sm);
   font-size: 28rpx;
   line-height: 1.6;
   word-break: break-word;
 }
 .bubble.user {
-  background: #667eea;
+  background: var(--hai-primary);
   color: #fff;
   border-bottom-right-radius: 4rpx;
 }
 .bubble.assistant {
-  background: #fff;
-  color: #333;
+  background: var(--hai-card);
+  color: var(--hai-text);
+  border: 1rpx solid var(--hai-border);
   border-bottom-left-radius: 4rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+  box-shadow: var(--hai-shadow);
 }
 .msg-image {
   width: 200rpx;
@@ -569,13 +636,13 @@ function getAppBaseUrl(): string {
   padding: 12rpx;
 }
 .reconnect-link {
-  color: #667eea;
+  color: var(--hai-primary);
   text-decoration: underline;
 }
 .input-area {
   padding: 16rpx 20rpx;
-  background: #fff;
-  border-top: 1rpx solid #eee;
+  background: var(--hai-card);
+  border-top: 1rpx solid var(--hai-border);
   padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
 }
 .preview-images {
@@ -613,13 +680,13 @@ function getAppBaseUrl(): string {
   align-items: center;
   gap: 8rpx;
   padding: 8rpx 16rpx;
-  background: #f0f0f0;
+  background: var(--hai-bg);
   border-radius: 8rpx;
   max-width: 100%;
 }
 .file-name {
   font-size: 24rpx;
-  color: #666;
+  color: var(--hai-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -635,13 +702,20 @@ function getAppBaseUrl(): string {
 }
 .attach-btn {
   flex-shrink: 0;
+  width: 72rpx;
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .text-input {
   flex: 1;
-  height: 72rpx;
-  padding: 0 20rpx;
-  background: #f5f5f5;
-  border-radius: 36rpx;
+  min-height: 80rpx;
+  height: 80rpx;
+  padding: 0 24rpx;
+  background: var(--hai-bg);
+  border-radius: 40rpx;
   font-size: 28rpx;
+  color: var(--hai-text);
 }
 </style>

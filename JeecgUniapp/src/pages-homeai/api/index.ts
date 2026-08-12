@@ -13,5 +13,6 @@ import { get } from './request'
 
 export const configApi = {
   fileWhitelist: () => get<any>('/config/file-whitelist'),
-  wechatPublic: () => get<{ planRemindTemplateId?: string }>('/config/wechat-public'),
+  wechatPublic: () =>
+    get<{ planRemindTemplateId?: string; learnRemindTemplateId?: string }>('/config/wechat-public'),
 }

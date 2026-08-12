@@ -1,0 +1,121 @@
+/* 家庭 AI 小工具视觉令牌（对齐首页暖灰 + 深蓝点缀） */
+:root,
+page {
+  --hai-bg: #f3f2ee;
+  --hai-card: #ffffff;
+  --hai-text: #2c271f;
+  --hai-text-secondary: #8a857c;
+  --hai-text-muted: #a39e94;
+  --hai-text-tertiary: #c4bfb6;
+  --hai-icon: #3a342c;
+  --hai-border: #ece9e2;
+  --hai-primary: #1b4f8a;
+  --hai-primary-mid: #2a6bb0;
+  --hai-primary-soft: rgba(27, 79, 138, 0.08);
+  --hai-danger: #c45c4a;
+  --hai-danger-soft: rgba(196, 92, 74, 0.12);
+  --hai-warning: #d4a017;
+  --hai-success: #3e6e58;
+  --hai-success-soft: rgba(62, 110, 88, 0.15);
+  --hai-on-primary: #ffffff;
+  --hai-shadow: 0 8rpx 32rpx rgba(27, 40, 60, 0.06);
+  --hai-radius: 28rpx;
+  --hai-radius-sm: 20rpx;
+  --hai-radius-md: 24rpx;
+  --hai-serif: 'Songti SC', 'STSong', 'Noto Serif SC', serif;
+  /* 与 wot-design 对齐，避免全局旧蓝泄漏 */
+  --wot-color-theme: #1b4f8a;
+}
+
+.hai-page {
+  min-height: 100vh;
+  box-sizing: border-box;
+  background: var(--hai-bg);
+  padding: 24rpx 32rpx 48rpx;
+  color: var(--hai-text);
+}
+
+.hai-page--flush {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.hai-page--fab {
+  padding-bottom: 120rpx;
+}
+
+.hai-card {
+  background: var(--hai-card);
+  border-radius: var(--hai-radius);
+  box-shadow: var(--hai-shadow);
+}
+
+.hai-section-title {
+  font-family: var(--hai-serif);
+  font-size: 34rpx;
+  font-weight: 700;
+  color: var(--hai-text);
+}
+
+.hai-link {
+  color: var(--hai-primary);
+  font-size: 24rpx;
+}
+
+.hai-fab {
+  position: fixed;
+  right: 40rpx;
+  bottom: calc(100rpx + env(safe-area-inset-bottom));
+  width: 100rpx;
+  height: 100rpx;
+  background: var(--hai-primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48rpx;
+  color: var(--hai-on-primary);
+  box-shadow: 0 8rpx 28rpx rgba(27, 79, 138, 0.28);
+  z-index: 20;
+}
+
+.hai-bottom-bar {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 32rpx;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.hai-bottom-bar .hai-bottom-btn {
+  flex: 1;
+  text-align: center;
+  padding: 24rpx;
+  background: var(--hai-primary);
+  border-radius: 999rpx;
+  color: var(--hai-on-primary);
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.hai-bottom-bar .hai-bottom-btn.success {
+  background: var(--hai-success);
+}
+
+.hai-empty {
+  text-align: center;
+  color: var(--hai-text-muted);
+  padding: 48rpx;
+  font-size: 26rpx;
+  background: var(--hai-card);
+  border-radius: var(--hai-radius);
+  box-shadow: var(--hai-shadow);
+}
+
+/* 轻按压反馈（列表行 / 快捷入口） */
+.hai-press {
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+.hai-press:active {
+  opacity: 0.88;
+  transform: scale(0.98);
+}

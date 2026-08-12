@@ -36,6 +36,9 @@ public interface IRecipeService extends IService<Recipe> {
     /** 创建/编辑时写入家庭 ID（visibility=family 时） */
     void applyFamilyOnSave(Recipe recipe, String userId, String familyId);
 
+    /** 管理端保存：规范化可见性；家庭共享时必须带 familyId */
+    void applyAdminVisibilityOnSave(Recipe recipe);
+
     /** 详情（含可见性校验与收藏状态） */
     Map<String, Object> getDetailWithRelations(String id, String userId, String familyId, boolean checkVisibility);
 
@@ -46,10 +49,45 @@ public interface IRecipeService extends IService<Recipe> {
 
     /** 我的收藏列表（仍受可见性约束） */
     List<Recipe> listFavoriteRecipes(String userId, String familyId);
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R26】浏览计数 + 热门排行-----------
+    /** 浏览计数 +1（详情可见后调用） */
+    void incrementViewCount(String recipeId);
+
+    /** 热门菜谱（按 view_count 降序，受可见性约束） */
+    List<Recipe> listHotRecipes(String userId, String familyId, int limit);
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R28】轻量推荐-----------
+    /**
+     * 推荐菜谱：今日计划 > 我的收藏 > 家庭收藏 > 加权热门（含季节分类加权）
+     * @return 每项含 recipe 字段 + reason
+     */
+    List<Map<String, Object>> listRecommendRecipes(String userId, String familyId, int limit, String season);
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R28】轻量推荐-----------
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R30】新菜尝鲜-----------
+    /**
+     * 新菜尝鲜：近 days 日新增（按 createTime），优先排除用户近期计划做过的菜
+     */
+    List<Recipe> listNewRecipes(String userId, String familyId, int limit, int days);
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R30】新菜尝鲜-----------
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R26】浏览计数 + 热门排行-----------
     void saveWithRelations(Recipe recipe, List<RecipeIngredient> ingredients, List<RecipeStep> steps);
 
     /** 编辑菜谱（更新主表并整体替换食材/步骤） */
     void updateWithRelations(Recipe recipe, List<RecipeIngredient> ingredients, List<RecipeStep> steps);
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R24】Excel 含子表导入导出-----------
+    /** 从 Excel 文本列解析食材 */
+    List<RecipeIngredient> parseIngredientsFromExcel(String text);
+
+    /** 从 Excel 文本列解析步骤 */
+    List<RecipeStep> parseStepsFromExcel(String text);
+
+    /** 导出前把子表填回 Excel 文本列 */
+    void fillExcelRelationText(Recipe recipe);
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R24】Excel 含子表导入导出-----------
+
     String uploadVideo(String recipeId, MultipartFile file);
     void deleteVideo(String recipeId);
     /** 上传菜谱封面图并更新菜谱记录 */

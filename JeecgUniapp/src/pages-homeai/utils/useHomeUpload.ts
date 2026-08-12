@@ -1,9 +1,10 @@
 /**
  * 统一文件上传 composable（白名单校验 + 进度）
  */
-import { getServerBaseUrl } from '../pages-homeai/api/request'
-import { getToken } from '../pages-homeai/utils/auth'
-import { validateUploadFile } from '../pages-homeai/utils/fileWhitelist'
+import { getServerBaseUrl } from '../api/request'
+import { getToken } from './auth'
+import { validateUploadFile } from './fileWhitelist'
+import { useHomeaiFilePick } from './useHomeaiFilePick'
 
 export interface HomeUploadOptions {
   url: string
@@ -46,17 +47,14 @@ export function chooseAndUpload(options: {
   formData?: Record<string, string>
   sourceType?: ('album' | 'camera')[]
 }) {
-  uni.chooseImage({
-    count: 1,
-    sourceType: options.sourceType || ['album', 'camera'],
-    success: async (r) => {
-      if (!r.tempFilePaths?.[0]) return
-      try {
-        await homeUpload({ url: options.url, filePath: r.tempFilePaths[0], formData: options.formData })
-        uni.showToast({ title: '上传成功', icon: 'success' })
-      } catch (e: any) {
-        uni.showToast({ title: e.message || '上传失败', icon: 'none' })
-      }
-    },
+  const { pickImages } = useHomeaiFilePick()
+  pickImages({ count: 1, sourceType: options.sourceType || ['album', 'camera'] }).then(async (files) => {
+    if (!files[0]) return
+    try {
+      await homeUpload({ url: options.url, filePath: files[0].path, formData: options.formData })
+      uni.showToast({ title: '上传成功', icon: 'success' })
+    } catch (e: any) {
+      uni.showToast({ title: e.message || '上传失败', icon: 'none' })
+    }
   })
 }

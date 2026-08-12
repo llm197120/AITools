@@ -10,8 +10,12 @@ import org.jeecg.modules.homeai.plan.mapper.PlanInstanceMapper;
 import org.jeecg.modules.homeai.plan.service.IPlanService;
 import org.jeecg.modules.homeai.plan.util.PlanRepeatUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiPlanConfigService;
+import org.jeecg.modules.homeai.recipe.entity.Recipe;
+import org.jeecg.modules.homeai.recipe.service.IRecipeService;
 import org.jeecg.common.util.RedisUtil;
+import org.jeecg.common.util.oConvertUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -30,6 +34,12 @@ public class PlanServiceImpl extends ServiceImpl<PlanMasterMapper, PlanMaster> i
 
     @Autowired
     private IHomeaiPlanConfigService planConfigService;
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】计划关联菜谱-----------
+    @Lazy
+    @Autowired
+    private IRecipeService recipeService;
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】计划关联菜谱-----------
 
     /** 计划日历缓存 key + TTL(5分钟) */
     private static final String CACHE_PLAN_CALENDAR = "homeai:cache:plan:calendar:%s:%s";
@@ -228,6 +238,15 @@ public class PlanServiceImpl extends ServiceImpl<PlanMasterMapper, PlanMaster> i
                 inst.setIsAllDay(m.getIsAllDay());
                 inst.setUserId(m.getUserId());
                 inst.setRepeatRule(m.getRepeatRule());
+                //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】计划关联菜谱-----------
+                inst.setRecipeId(m.getRecipeId());
+                if (oConvertUtils.isNotEmpty(m.getRecipeId())) {
+                    Recipe recipe = recipeService.getById(m.getRecipeId());
+                    if (recipe != null) {
+                        inst.setRecipeName(recipe.getName());
+                    }
+                }
+                //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】计划关联菜谱-----------
             }
         }
     }

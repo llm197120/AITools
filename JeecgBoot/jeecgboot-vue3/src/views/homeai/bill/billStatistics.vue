@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <!-- 筛选与汇总 -->
     <a-card :bordered="false" style="margin-bottom: 16px">
       <a-space>
@@ -15,10 +15,10 @@
 
     <a-row :gutter="16" style="margin-bottom: 16px">
       <a-col :span="6">
-        <a-card :bordered="false"><a-statistic title="总支出" :value="data.totalExpense || 0" :precision="2" prefix="¥" value-style="color:#e74c3c" /></a-card>
+        <a-card :bordered="false"><a-statistic title="总支出" :value="data.totalExpense || 0" :precision="2" prefix="¥" value-style="color:var(--hai-admin-danger)" /></a-card>
       </a-col>
       <a-col :span="6">
-        <a-card :bordered="false"><a-statistic title="总收入" :value="data.totalIncome || 0" :precision="2" prefix="¥" value-style="color:#27ae60" /></a-card>
+        <a-card :bordered="false"><a-statistic title="总收入" :value="data.totalIncome || 0" :precision="2" prefix="¥" value-style="color:var(--hai-admin-success)" /></a-card>
       </a-col>
       <a-col :span="6">
         <a-card :bordered="false"><a-statistic title="结余" :value="data.balance || 0" :precision="2" prefix="¥" /></a-card>
@@ -29,11 +29,12 @@
     </a-row>
 
     <BasicTable :dataSource="data.rows || []" :columns="columns" :pagination="false" row-key="name" />
-  </div>
+  </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-bill-statistics" setup>
-  import { ref, reactive } from 'vue';
+  import { PageWrapper } from '/@/components/Page';
+  import { ref, reactive, h } from 'vue';
   import dayjs from 'dayjs';
   import { BasicTable } from '/@/components/Table';
   import { defHttp } from '/@/utils/http/axios';
@@ -44,8 +45,8 @@
 
   const columns = [
     { title: '维度', dataIndex: 'name', width: 200 },
-    { title: '支出', dataIndex: 'expense', key: 'expense', width: 200, customRender: ({ text }: any) => `¥${Number(text || 0).toFixed(2)}` },
-    { title: '收入', dataIndex: 'income', key: 'income', width: 200, customRender: ({ text }: any) => `¥${Number(text || 0).toFixed(2)}` },
+    { title: '支出', dataIndex: 'expense', key: 'expense', width: 200, customRender: ({ text }: any) => h('span', { class: 'hai-amount-expense' }, `¥${Number(text || 0).toFixed(2)}`) },
+    { title: '收入', dataIndex: 'income', key: 'income', width: 200, customRender: ({ text }: any) => h('span', { class: 'hai-amount-income' }, `¥${Number(text || 0).toFixed(2)}`) },
   ];
 
   async function load() {

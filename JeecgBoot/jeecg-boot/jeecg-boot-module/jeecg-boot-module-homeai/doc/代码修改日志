@@ -166,3 +166,7 @@ HomeaiChatServiceImpl 已直接复用 IAiragChatService.send() 实现 SSE 流式
 -- author:admin---date:20260730--for: 【功能优化】菜单权限SQL-新增/导入/导出/回收站/文件夹按钮权限 ---
 涉及的文件：
   sql/alter_homeai_menus_buttons.sql（新增:用户/家庭/账单/计划/菜谱/学习6个模块的34个按钮权限 + 存储新增文件夹权限）
+-- author:admin---date:20260812--for: 【启动修复】移除单体误引入的 starter-cloud，避免 nacos-config 强制 spring.config.import ---
+涉及的文件：
+  jeecg-boot-module-homeai/pom.xml（移除 jeecg-boot-starter-cloud；OSS 不依赖该 starter）
+  jeecg-module-system/jeecg-system-start/src/main/resources/application.yml（单体关闭 nacos + optional:nacos: 兜底）

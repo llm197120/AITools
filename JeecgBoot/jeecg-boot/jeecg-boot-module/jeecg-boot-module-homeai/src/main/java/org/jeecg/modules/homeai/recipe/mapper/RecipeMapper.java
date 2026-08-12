@@ -42,4 +42,9 @@ public interface RecipeMapper extends BaseMapper<Recipe> {
     })
     int deletePermanentlyByIds(@Param("ids") Collection<String> ids);
     //update-end---author:admin ---date:2026-07-31  for：修复回收站功能-----------
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R26】菜谱浏览计数原子递增-----------
+    @Update("UPDATE homeai_recipe SET view_count = IFNULL(view_count, 0) + 1 WHERE id = #{id} AND del_flag = 0")
+    int incrementViewCount(@Param("id") String id);
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R26】菜谱浏览计数原子递增-----------
 }

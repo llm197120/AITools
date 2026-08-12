@@ -1,5 +1,5 @@
 <template>
-  <BasicDrawer v-bind="$attrs" @register="registerDrawer" :title="isUpdate ? '编辑菜谱' : '新增菜谱'" width="45%">
+  <BasicDrawer v-bind="$attrs" @register="registerDrawer" :title="isUpdate ? '编辑菜谱' : '新增菜谱'" width="40%">
     <BasicForm @register="registerForm" @submit="handleSubmit">
       <template #coverUrlSlot="{ model, field }">
         <div style="display: flex; gap: 8px; align-items: center">
@@ -18,37 +18,36 @@
       </template>
     </BasicForm>
 
-    <!-- 食材清单 -->
-    <a-divider style="margin: 8px 0">食材清单</a-divider>
-    <div v-for="(ing, i) in ingredients" :key="i" style="display: flex; gap: 8px; margin-bottom: 8px">
-      <a-input v-model:value="ing.name" placeholder="食材名" style="flex: 1" />
-      <a-input v-model:value="ing.amount" placeholder="用量" style="flex: 1" />
-      <a-button type="text" danger size="small" @click="ingredients.splice(i, 1)">删除</a-button>
-    </div>
-    <a-button type="dashed" block size="small" @click="ingredients.push({ name: '', amount: '' })">+ 添加食材</a-button>
-
-    <!-- 烹饪步骤 -->
-    <a-divider style="margin: 16px 0 8px">烹饪步骤</a-divider>
-    <div v-for="(s, i) in steps" :key="i" style="border: 1px solid #f0f0f0; border-radius: 8px; padding: 8px; margin-bottom: 8px">
-      <div style="display: flex; justify-content: space-between; margin-bottom: 6px">
-        <span style="font-weight: 600">第 {{ i + 1 }} 步</span>
-        <span>
-          <a-button type="text" size="small" @click="moveStep(i, -1)">↑</a-button>
-          <a-button type="text" size="small" @click="moveStep(i, 1)">↓</a-button>
-          <a-button type="text" danger size="small" @click="steps.splice(i, 1)">删除</a-button>
-        </span>
+    <a-card size="small" title="食材清单" :bordered="false" style="margin-top: 12px; background: var(--hai-admin-bg, #f3f2ee)">
+      <div v-for="(ing, i) in ingredients" :key="i" style="display: flex; gap: 8px; margin-bottom: 8px">
+        <a-input v-model:value="ing.name" placeholder="食材名" style="flex: 1" />
+        <a-input v-model:value="ing.amount" placeholder="用量" style="flex: 1" />
+        <a-button type="text" danger size="small" @click="ingredients.splice(i, 1)">删除</a-button>
       </div>
-      <a-textarea v-model:value="s.description" :rows="2" placeholder="步骤说明" style="margin-bottom: 6px" />
-      <div style="display: flex; gap: 8px; align-items: center">
-        <a-input v-model:value="s.imageUrl" placeholder="步骤图片地址" style="flex: 1" />
-        <input type="file" accept="image/*" style="display: none" :id="`stepImg-${i}`" @change="(e: any) => onStepImageChange(e, i)" />
-        <a-button size="small" @click="triggerStepImage(i)">上传图</a-button>
-        <a-image v-if="s.imageUrl" :src="s.imageUrl" width="48" height="48" style="border-radius: 4px" />
-      </div>
-    </div>
-    <a-button type="dashed" block size="small" @click="steps.push({ description: '', imageUrl: '' })">+ 添加步骤</a-button>
+      <a-button type="dashed" block size="small" @click="ingredients.push({ name: '', amount: '' })">+ 添加食材</a-button>
+    </a-card>
 
-    <!-- 底部按钮 -->
+    <a-card size="small" title="烹饪步骤" :bordered="false" style="margin-top: 12px; background: var(--hai-admin-bg, #f3f2ee)">
+      <div v-for="(s, i) in steps" :key="i" style="border: 1px solid var(--hai-admin-border, #ece9e2); border-radius: 8px; padding: 8px; margin-bottom: 8px; background: #fff">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px">
+          <span style="font-weight: 600">第 {{ i + 1 }} 步</span>
+          <span>
+            <a-button type="text" size="small" @click="moveStep(i, -1)">↑</a-button>
+            <a-button type="text" size="small" @click="moveStep(i, 1)">↓</a-button>
+            <a-button type="text" danger size="small" @click="steps.splice(i, 1)">删除</a-button>
+          </span>
+        </div>
+        <a-textarea v-model:value="s.description" :rows="2" placeholder="步骤说明" style="margin-bottom: 6px" />
+        <div style="display: flex; gap: 8px; align-items: center">
+          <a-input v-model:value="s.imageUrl" placeholder="步骤图片地址" style="flex: 1" />
+          <input type="file" accept="image/*" style="display: none" :id="`stepImg-${i}`" @change="(e: any) => onStepImageChange(e, i)" />
+          <a-button size="small" @click="triggerStepImage(i)">上传图</a-button>
+          <a-image v-if="s.imageUrl" :src="s.imageUrl" width="48" height="48" style="border-radius: 4px" />
+        </div>
+      </div>
+      <a-button type="dashed" block size="small" @click="steps.push({ description: '', imageUrl: '' })">+ 添加步骤</a-button>
+    </a-card>
+
     <template #footer>
       <a-button type="primary" :loading="saving" @click="submit">保存</a-button>
       <a-button style="margin-left: 8px" @click="closeDrawer()">取消</a-button>
@@ -60,21 +59,59 @@
   import { ref } from 'vue';
   import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
   import { BasicForm, useForm } from '/@/components/Form';
-  import { recipeApi } from '/@/api/homeai';
+  import { recipeApi, familyApi } from '/@/api/homeai';
   import { defHttp } from '/@/utils/http/axios';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import type { HomeaiRecipeIngredient } from '/@/api/homeai/types';
 
   const emit = defineEmits(['success']);
   const { createMessage } = useMessage();
+
+  /** 展示用量 → quantity/unit（与小程序 recipeIngredient 对齐，跨项目内联） */
+  function parseAmountToQuantityUnit(amount: string): { quantity?: number; unit?: string } {
+    const trimmed = (amount || '').trim();
+    if (!trimmed) return {};
+    const match = trimmed.match(/^(\d+(?:\.\d+)?)(.*)$/);
+    if (!match) return { unit: trimmed };
+    const quantity = Number(match[1]);
+    const unit = (match[2] || '').trim();
+    const result: { quantity?: number; unit?: string } = {};
+    if (!Number.isNaN(quantity)) result.quantity = quantity;
+    if (unit) result.unit = unit;
+    return result;
+  }
+
+  /** quantity/unit → 展示用量 */
+  function formatQuantityUnit(
+    quantity?: number | string | null,
+    unit?: string | null,
+    amountFallback?: string,
+  ): string {
+    const hasQuantity = quantity !== undefined && quantity !== null && quantity !== '';
+    if (hasQuantity) return `${quantity}${unit || ''}`;
+    if (unit) return String(unit);
+    return amountFallback || '';
+  }
 
   const isUpdate = ref(false);
   const recordId = ref('');
   const saving = ref(false);
   const categoryOptions = ref<{ label: string; value: string }[]>([]);
+  const familyOptions = ref<{ label: string; value: string }[]>([]);
   const coverInputRef = ref<HTMLInputElement | null>(null);
   const videoInputRef = ref<HTMLInputElement | null>(null);
-  const ingredients = ref<any[]>([{ name: '', amount: '' }]);
-  const steps = ref<any[]>([{ description: '', imageUrl: '' }]);
+  const ingredients = ref<HomeaiRecipeIngredient[]>([{ name: '', amount: '' }]);
+  const steps = ref<Array<{ description: string; imageUrl?: string }>>([{ description: '', imageUrl: '' }]);
+
+  async function loadFamilyOptions() {
+    try {
+      const res: any = await familyApi.list({ pageNo: 1, pageSize: 500 });
+      const records = res?.records || res?.result?.records || [];
+      familyOptions.value = records.map((f: any) => ({ label: f.name, value: f.id }));
+    } catch {
+      familyOptions.value = [];
+    }
+  }
 
   const [registerDrawer, { closeDrawer }] = useDrawerInner(async (data: any) => {
     isUpdate.value = data.isUpdate || false;
@@ -82,13 +119,20 @@
     resetFields();
     ingredients.value = [{ name: '', amount: '' }];
     steps.value = [{ description: '', imageUrl: '' }];
+    await loadFamilyOptions();
     try {
       const list: any[] = (await recipeApi.categories()) || [];
       categoryOptions.value = list.map((c) => ({ label: c.name, value: c.id }));
-      updateSchema({
-        field: 'categoryId',
-        componentProps: { options: categoryOptions.value, placeholder: '请选择分类', showSearch: true },
-      });
+      updateSchema([
+        {
+          field: 'categoryId',
+          componentProps: { options: categoryOptions.value, placeholder: '请选择分类', showSearch: true },
+        },
+        {
+          field: 'familyId',
+          componentProps: { options: familyOptions.value, placeholder: '请选择家庭', showSearch: true, allowClear: true },
+        },
+      ]);
     } catch {
       categoryOptions.value = [];
     }
@@ -96,16 +140,33 @@
       setFieldsValue({ ...data.record });
       // 加载食材/步骤
       try {
-        const detail: any = await defHttp.get({ url: `/homeai/recipe/${data.record.id}` });
+        const detail: any = await recipeApi.getById(data.record.id);
         const d = detail?.recipe || detail;
-        if (d) setFieldsValue({ ...data.record, coverUrl: d.coverUrl, videoUrl: d.videoUrl, visibility: d.visibility });
-        const ings = detail?.ingredients || [];
-        ingredients.value = ings.length ? ings.map((x: any) => ({ name: x.name, amount: x.amount })) : [{ name: '', amount: '' }];
+        if (d) {
+          setFieldsValue({
+            ...data.record,
+            coverUrl: d.coverUrl,
+            videoUrl: d.videoUrl,
+            visibility: d.visibility || 'public',
+            familyId: d.familyId,
+          });
+        }
+        const ings: HomeaiRecipeIngredient[] = detail?.ingredients || [];
+        ingredients.value = ings.length
+          ? ings.map((x) => ({ name: x.name, amount: formatQuantityUnit(x.quantity, x.unit, x.amount) }))
+          : [{ name: '', amount: '' }];
         const sts = detail?.steps || [];
-        steps.value = sts.length ? sts.map((x: any) => ({ description: x.description, imageUrl: x.imageUrl })) : [{ description: '', imageUrl: '' }];
+        steps.value = sts.length
+          ? sts.map((x: { description?: string; imageUrl?: string }) => ({
+              description: x.description || '',
+              imageUrl: x.imageUrl,
+            }))
+          : [{ description: '', imageUrl: '' }];
       } catch {
-        // 加载失败时使用列表数据
+        createMessage.warning('菜谱详情加载失败，已使用列表数据');
       }
+    } else {
+      setFieldsValue({ visibility: 'public' });
     }
   });
 
@@ -133,8 +194,22 @@
         field: 'visibility',
         label: '可见性',
         component: 'Select',
-        componentProps: { options: [{ label: '家庭共享', value: 'family' }, { label: '仅自己', value: 'private' }] },
-        defaultValue: 'family',
+        componentProps: {
+          options: [
+            { label: '公开（所有小程序用户）', value: 'public' },
+            { label: '家庭共享', value: 'family' },
+            { label: '仅自己', value: 'private' },
+          ],
+        },
+        defaultValue: 'public',
+      },
+      {
+        field: 'familyId',
+        label: '所属家庭',
+        component: 'Select',
+        componentProps: { options: familyOptions, placeholder: '请选择家庭', showSearch: true, allowClear: true },
+        ifShow: ({ values }) => values.visibility === 'family',
+        required: true,
       },
       { field: 'coverUrl', label: '封面', component: 'Input', slot: 'coverUrlSlot' },
       { field: 'videoUrl', label: '视频', component: 'Input', slot: 'videoUrlSlot' },
@@ -190,10 +265,20 @@
 
   async function handleSubmit(values: any) {
     try {
+      if (values.visibility === 'family' && !values.familyId) {
+        createMessage.warning('家庭共享菜谱请选择所属家庭');
+        return false;
+      }
       saving.value = true;
       const payload = {
         ...values,
-        ingredients: ingredients.value.filter((x: any) => x.name),
+        familyId: values.visibility === 'family' ? values.familyId : null,
+        ingredients: ingredients.value
+          .filter((x: any) => x.name)
+          .map((x: any) => {
+            const { quantity, unit } = parseAmountToQuantityUnit(x.amount || '');
+            return { name: x.name, quantity, unit };
+          }),
         steps: steps.value.filter((x: any) => x.description).map((x: any, i: number) => ({
           description: x.description,
           imageUrl: x.imageUrl || null,

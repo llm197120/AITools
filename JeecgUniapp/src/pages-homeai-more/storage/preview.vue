@@ -1,4 +1,4 @@
-<route lang="json5">{ style: { navigationBarTitleText: '文件预览' } }</route>
+<route lang="json5">{ style: { navigationBarTitleText: '文件预览', navigationBarBackgroundColor: '#F3F2EE' } }</route>
 <template>
   <view class="preview-page">
     <view v-if="loading" class="loading">加载中...</view>
@@ -172,19 +172,19 @@ onLoad(async (opts: any) => {
 })
 </script>
 <style scoped>
-.preview-page { min-height: 100vh; background: #f5f5f5; padding: 24rpx; padding-bottom: 160rpx; box-sizing: border-box; }
-.loading { text-align: center; padding: 80rpx; color: #999; }
-.file-name { font-size: 28rpx; color: #666; display: block; margin-bottom: 20rpx; word-break: break-all; }
-.preview-image { width: 100%; border-radius: 12rpx; background: #fff; }
-.preview-video { width: 100%; height: 420rpx; border-radius: 12rpx; background: #000; }
-.text-box { height: calc(100vh - 280rpx); background: #fff; border-radius: 12rpx; padding: 24rpx; box-sizing: border-box; }
-.text-content { font-size: 26rpx; color: #333; line-height: 1.7; white-space: pre-wrap; word-break: break-all; }
-.doc-box { background: #fff; border-radius: 16rpx; padding: 80rpx 40rpx; text-align: center; }
+.preview-page { min-height: 100vh; background: var(--hai-bg); padding: 24rpx 32rpx 160rpx; box-sizing: border-box; }
+.loading { text-align: center; padding: 80rpx; color: var(--hai-text-muted); }
+.file-name { font-size: 28rpx; color: var(--hai-text-secondary); display: block; margin-bottom: 20rpx; word-break: break-all; }
+.preview-image { width: 100%; border-radius: 24rpx; background: var(--hai-card); box-shadow: var(--hai-shadow); }
+.preview-video { width: 100%; height: 420rpx; border-radius: 24rpx; background: #000; }
+.text-box { height: calc(100vh - 280rpx); background: var(--hai-card); border-radius: 24rpx; padding: 24rpx; box-sizing: border-box; box-shadow: var(--hai-shadow); }
+.text-content { font-size: 26rpx; color: var(--hai-text); line-height: 1.7; white-space: pre-wrap; word-break: break-all; }
+.doc-box { background: var(--hai-card); border-radius: 28rpx; padding: 80rpx 40rpx; text-align: center; box-shadow: var(--hai-shadow); }
 .doc-icon { font-size: 80rpx; display: block; margin-bottom: 20rpx; }
-.doc-tip { font-size: 28rpx; color: #666; display: block; margin-bottom: 40rpx; }
+.doc-tip { font-size: 28rpx; color: var(--hai-text-secondary); display: block; margin-bottom: 40rpx; }
 .action-bar {
   position: fixed; left: 0; right: 0; bottom: 0;
-  padding: 20rpx 30rpx calc(20rpx + env(safe-area-inset-bottom));
-  background: #fff; border-top: 1rpx solid #eee;
+  padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
+  background: var(--hai-card); border-top: 1rpx solid var(--hai-border);
 }
 </style>

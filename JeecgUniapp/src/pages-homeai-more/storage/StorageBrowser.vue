@@ -31,11 +31,11 @@
             {{ folder.fileCount || 0 }} 个文件
             <text v-if="folder.visibility === 'family'" class="tag-family">家庭</text>
             <text v-else-if="folder.visibility === 'public'" class="tag-public">公开</text>
-            <text v-if="folder.userId && folder.userId !== userId" class="tag-other">他人创建</text>
+            <text v-if="folder.userId && folder.userId !== userId" class="tag-other">{{ ownerLabel(folder.userId) }}</text>
           </text>
         </view>
         <text v-if="canEditFolder(folder)" class="action-hint" @click.stop="showFolderActions(folder)">管理</text>
-        <wd-icon name="arrow-right" size="14px" color="#ccc" />
+        <wd-icon name="arrow-right" size="14px" color="#A39E94" />
       </view>
 
       <!-- 文件列表（根目录与子文件夹均展示） -->
@@ -46,16 +46,29 @@
         @click="openFile(file)"
         @longpress="showFileActions(file)"
       >
-        <HomeFileIcon :ext="file.extension" :name="getStorageDisplayName(file)" />
+        <image
+          v-if="file.thumbnailUrl"
+          class="file-thumb"
+          :src="file.thumbnailUrl"
+          mode="aspectFill"
+        />
+        <HomeFileIcon v-else :ext="file.extension" :name="getStorageDisplayName(file)" />
         <view class="file-info">
           <text class="file-name">{{ getStorageDisplayName(file) }}</text>
           <text class="file-meta">
             {{ formatSize(file.fileSize) }} · {{ formatTime(file.createTime) }}
             <text v-if="!folderId && file.visibility === 'family'" class="tag-family">家庭</text>
             <text v-else-if="!folderId && file.visibility === 'public'" class="tag-public">公开</text>
+            <text v-if="file.userId && file.userId !== userId" class="tag-other">{{ ownerLabel(file.userId) }}</text>
           </text>
         </view>
         <text class="action-hint" @click.stop="showFileActions(file)">更多</text>
+      </view>
+
+      <view v-if="files.length" class="load-more-wrap">
+        <text v-if="loadingMore" class="load-more-text">加载中...</text>
+        <view v-else-if="hasMore" class="load-more-btn" @click="loadMore">加载更多</view>
+        <text v-else class="load-more-text">没有更多了</text>
       </view>
 
       <HomeEmpty
@@ -78,12 +91,15 @@
 <script lang="ts" setup>
 import { onMounted } from 'vue'
 import { useStorageBrowser } from '../../pages-homeai/utils/useStorageBrowser'
+import { useMemberLabel } from '../../pages-homeai/utils/useMemberLabel'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 import HomeEmpty from '../../components/HomeEmpty.vue'
-import { getStorageDisplayName, normalizeStorageFiles } from '../../pages-homeai/utils/storageFileDisplay'
+import { getStorageDisplayName } from '../../pages-homeai/utils/storageFileDisplay'
 import HomeFileIcon from '../../components/HomeFileIcon.vue'
 
 const props = defineProps<{ folderId: string | null; userId?: string }>()
+
+const { loadMemberLabels, resolveMemberLabel } = useMemberLabel()
 
 const {
   files,
@@ -91,6 +107,9 @@ const {
   subFolders,
   breadcrumbs,
   refresh,
+  loadMore,
+  hasMore,
+  loadingMore,
   enterFolder,
   onBreadcrumb,
   openFile,
@@ -104,9 +123,16 @@ const {
   () => props.userId,
 )
 
-defineExpose({ refresh })
+defineExpose({ refresh, loadMore })
 
-onMounted(() => refresh())
+function ownerLabel(uid: string) {
+  return resolveMemberLabel(uid, '家庭成员')
+}
+
+onMounted(async () => {
+  await loadMemberLabels()
+  await refresh()
+})
 
 function formatSize(bytes: number) {
   if (!bytes) return '0B'
@@ -121,30 +147,56 @@ function formatTime(t: string) {
 </script>
 
 <style scoped>
-.browser { min-height: 100vh; background: #f5f5f5; padding-bottom: 160rpx; }
-.breadcrumb { white-space: nowrap; padding: 20rpx 24rpx; background: #fff; border-bottom: 1rpx solid #eee; }
-.crumb { font-size: 26rpx; color: #667eea; }
-.crumb.active { color: #333; font-weight: 600; }
-.sep { color: #ccc; }
+.browser { min-height: 100vh; background: var(--hai-bg); padding: 16rpx 32rpx 160rpx; box-sizing: border-box; }
+.breadcrumb {
+  white-space: nowrap;
+  padding: 20rpx 24rpx;
+  background: var(--hai-card);
+  border-radius: 24rpx;
+  margin-bottom: 16rpx;
+  box-shadow: var(--hai-shadow);
+}
+.crumb { font-size: 26rpx; color: var(--hai-primary); }
+.crumb.active { color: var(--hai-text); font-weight: 600; }
+.sep { color: #c4bfb6; }
 .loading-wrap { padding: 20rpx; }
 .folder-item, .file-item {
   display: flex; align-items: center; gap: 16rpx;
-  padding: 28rpx 24rpx; background: #fff; border-bottom: 1rpx solid #f5f5f5;
+  padding: 28rpx 24rpx; background: var(--hai-card); border-radius: 24rpx; margin-bottom: 12rpx;
+  box-shadow: var(--hai-shadow);
 }
 .folder-icon { font-size: 36rpx; }
+.file-thumb {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 12rpx;
+  flex-shrink: 0;
+  background: #ece9e2;
+}
 .folder-info, .file-info { flex: 1; min-width: 0; }
-.folder-name, .file-name { font-size: 28rpx; color: #333; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.folder-meta, .file-meta { font-size: 22rpx; color: #999; display: block; margin-top: 4rpx; }
-.tag-family { color: #27ae60; margin-left: 8rpx; }
-.tag-public { color: #3498db; margin-left: 8rpx; }
-.tag-other { color: #e67e22; margin-left: 8rpx; }
-.action-hint { font-size: 22rpx; color: #667eea; padding: 8rpx 12rpx; flex-shrink: 0; }
-.fab-group {
-  position: fixed; left: 0; right: 0; bottom: 0;
-  display: flex; gap: 20rpx; padding: 20rpx 30rpx 40rpx;
-  background: linear-gradient(transparent, #f5f5f5 30%);
+.load-more-wrap {
+  padding: 24rpx 0 8rpx;
+  display: flex;
   justify-content: center;
 }
-.fab { padding: 20rpx 36rpx; background: #fff; border-radius: 40rpx; font-size: 26rpx; color: #333; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.08); }
-.fab.primary { background: #667eea; color: #fff; }
+.load-more-text { font-size: 24rpx; color: var(--hai-text-muted); }
+.load-more-btn {
+  font-size: 26rpx;
+  color: var(--hai-primary);
+  padding: 12rpx 32rpx;
+}
+.folder-name, .file-name { font-size: 28rpx; color: var(--hai-text); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-meta, .file-meta { font-size: 22rpx; color: var(--hai-text-muted); display: block; margin-top: 4rpx; }
+.tag-family { color: var(--hai-success); margin-left: 8rpx; }
+.tag-public { color: var(--hai-primary); margin-left: 8rpx; }
+.tag-other { color: var(--hai-danger); margin-left: 8rpx; }
+.action-hint { font-size: 22rpx; color: var(--hai-primary); padding: 8rpx 12rpx; flex-shrink: 0; }
+.fab-group {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  display: flex; gap: 20rpx; padding: 20rpx 30rpx calc(40rpx + env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, var(--hai-bg) 30%);
+  justify-content: center;
+}
+.fab { padding: 20rpx 36rpx; background: var(--hai-card); border-radius: 999rpx; font-size: 26rpx; color: var(--hai-text); box-shadow: var(--hai-shadow); }
+.fab.primary { background: var(--hai-primary); color: var(--hai-on-primary); box-shadow: 0 8rpx 28rpx rgba(27, 79, 138, 0.28); }
 </style>

@@ -1,6 +1,6 @@
-<route lang="json5">{ style: { navigationBarTitleText: '学习资料' } }</route>
+<route lang="json5">{ style: { navigationBarTitleText: '学习资料', navigationBarBackgroundColor: '#F3F2EE' } }</route>
 <template>
-  <view class="page">
+  <view class="hai-page hai-page--fab">
     <text class="title">{{ material.title || title }}</text>
     <text class="meta" v-if="material.category">{{ material.category }} · {{ material.type }}</text>
 
@@ -43,6 +43,8 @@ const mediaUrl = ref('')
 const linkUrl = ref('')
 const learning = ref(false)
 const elapsed = ref(0)
+/** 列表跳转带 autoStart=1 时，无进行中会话则自动开始学习 */
+const autoStart = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
 
 const isVideo = computed(() => material.value.type === 'video' || isVideoExt(getFileExt(mediaUrl.value)))
@@ -128,28 +130,33 @@ onLoad(async (opts: any) => {
     return
   }
   materialId.value = opts?.id || ''
+  autoStart.value = opts?.autoStart === '1' || opts?.autoStart === 1 || opts?.autoStart === true
   if (!materialId.value) {
     uni.showToast({ title: '参数错误', icon: 'none' })
     return
   }
   await loadMaterial(materialId.value)
   await syncSession()
+  // 加载成功且无进行中会话时，按 autoStart 自动开始计时
+  if (autoStart.value && !learning.value) {
+    await startLearn()
+  }
 })
 
 onUnmounted(() => clearTimer())
 </script>
 <style scoped>
-.page { min-height: 100vh; background: #f5f5f5; padding: 24rpx; padding-bottom: 120rpx; }
-.title { font-size: 36rpx; font-weight: 700; color: #333; display: block; margin-bottom: 8rpx; }
-.meta { font-size: 24rpx; color: #999; display: block; margin-bottom: 24rpx; }
-.media { width: 100%; border-radius: 12rpx; margin-bottom: 24rpx; }
-.media.image { background: #fff; }
-.doc-tip { background: #fff; border-radius: 12rpx; padding: 60rpx; text-align: center; margin-bottom: 24rpx; }
-.link-box { background: #fff; border-radius: 12rpx; padding: 24rpx; margin-bottom: 24rpx; }
-.link-url { font-size: 24rpx; color: #667eea; word-break: break-all; display: block; margin-bottom: 16rpx; }
+/* page shell: .hai-page */
+.title { font-family: var(--hai-serif); font-size: 36rpx; font-weight: 700; color: var(--hai-text); display: block; margin-bottom: 8rpx; }
+.meta { font-size: 24rpx; color: var(--hai-text-muted); display: block; margin-bottom: 24rpx; }
+.media { width: 100%; border-radius: 24rpx; margin-bottom: 24rpx; box-shadow: var(--hai-shadow); }
+.media.image { background: var(--hai-card); }
+.doc-tip { background: var(--hai-card); border-radius: 24rpx; padding: 60rpx; text-align: center; margin-bottom: 24rpx; box-shadow: var(--hai-shadow); color: var(--hai-text); }
+.link-box { background: var(--hai-card); border-radius: 24rpx; padding: 24rpx; margin-bottom: 24rpx; box-shadow: var(--hai-shadow); }
+.link-url { font-size: 24rpx; color: var(--hai-primary); word-break: break-all; display: block; margin-bottom: 16rpx; }
 .doc-icon { font-size: 64rpx; display: block; margin-bottom: 16rpx; }
-.desc { background: #fff; border-radius: 12rpx; padding: 24rpx; font-size: 28rpx; color: #666; line-height: 1.6; margin-bottom: 24rpx; }
-.timer-bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: space-between; background: #27ae60; color: #fff; padding: 24rpx 30rpx; font-size: 28rpx; }
+.desc { background: var(--hai-card); border-radius: 24rpx; padding: 24rpx; font-size: 28rpx; color: var(--hai-text-secondary); line-height: 1.6; margin-bottom: 24rpx; box-shadow: var(--hai-shadow); }
+.timer-bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: space-between; background: var(--hai-success); color: var(--hai-on-primary); padding: 24rpx 32rpx; font-size: 28rpx; }
 .stop-btn { background: rgba(255,255,255,0.2); padding: 12rpx 24rpx; border-radius: 8rpx; }
 .actions { margin-top: 40rpx; }
 </style>

@@ -1,6 +1,6 @@
-<route lang="json5">{ style: { navigationBarTitleText: '导入账单' } }</route>
+<route lang="json5">{ style: { navigationBarTitleText: '导入账单', navigationBarBackgroundColor: '#F3F2EE' } }</route>
 <template>
-  <view class="page">
+  <view class="hai-page">
     <view class="section">
       <text class="label">导入来源</text>
       <view class="type-row">
@@ -18,24 +18,26 @@
 </template>
 <script lang="ts" setup>
 import { ref } from 'vue'
+import { useHomeaiFilePick } from '../../pages-homeai/utils/useHomeaiFilePick'
+
+const { pickFiles } = useHomeaiFilePick()
 
 const importType = ref<'wechat_csv' | 'excel'>('wechat_csv')
 const filePath = ref('')
 const fileName = ref('')
 
-function chooseFile() {
-  uni.chooseMessageFile({
+async function chooseFile() {
+  const ext = importType.value === 'excel' ? ['xlsx', 'xls'] : ['csv']
+  const files = await pickFiles({
     count: 1,
     type: 'file',
-    extension: importType.value === 'excel' ? ['xlsx', 'xls'] : ['csv'],
-    success: (r) => {
-      const f = r.tempFiles?.[0]
-      if (f) {
-        filePath.value = f.path
-        fileName.value = f.name
-      }
-    },
+    extension: ext,
+    allowedExt: ext,
   })
+  if (files[0]) {
+    filePath.value = files[0].path
+    fileName.value = files[0].name
+  }
 }
 
 async function preview() {
@@ -55,12 +57,12 @@ async function preview() {
 }
 </script>
 <style scoped>
-.page { min-height: 100vh; background: #f5f5f5; padding: 30rpx; }
-.label { font-size: 26rpx; color: #666; margin-bottom: 16rpx; display: block; }
-.type-row { display: flex; gap: 16rpx; margin-bottom: 30rpx; }
-.type-btn { flex: 1; text-align: center; padding: 20rpx; background: #fff; border-radius: 12rpx; font-size: 28rpx; }
-.type-btn.active { background: #667eea; color: #fff; }
-.upload-box { background: #fff; border-radius: 16rpx; padding: 60rpx 30rpx; text-align: center; margin-bottom: 40rpx; }
+/* page shell: .hai-page */
+.label { font-size: 26rpx; color: var(--hai-text-secondary); margin-bottom: 16rpx; display: block; }
+.type-row { display: flex; gap: 16rpx; margin-bottom: 24rpx; }
+.type-btn { flex: 1; text-align: center; padding: 22rpx; background: var(--hai-card); border-radius: 999rpx; font-size: 28rpx; color: var(--hai-text-secondary); box-shadow: var(--hai-shadow); }
+.type-btn.active { background: var(--hai-primary); color: var(--hai-on-primary); }
+.upload-box { background: var(--hai-card); border-radius: 28rpx; padding: 60rpx 30rpx; text-align: center; margin-bottom: 40rpx; box-shadow: var(--hai-shadow); color: var(--hai-text); }
 .upload-icon { font-size: 64rpx; display: block; margin-bottom: 16rpx; }
-.tip { display: block; font-size: 22rpx; color: #999; margin-top: 12rpx; }
+.tip { display: block; font-size: 22rpx; color: var(--hai-text-muted); margin-top: 12rpx; }
 </style>

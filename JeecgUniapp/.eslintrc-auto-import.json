@@ -89,7 +89,6 @@
     "useGeoPosition": true,
     "useId": true,
     "useModel": true,
-    "usePageList": true,
     "useRequest": true,
     "useSlots": true,
     "useTemplateRef": true,
@@ -97,6 +96,7 @@
     "watch": true,
     "watchEffect": true,
     "watchPostEffect": true,
-    "watchSyncEffect": true
+    "watchSyncEffect": true,
+    "usePageList": true
   }
 }

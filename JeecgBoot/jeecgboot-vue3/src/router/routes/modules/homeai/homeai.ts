@@ -1,3 +1,13 @@
+/**
+ * HomeAI 管理端路由定义（开发参考 / 文档用途）
+ *
+ * 【权限模式说明】
+ * - 当前 projectSetting.permissionMode 为 BACK：动态路由与侧边菜单以后台 DB 菜单为准
+ *   （getBackMenuAndPerms → permission store 构建），本文件不会在 BACK 模式下直接注册进路由表
+ * - 本文件仅作开发对照与文档：组件路径须与 DB 菜单 component 字段保持一致
+ *   （例如 views/homeai/user/index → 菜单 component 填 homeai/user/index）
+ * - 请勿删除本路由定义：若切换为 ROUTE_MAPPING / ROLE 等前端路由映射模式，仍会用到 asyncRoutes
+ */
 import type { AppRouteModule } from '/@/router/types';
 import { LAYOUT } from '/@/router/constant';
 
@@ -23,6 +33,12 @@ const homeai: AppRouteModule = {
       name: 'HomeaiFamily',
       component: () => import('/@/views/homeai/family/index.vue'),
       meta: { title: '家庭管理', icon: 'ant-design:team-outlined' },
+    },
+    {
+      path: 'dashboard/crossStats',
+      name: 'HomeaiDashboardCrossStats',
+      component: () => import('/@/views/homeai/dashboard/crossStats.vue'),
+      meta: { title: '综合统计', icon: 'ant-design:dashboard-outlined' },
     },
     // AI 管理（与设计文档 / 菜单 SQL 路径一致：/homeai/ai/*）
     {

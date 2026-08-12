@@ -45,4 +45,10 @@ public class PlanInstance implements Serializable {
     /** 冗余展示字段：重复规则 */
     @com.baomidou.mybatisplus.annotation.TableField(exist = false)
     private String repeatRule;
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】计划关联菜谱-----------
+    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    private String recipeId;
+    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    private String recipeName;
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】计划关联菜谱-----------
 }

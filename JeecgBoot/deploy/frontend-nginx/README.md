@@ -1,6 +1,6 @@
 # 管理端 Nginx 静态部署方案
 
-后端仍用 **Docker**；管理端为 **宿主机 Nginx + 静态 dist**（从 GitHub Actions Artifacts 下载）。
+后端仍用 **Docker**；管理端为 **宿主机 Nginx + 静态 dist**（ECS 本机 `pnpm run build:docker:prod`，不使用 GitHub Artifacts）。
 
 ## 目录说明
 

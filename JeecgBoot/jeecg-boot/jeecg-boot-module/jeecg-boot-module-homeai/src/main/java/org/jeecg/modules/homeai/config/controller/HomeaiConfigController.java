@@ -7,9 +7,11 @@ import org.jeecg.common.api.vo.Result;
 import org.jeecg.common.aspect.annotation.AutoLog;
 import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.modules.homeai.config.dto.HomeaiPlanConfigDto;
+import org.jeecg.modules.homeai.config.dto.HomeaiStorageConfigDto;
 import org.jeecg.modules.homeai.config.entity.HomeaiFileWhitelist;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileWhitelistService;
 import org.jeecg.modules.homeai.config.service.IHomeaiPlanConfigService;
+import org.jeecg.modules.homeai.config.service.IHomeaiStorageConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
@@ -26,11 +28,26 @@ public class HomeaiConfigController {
     @Value("${homeai.wechat.plan-remind-template-id:}")
     private String planRemindTemplateId;
 
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R29】学习提醒模板-----------
+    @Value("${homeai.wechat.learn-remind-template-id:}")
+    private String learnRemindTemplateId;
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R29】学习提醒模板-----------
+
     @Autowired
     private IHomeaiFileWhitelistService whitelistService;
 
     @Autowired
     private IHomeaiPlanConfigService planConfigService;
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】存储配额配置 API-----------
+    @Autowired
+    private IHomeaiStorageConfigService storageConfigService;
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】存储配额配置 API-----------
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R31】学习提醒模板联调-----------
+    @Autowired
+    private org.jeecg.modules.homeai.config.service.IHomeaiWxSubscribeService wxSubscribeService;
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R31】学习提醒模板联调-----------
 
     @GetMapping("/file-whitelist")
     @Operation(summary = "文件白名单-查询(小程序/管理端)")
@@ -73,11 +90,82 @@ public class HomeaiConfigController {
         return Result.OK("保存成功");
     }
 
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】存储配额配置 API-----------
+    @GetMapping("/storage")
+    @Operation(summary = "资料存储配额配置-查询(管理端)")
+    @RequiresPermissions("homeai:storage:file:list")
+    public Result<?> getStorageConfig() {
+        return Result.OK(storageConfigService.getConfig());
+    }
+
+    @PutMapping("/storage")
+    @AutoLog(value = "资料存储配额配置-更新")
+    @Operation(summary = "资料存储配额配置-更新(管理端)")
+    @RequiresPermissions("homeai:storage:file:list")
+    public Result<?> updateStorageConfig(@RequestBody HomeaiStorageConfigDto config) {
+        storageConfigService.saveConfig(config);
+        return Result.OK("保存成功");
+    }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R30】家庭级配额覆盖 API-----------
+    @GetMapping("/storage/family/{familyId}")
+    @Operation(summary = "家庭存储配额覆盖-查询")
+    @RequiresPermissions("homeai:storage:file:list")
+    public Result<?> getFamilyStorageLimit(@PathVariable String familyId) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("familyId", familyId);
+        data.put("limitBytes", storageConfigService.getFamilyLimitBytes(familyId));
+        data.put("custom", storageConfigService.hasFamilyLimitOverride(familyId));
+        data.put("defaultFamilyLimitBytes", storageConfigService.getDefaultFamilyLimitBytes());
+        return Result.OK(data);
+    }
+
+    @PutMapping("/storage/family/{familyId}")
+    @AutoLog(value = "家庭存储配额覆盖-更新")
+    @Operation(summary = "家庭存储配额覆盖-更新(字节，<=0 清除)")
+    @RequiresPermissions("homeai:storage:file:list")
+    public Result<?> updateFamilyStorageLimit(@PathVariable String familyId,
+                                              @RequestBody Map<String, Object> body) {
+        Long limitBytes = null;
+        if (body != null && body.get("limitBytes") != null) {
+            limitBytes = Long.valueOf(String.valueOf(body.get("limitBytes")));
+        }
+        storageConfigService.setFamilyLimitBytes(familyId, limitBytes);
+        Map<String, Object> data = new HashMap<>();
+        data.put("familyId", familyId);
+        data.put("limitBytes", storageConfigService.getFamilyLimitBytes(familyId));
+        data.put("custom", storageConfigService.hasFamilyLimitOverride(familyId));
+        return Result.OK("保存成功", data);
+    }
+
+    @DeleteMapping("/storage/family/{familyId}")
+    @AutoLog(value = "家庭存储配额覆盖-清除")
+    @Operation(summary = "家庭存储配额覆盖-清除")
+    @RequiresPermissions("homeai:storage:file:list")
+    public Result<?> clearFamilyStorageLimit(@PathVariable String familyId) {
+        storageConfigService.clearFamilyLimitBytes(familyId);
+        return Result.OK("已恢复默认家庭配额");
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R30】家庭级配额覆盖 API-----------
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】存储配额配置 API-----------
+
     @GetMapping("/wechat-public")
     @Operation(summary = "微信公开配置(小程序订阅消息等)")
     public Result<?> getWechatPublicConfig() {
         Map<String, Object> data = new HashMap<>();
         data.put("planRemindTemplateId", planRemindTemplateId != null ? planRemindTemplateId : "");
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R29】学习提醒模板-----------
+        data.put("learnRemindTemplateId", learnRemindTemplateId != null ? learnRemindTemplateId : "");
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R29】学习提醒模板-----------
         return Result.OK(data);
     }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R31】学习提醒模板联调-----------
+    @GetMapping("/wechat-learn-remind")
+    @Operation(summary = "学习提醒订阅消息字段映射与样例(管理端联调)")
+    @RequiresPermissions("homeai:learn:material:list")
+    public Result<?> getLearnRemindTemplateMeta() {
+        return Result.OK(wxSubscribeService.describeLearnRemindTemplate());
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R31】学习提醒模板联调-----------
 }

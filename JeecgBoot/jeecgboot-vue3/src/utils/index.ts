@@ -349,7 +349,9 @@ export function importViewsFile(path): Promise<any> {
       if (path == page) {
         flag = false;
         dynamicPages[path]().then((mod) => {
-          console.log(path, mod);
+          if (import.meta.env.DEV) {
+            console.log(path, mod);
+          }
           resolve(mod);
         });
       }

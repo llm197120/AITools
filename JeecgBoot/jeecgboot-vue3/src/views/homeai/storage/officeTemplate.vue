@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <BasicTable @register="registerTable">
       <template #tableTitle>
         <a-button type="primary" preIcon="ant-design:plus-outlined" @click="handleAdd"> 新增模板</a-button>
@@ -14,27 +14,28 @@
         </template>
       </template>
     </BasicTable>
-  </div>
-  <BasicModal @register="registerModal" :title="isUpdate ? '编辑模板' : '新增模板'" width="480px">
-    <BasicForm @register="registerForm" @submit="handleSubmit">
-      <template #fileUrlSlot>
-        <div style="display: flex; gap: 8px; align-items: center">
-          <input ref="fileInputRef" type="file" accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx" style="display: none" @change="onFileChange" />
-          <a-button type="primary" @click="fileInputRef?.click()">选择模板文件</a-button>
-          <span v-if="selectedFileName" style="color: #666; flex: 1; overflow: hidden; text-overflow: ellipsis">{{ selectedFileName }}</span>
-          <span v-else style="color: #999">请上传模板文件</span>
-        </div>
-        <div v-if="uploadedFileUrl" style="margin-top: 8px; font-size: 12px; color: #52c41a">已上传：{{ uploadedFileUrl }}</div>
+    <BasicModal @register="registerModal" :title="isUpdate ? '编辑模板' : '新增模板'" width="480px">
+      <BasicForm @register="registerForm" @submit="handleSubmit">
+        <template #fileUrlSlot>
+          <div style="display: flex; gap: 8px; align-items: center">
+            <input ref="fileInputRef" type="file" accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx" style="display: none" @change="onFileChange" />
+            <a-button type="primary" @click="fileInputRef?.click()">选择模板文件</a-button>
+            <span v-if="selectedFileName" style="color: #666; flex: 1; overflow: hidden; text-overflow: ellipsis">{{ selectedFileName }}</span>
+            <span v-else style="color: #999">请上传模板文件</span>
+          </div>
+          <div v-if="uploadedFileUrl" style="margin-top: 8px; font-size: 12px; color: #52c41a">已上传：{{ uploadedFileUrl }}</div>
+        </template>
+      </BasicForm>
+      <template #footer>
+        <a-button @click="closeModal()">取消</a-button>
+        <a-button type="primary" :loading="saving" @click="submit">保存</a-button>
       </template>
-    </BasicForm>
-    <template #footer>
-      <a-button @click="closeModal()">取消</a-button>
-      <a-button type="primary" :loading="saving" @click="submit">保存</a-button>
-    </template>
-  </BasicModal>
+    </BasicModal>
+  </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-storage-template" setup>
+  import { PageWrapper } from '/@/components/Page';
   import { ref } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { BasicModal, useModal } from '/@/components/Modal';

@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <BasicTable @register="registerTable">
       <template #tableTitle>
         <a-button type="primary" preIcon="ant-design:plus-outlined" @click="handleAdd"> 新增分类</a-button>
@@ -16,7 +16,7 @@
         </template>
       </template>
     </BasicTable>
-  </div>
+  </PageWrapper>
   <BasicModal @register="registerModal" :title="isUpdate ? '编辑分类' : '新增分类'" width="480px">
     <BasicForm @register="registerForm" @submit="handleSubmit" />
     <template #footer>
@@ -27,17 +27,25 @@
 </template>
 
 <script lang="ts" name="homeai-plan-category" setup>
-  import { ref } from 'vue';
-  import { BasicTable, TableAction, useTable } from '/@/components/Table';
-  import { BasicModal, useModal } from '/@/components/Modal';
-  import { BasicForm, useForm } from '/@/components/Form';
+  import { PageWrapper } from '/@/components/Page';
+  import { BasicTable, TableAction } from '/@/components/Table';
+  import { BasicModal } from '/@/components/Modal';
+  import { BasicForm } from '/@/components/Form';
   import { planApi } from '/@/api/homeai';
-  import { useMessage } from '/@/hooks/web/useMessage';
+  import { useHomeaiCrud } from '../hooks/useHomeaiCrud';
 
-  const { createMessage, createConfirm } = useMessage();
-  const [registerTable, { reload }] = useTable({
+  const {
+    registerTable,
+    registerModal,
+    registerForm,
+    isUpdate,
+    handleAdd,
+    handleSubmit,
+    getTableAction,
+    closeModal,
+    submit,
+  } = useHomeaiCrud({
     title: '计划分类管理',
-    api: (params: any) => planApi.categoryList(params),
     columns: [
       { title: '分类名称', dataIndex: 'name', width: 150 },
       { title: '图标', dataIndex: 'icon', width: 60 },
@@ -45,23 +53,7 @@
       { title: '排序', dataIndex: 'sortOrder', width: 60 },
       { title: '状态', dataIndex: 'isEnabled', key: 'isEnabled', width: 80 },
     ],
-    useSearchForm: false,
-    showTableSetting: true,
-    showIndexColumn: true,
-    actionColumn: {
-      width: 120,
-      title: '操作',
-      dataIndex: 'action',
-      slots: { customRender: 'action' },
-    },
-  });
-
-  const isUpdate = ref(false);
-  const recordId = ref('');
-  const [registerModal, { openModal, closeModal }] = useModal();
-  const [registerForm, { setFieldsValue, resetFields, submit }] = useForm({
-    labelWidth: 100,
-    schemas: [
+    formSchemas: [
       { field: 'name', label: '分类名称', component: 'Input', required: true },
       { field: 'icon', label: '图标(emoji)', component: 'Input', componentProps: { placeholder: '如: 📋' } },
       { field: 'color', label: '颜色', component: 'Input', componentProps: { placeholder: '如: #1890ff' } },
@@ -79,61 +71,15 @@
         },
       },
     ],
-    showSubmitButton: false,
-    showResetButton: false,
+    api: {
+      list: (params) => planApi.categoryList(params),
+      add: (data) => planApi.addCategory(data),
+      edit: (data) => planApi.editCategory(data),
+      delete: (id) => planApi.deleteCategory(id),
+    },
+    defaultFormValues: { sortOrder: 0, isEnabled: 1 },
+    deleteConfirmContent: '确定删除分类「{name}」吗？',
   });
-
-  function handleAdd() {
-    isUpdate.value = false;
-    recordId.value = '';
-    resetFields();
-    setFieldsValue({ sortOrder: 0, isEnabled: 1 });
-    openModal(true);
-  }
-
-  function getTableAction(record: any) {
-    return [
-      { icon: 'ant-design:edit-outlined', onClick: () => handleEdit(record), title: '编辑' },
-      { icon: 'ant-design:delete-outlined', onClick: () => handleDelete(record), title: '删除', color: 'error' },
-    ];
-  }
-
-  function handleEdit(record: any) {
-    isUpdate.value = true;
-    recordId.value = record.id;
-    setFieldsValue({ ...record });
-    openModal(true);
-  }
-
-  async function handleDelete(record: any) {
-    createConfirm({
-      title: '确认删除',
-      content: `确定删除分类「${record.name}」吗？`,
-      onOk: async () => {
-        await planApi.deleteCategory(record.id);
-        createMessage.success('删除成功');
-        reload();
-      },
-    });
-  }
-
-  async function handleSubmit(values: any) {
-    try {
-      if (isUpdate.value) {
-        await planApi.editCategory({ id: recordId.value, ...values });
-        createMessage.success('编辑成功');
-      } else {
-        await planApi.addCategory(values);
-        createMessage.success('新增成功');
-      }
-      closeModal();
-      reload();
-      return true;
-    } catch (e: any) {
-      createMessage.error(e?.message || '操作失败');
-      return false;
-    }
-  }
 </script>
 
 <style scoped>

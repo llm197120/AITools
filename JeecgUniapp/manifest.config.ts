@@ -51,7 +51,8 @@ export default defineManifestConfig({
       /* android打包配置 */
       android: {
         minSdkVersion: 26,
-        targetSdkVersion: 30,
+        // 上架前建议 targetSdk ≥ 34（符合应用商店政策）
+        targetSdkVersion: 34,
         abiFilters: ['armeabi-v7a', 'arm64-v8a'],
         permissions: [
           '<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>',
@@ -124,13 +125,21 @@ export default defineManifestConfig({
   'mp-weixin': {
     appid: VITE_WX_APPID,
     setting: {
-      urlCheck: false,
+      /**
+       * 校验合法域名。本地连 127.0.0.1 时请在微信开发者工具勾选「不校验合法域名」。
+       * 正式上架前需在公众平台配置 request / uploadFile 合法域名。
+       */
+      urlCheck: true,
       minified: true,
       es6: true,
     },
     usingComponents: true,
     // lazyCodeLoading 在 uni-app 中会导致小程序空白，暂时禁用
     // lazyCodeLoading: 'requiredComponents',
+    /**
+     * 上架前须开启隐私合规：将下一行取消注释为 __usePrivacyCheck__: true，
+     * 并完善隐私协议弹窗 / 权限说明（与微信小程序隐私指引一致）。
+     */
     // __usePrivacyCheck__: true,
   },
   'mp-alipay': {

@@ -5,8 +5,12 @@ spring:
     import: optional:classpath:config/application-liteflow.yml
   cloud:
     nacos:
+      # 单体模式关闭 Nacos（homeai 已去掉 starter-cloud；此处兜底防止其它传递依赖触发校验）
       config:
+        enabled: false
         import-check:
           enabled: false
+      discovery:
+        enabled: false
   profiles:
     active: '@profile.name@'

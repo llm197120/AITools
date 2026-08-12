@@ -15,6 +15,7 @@ import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
 import io.swagger.v3.oas.annotations.Operation;
+import org.jeecg.modules.homeai.audit.service.IHomeaiAuditLogService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
@@ -48,6 +49,9 @@ public class LearnController {
     @Autowired private LearnMaterialMapper learnMaterialMapper;
     @Autowired private HomeaiSecurityUtil securityUtil;
     @Autowired private IHomeaiFileStorageService fileStorageService;
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22】学习审计埋点-----------
+    @Autowired private IHomeaiAuditLogService auditLogService;
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】学习审计埋点-----------
 
     private String getUserId(HttpServletRequest r) {
         // 优先从Shiro认证获取（管理端）
@@ -151,8 +155,11 @@ public class LearnController {
     @GetMapping("/admin/stats")
     @Operation(summary="学习-统计(管理端)")
     @RequiresPermissions("homeai:learn:material:list")
-    public Result<?> adminStats() {
-        return Result.OK(learnService.adminStats());
+    public Result<?> adminStats(@RequestParam(defaultValue = "0") int days,
+                                @RequestParam(required = false) String userId) {
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R29】多维统计参数-----------
+        return Result.OK(learnService.adminStats(days, userId));
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R29】多维统计参数-----------
     }
 
     @GetMapping("/admin/stats/trend")
@@ -161,6 +168,112 @@ public class LearnController {
     public Result<?> adminStatsTrend(@RequestParam(defaultValue = "30") int days) {
         return Result.OK(learnService.adminStatsTrend(days));
     }
+
+    //update-begin---author:copilot ---date:2026-08-12 for：【第15轮】学习按分类统计-----------
+    @GetMapping("/admin/stats/category")
+    @Operation(summary = "按分类学习统计")
+    @RequiresPermissions("homeai:learn:material:list")
+    public Result<?> adminStatsByCategory(@RequestParam(defaultValue = "0") int days,
+                                          @RequestParam(required = false) String userId) {
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R29】分类统计参数-----------
+        return Result.OK(learnService.getAdminStatsByCategory(days, userId));
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R29】分类统计参数-----------
+    }
+    //update-end---author:copilot ---date:2026-08-12 for：【第15轮】学习按分类统计-----------
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R29】按用户统计-----------
+    @GetMapping("/admin/stats/user")
+    @Operation(summary = "按用户学习统计")
+    @RequiresPermissions("homeai:learn:material:list")
+    public Result<?> adminStatsByUser(@RequestParam(defaultValue = "30") int days) {
+        return Result.OK(learnService.adminStatsByUser(days));
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R29】按用户统计-----------
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R31】学习统计导出-----------
+    @GetMapping("/admin/stats/export")
+    @Operation(summary = "学习多维统计导出Excel")
+    @RequiresPermissions("homeai:learn:material:list")
+    public void exportAdminStats(@RequestParam(defaultValue = "30") int days,
+                                 @RequestParam(required = false) String userId,
+                                 HttpServletResponse response) {
+        try {
+            Map<String, Object> summary = learnService.adminStats(days, userId);
+            List<Map<String, Object>> byCategory = learnService.getAdminStatsByCategory(days, userId);
+            int userDays = days > 0 ? days : 30;
+            List<Map<String, Object>> byUser = learnService.adminStatsByUser(userDays);
+            if (oConvertUtils.isNotEmpty(userId) && byUser != null) {
+                byUser = byUser.stream()
+                        .filter(u -> userId.equals(String.valueOf(u.get("userId"))))
+                        .collect(Collectors.toList());
+            }
+            List<Map<String, Object>> trend = days > 0 ? learnService.adminStatsTrend(days) : Collections.emptyList();
+
+            org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+            writeSummarySheet(wb, summary, days, userId);
+            writeMapSheet(wb, "按分类", byCategory, new String[]{
+                    "categoryName", "materialCount", "recordCount", "totalDuration"
+            }, new String[]{"分类", "资料数", "记录数", "时长(分钟)"});
+            writeMapSheet(wb, "按用户", byUser, new String[]{
+                    "nickname", "userId", "recordCount", "durationMinutes", "activeDays"
+            }, new String[]{"昵称", "用户ID", "记录数", "时长(分钟)", "活跃天"});
+            writeMapSheet(wb, "趋势", trend, new String[]{
+                    "date", "recordCount", "durationMinutes"
+            }, new String[]{"日期", "记录数", "时长(分钟)"});
+
+            String fileName = java.net.URLEncoder.encode("学习统计导出.xlsx", java.nio.charset.StandardCharsets.UTF_8)
+                    .replaceAll("\\+", "%20");
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + fileName);
+            wb.write(response.getOutputStream());
+            wb.close();
+        } catch (Exception e) {
+            log.error("学习统计导出失败", e);
+            throw new JeecgBootException("学习统计导出失败: " + e.getMessage());
+        }
+    }
+
+    private void writeSummarySheet(org.apache.poi.xssf.usermodel.XSSFWorkbook wb,
+                                   Map<String, Object> summary, int days, String userId) {
+        org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("汇总");
+        String[][] rows = {
+                {"统计范围(天)", days > 0 ? String.valueOf(days) : "全部"},
+                {"用户过滤", oConvertUtils.isNotEmpty(userId) ? userId : "全部"},
+                {"学习记录总数", String.valueOf(summary != null ? summary.getOrDefault("totalRecords", 0) : 0)},
+                {"总学习时长(分钟)", String.valueOf(summary != null ? summary.getOrDefault("totalDurationMinutes", 0) : 0)},
+                {"活跃用户数", String.valueOf(summary != null ? summary.getOrDefault("activeUserCount", 0) : 0)},
+                {"活跃天数", String.valueOf(summary != null ? summary.getOrDefault("activeDayCount", 0) : 0)},
+        };
+        for (int i = 0; i < rows.length; i++) {
+            org.apache.poi.ss.usermodel.Row row = sheet.createRow(i);
+            row.createCell(0).setCellValue(rows[i][0]);
+            row.createCell(1).setCellValue(rows[i][1]);
+        }
+        sheet.setColumnWidth(0, 20 * 256);
+        sheet.setColumnWidth(1, 24 * 256);
+    }
+
+    private void writeMapSheet(org.apache.poi.xssf.usermodel.XSSFWorkbook wb, String sheetName,
+                               List<Map<String, Object>> rows, String[] keys, String[] headers) {
+        org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet(sheetName);
+        org.apache.poi.ss.usermodel.Row head = sheet.createRow(0);
+        for (int i = 0; i < headers.length; i++) {
+            head.createCell(i).setCellValue(headers[i]);
+            sheet.setColumnWidth(i, 16 * 256);
+        }
+        if (rows == null) {
+            return;
+        }
+        int rIdx = 1;
+        for (Map<String, Object> item : rows) {
+            org.apache.poi.ss.usermodel.Row row = sheet.createRow(rIdx++);
+            for (int c = 0; c < keys.length; c++) {
+                Object v = item != null ? item.get(keys[c]) : null;
+                row.createCell(c).setCellValue(v == null ? "" : String.valueOf(v));
+            }
+        }
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R31】学习统计导出-----------
 
     /**
      * 学习统计（小程序端）
@@ -171,6 +284,25 @@ public class LearnController {
         if (uid == null) return Result.error("未登录");
         return Result.OK(learnService.getUserStatistics(uid));
     }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R29】每日目标 API-----------
+    @GetMapping("/goal")
+    @Operation(summary = "学习-每日目标与今日进度")
+    public Result<?> goal(HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        return Result.OK(learnService.getTodayProgress(uid));
+    }
+
+    @PutMapping("/goal")
+    @Operation(summary = "学习-设置每日目标(分钟)")
+    public Result<?> setGoal(@RequestParam int minutes, HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        learnService.setDailyGoalMinutes(uid, minutes);
+        return Result.OK(learnService.getTodayProgress(uid));
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R29】每日目标 API-----------
 
     /** 学习日历：某月有学习记录的日期 */
     @GetMapping("/calendar")
@@ -387,8 +519,19 @@ public class LearnController {
     @AutoLog(value="学习资料-彻底删除")
     @Operation(summary="学习资料-彻底删除")
     @RequiresPermissions("homeai:learn:deletePermanently")
-    public Result<?> deletePermanently(@RequestBody List<String> ids) {
+    public Result<?> deletePermanently(@RequestBody List<String> ids, HttpServletRequest request) {
         learnMaterialMapper.deletePermanentlyByIds(ids);
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22】学习彻底删除审计-----------
+        auditLogService.record(
+                getUserId(request),
+                "learn_delete_permanently",
+                "learn",
+                ids != null && ids.size() == 1 ? ids.get(0) : null,
+                "彻底删除学习资料 " + (ids == null ? 0 : ids.size()) + " 个",
+                Collections.singletonMap("ids", ids),
+                "success",
+                request.getRemoteAddr());
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】学习彻底删除审计-----------
         return Result.OK("彻底删除成功");
     }
 

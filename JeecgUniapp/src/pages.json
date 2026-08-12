@@ -2,9 +2,9 @@
   "globalStyle": {
     "navigationStyle": "default",
     "navigationBarTitleText": "家庭AI小工具",
-    "navigationBarBackgroundColor": "#f8f8f8",
+    "navigationBarBackgroundColor": "#F3F2EE",
     "navigationBarTextStyle": "black",
-    "backgroundColor": "#000000"
+    "backgroundColor": "#F3F2EE"
   },
   "easycom": {
     "autoscan": true,
@@ -14,10 +14,10 @@
     }
   },
   "tabBar": {
-    "color": "#aaa",
-    "selectedColor": "#667eea",
-    "backgroundColor": "#F8F8F8",
-    "borderStyle": "black",
+    "color": "#8A857C",
+    "selectedColor": "#1B4F8A",
+    "backgroundColor": "#F3F2EE",
+    "borderStyle": "white",
     "list": [
       {
         "iconPath": "static/tabbar/tabbar-home-2.png",
@@ -26,8 +26,8 @@
         "text": "首页"
       },
       {
-        "iconPath": "static/tabbar/tabbar-demo-2.png",
-        "selectedIconPath": "static/tabbar/tabbar-demo.png",
+        "iconPath": "static/tabbar/tabbar-family-2.png",
+        "selectedIconPath": "static/tabbar/tabbar-family.png",
         "pagePath": "pages/homeai/family",
         "text": "家庭"
       },
@@ -46,22 +46,23 @@
       "layout": "default",
       "style": {
         "navigationStyle": "custom",
-        "navigationBarTitleText": "家庭AI小工具",
-        "disableScroll": true
+        "navigationBarTitleText": "家庭AI小工具"
       }
     },
     {
       "path": "pages/homeai/family",
       "type": "page",
       "style": {
-        "navigationBarTitleText": "我的家庭"
+        "navigationBarTitleText": "我的家庭",
+        "navigationBarBackgroundColor": "#F3F2EE"
       }
     },
     {
       "path": "pages/homeai/profile",
       "type": "page",
       "style": {
-        "navigationBarTitleText": "个人中心"
+        "navigationBarTitleText": "个人中心",
+        "navigationBarBackgroundColor": "#F3F2EE"
       }
     }
   ],
@@ -73,14 +74,16 @@
           "path": "ai/chat",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "AI对话"
+            "navigationBarTitleText": "AI对话",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "ai/conversations",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "AI对话"
+            "navigationBarTitleText": "AI对话",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         }
       ]
@@ -92,175 +95,211 @@
           "path": "all-functions/index",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "全部功能"
+            "navigationBarTitleText": "全部功能",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "bill/add",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "记一笔"
+            "navigationBarTitleText": "记一笔",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "bill/edit",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "编辑账单"
+            "navigationBarTitleText": "编辑账单",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "bill/import-confirm",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "导入确认"
+            "navigationBarTitleText": "导入确认",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "bill/import",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "导入账单"
+            "navigationBarTitleText": "导入账单",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "bill/index",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "账单"
+            "navigationBarTitleText": "账单",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "bill/statistics",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "统计分析"
+            "navigationBarTitleText": "统计分析",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "learn/add",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "添加学习资料"
+            "navigationBarTitleText": "添加学习资料",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "learn/detail",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "学习资料"
+            "navigationBarTitleText": "学习资料",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "learn/index",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "学习模块"
+            "navigationBarTitleText": "学习模块",
+            "navigationBarBackgroundColor": "#F3F2EE",
+            "onReachBottomDistance": 80
           }
         },
         {
           "path": "learn/record",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "学习记录"
+            "navigationBarTitleText": "学习记录",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "plan/add",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "新增计划"
+            "navigationBarTitleText": "新增计划",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "plan/detail",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "计划详情"
+            "navigationBarTitleText": "计划详情",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "plan/index",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "日常计划"
+            "navigationBarTitleText": "日常计划",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "recipe/add",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "新增菜谱"
+            "navigationBarTitleText": "新增菜谱",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "recipe/category",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "分类浏览"
+            "navigationBarTitleText": "分类浏览",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "recipe/detail",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "菜谱详情"
+            "navigationBarTitleText": "菜谱详情",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "recipe/index",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "烹饪指南"
+            "navigationBarTitleText": "烹饪指南",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "storage/files",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "文件夹"
+            "navigationBarTitleText": "文件夹",
+            "navigationBarBackgroundColor": "#F3F2EE",
+            "onReachBottomDistance": 80
           }
         },
         {
           "path": "storage/index",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "资料存储"
+            "navigationBarTitleText": "资料存储",
+            "navigationBarBackgroundColor": "#F3F2EE",
+            "onReachBottomDistance": 80
           }
         },
         {
           "path": "storage/office-convert",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "格式转换"
+            "navigationBarTitleText": "格式转换",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "storage/office-generate",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "AI文件生成"
+            "navigationBarTitleText": "AI文件生成",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "storage/office-history",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "处理历史"
+            "navigationBarTitleText": "处理历史",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "storage/preview",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "文件预览"
+            "navigationBarTitleText": "文件预览",
+            "navigationBarBackgroundColor": "#F3F2EE"
+          }
+        },
+        {
+          "path": "storage/recycle",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "回收站",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {
           "path": "storage/search",
           "type": "page",
           "style": {
-            "navigationBarTitleText": "搜索文件"
+            "navigationBarTitleText": "搜索文件",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {

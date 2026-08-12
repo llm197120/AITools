@@ -1,8 +1,14 @@
 <template>
-  <div style="padding: 16px">
-    <div class="storage-toolbar">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
+    <a-tabs v-model:activeKey="activeTab" @change="onMainTabChange">
+      <a-tab-pane key="files" tab="文件管理" />
+      <a-tab-pane key="recycle" tab="回收站" />
+    </a-tabs>
+
+    <template v-if="activeTab === 'files'">
+    <div class="homeai-toolbar">
       <a-button type="primary" preIcon="ant-design:folder-add-outlined" @click="openCreateFolderModal">新增文件夹</a-button>
-      <a-button type="primary" preIcon="ant-design:upload-outlined" @click="handleUploadModal" style="margin-left: 8px">上传文件</a-button>
+      <a-button preIcon="ant-design:upload-outlined" @click="handleUploadModal">上传文件</a-button>
     </div>
 
     <!-- 空间统计 -->
@@ -13,13 +19,52 @@
       <a-col :span="6">
         <a-card :bordered="false"><a-statistic title="总占用空间" :value="formatSize(spaceStats.totalSize || 0)" /></a-card>
       </a-col>
-      <a-col :span="12">
-        <a-card :bordered="false" title="各用户占用（Top 5）">
-          <div v-for="u in topUsers" :key="u.userId" style="display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0">
-            <span>{{ u.userId }}</span>
-            <span>{{ u.fileCount }} 个 · {{ formatSize(u.totalSize) }}</span>
+      <a-col :span="6">
+        <a-card :bordered="false">
+          <a-statistic title="用户默认配额" :value="formatSize(spaceStats.defaultUserLimitBytes || 0)" />
+          <div style="margin-top: 8px; font-size: 12px; color: #888">
+            家庭默认 {{ formatSize(spaceStats.defaultFamilyLimitBytes || 0) }} · 告警 {{ spaceStats.warnPercent || 80 }}%
           </div>
-          <span v-if="topUsers.length === 0" style="color: #999">暂无数据</span>
+        </a-card>
+      </a-col>
+      <a-col :span="6">
+        <a-card :bordered="false" title="占用 Top5（用户 / 家庭）">
+          <div style="font-size: 12px; color: #888; margin-bottom: 4px">用户</div>
+          <div v-for="u in topUsers" :key="'u-' + u.userId" style="padding: 2px 0">
+            <div style="display: flex; justify-content: space-between; font-size: 12px">
+              <span>{{ resolveUserLabel(u.userId) }}</span>
+              <span :style="{ color: u.overWarn ? '#cf1322' : undefined }">
+                {{ formatSize(u.totalSize) }}
+              </span>
+            </div>
+            <a-progress
+              v-if="u.limitBytes"
+              :percent="Math.min(100, Math.round(u.usedPercent || 0))"
+              size="small"
+              :status="u.overWarn ? 'exception' : 'normal'"
+              :show-info="false"
+            />
+          </div>
+          <div style="font-size: 12px; color: #888; margin: 8px 0 4px">家庭</div>
+          <div v-for="f in topFamilies" :key="'f-' + f.familyId" style="padding: 2px 0; cursor: pointer" @click="openFamilyQuota(f)">
+            <div style="display: flex; justify-content: space-between; font-size: 12px">
+              <span>
+                {{ f.familyName || f.familyId }}
+                <a-tag v-if="f.customLimit" color="blue" style="margin-left: 4px; font-size: 10px; line-height: 16px; padding: 0 4px">自定义</a-tag>
+              </span>
+              <span :style="{ color: f.overWarn ? '#cf1322' : undefined }">
+                {{ formatSize(f.totalSize) }}
+              </span>
+            </div>
+            <a-progress
+              v-if="f.limitBytes"
+              :percent="Math.min(100, Math.round(f.usedPercent || 0))"
+              size="small"
+              :status="f.overWarn ? 'exception' : 'normal'"
+              :show-info="false"
+            />
+          </div>
+          <span v-if="topUsers.length === 0 && topFamilies.length === 0" style="color: #999">暂无数据</span>
         </a-card>
       </a-col>
     </a-row>
@@ -37,7 +82,7 @@
           default-expand-all
           @select="onFolderSelect"
         >
-          <template #title="{ id, name, fileCount, visibility, userId }">
+          <template #title="{ id, name, fileCount, visibility, userId, familyIds }">
             <div style="display:flex;align-items:center;gap:8px;width:100%">
               <Icon icon="ant-design:folder-outlined" :style="{color:'#faad14'}" />
               <span style="flex:1">{{ name }}</span>
@@ -45,8 +90,12 @@
               <a-tag v-else-if="visibility === 'public'" color="blue" size="small">公开</a-tag>
               <a-tag v-else size="small">私有</a-tag>
               <a-tag v-if="fileCount !== undefined" color="blue" size="small">{{ fileCount }}个文件</a-tag>
-              <a-button type="link" size="small" @click.stop="openEditFolderModal({ id, name })">编辑</a-button>
-              <a-popconfirm title="确定删除该文件夹？其内文件与子文件夹将一并删除" @confirm="handleDeleteFolder(id)">
+              <a-button
+                type="link"
+                size="small"
+                @click.stop="openEditFolderModal({ id, name, visibility, familyIds: normalizeFamilyIds(familyIds) })"
+              >编辑</a-button>
+              <a-popconfirm title="确定将该文件夹移入回收站？其内文件与子文件夹将一并移入" @confirm="handleDeleteFolder(id)">
                 <a-button type="link" danger size="small" @click.stop>删除</a-button>
               </a-popconfirm>
             </div>
@@ -60,12 +109,21 @@
         <a-table
           :columns="folderFileColumns"
           :data-source="folderFiles"
-          :pagination="false"
+          :pagination="{ pageSize: 20, showSizeChanger: true, showTotal: (t: number) => `共 ${t} 条` }"
           size="small"
           row-key="id"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'visibility'">
+            <template v-if="column.key === 'thumb'">
+              <img
+                v-if="record.thumbnailUrl"
+                :src="record.thumbnailUrl"
+                alt=""
+                style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px"
+              />
+              <span v-else>{{ record.extension || '-' }}</span>
+            </template>
+            <template v-else-if="column.key === 'visibility'">
               <a-tag :color="record.visibility === 'family' ? 'green' : record.visibility === 'public' ? 'blue' : 'default'">
                 {{ record.visibility === 'family' ? '家庭' : record.visibility === 'public' ? '公开' : '私有' }}
               </a-tag>
@@ -87,6 +145,62 @@
         <a-empty v-if="folderFiles.length === 0" description="该文件夹暂无文件" />
       </a-card>
     </div>
+    </template>
+
+    <template v-else>
+      <a-tabs v-model:activeKey="recycleType" size="small" @change="onRecycleTypeChange">
+        <a-tab-pane key="file" tab="文件" />
+        <a-tab-pane key="folder" tab="文件夹" />
+      </a-tabs>
+      <div class="homeai-toolbar" style="margin-bottom: 12px">
+        <a-input-search
+          v-model:value="recycleKeyword"
+          allow-clear
+          :placeholder="recycleType === 'folder' ? '按文件夹名搜索' : '按文件名搜索'"
+          style="width: 260px"
+          @search="loadRecycleBin"
+        />
+        <a-button @click="loadRecycleBin" preIcon="ant-design:reload-outlined">刷新</a-button>
+        <a-button type="primary" :disabled="!recycleSelectedKeys.length" @click="handleRestoreSelected">恢复</a-button>
+        <a-button danger :disabled="!recycleSelectedKeys.length" @click="handleDeletePermanentlySelected">彻底删除</a-button>
+      </div>
+      <a-table
+        :columns="recycleType === 'folder' ? recycleFolderColumns : recycleColumns"
+        :data-source="recycleFiles"
+        :loading="recycleLoading"
+        :row-selection="{ selectedRowKeys: recycleSelectedKeys, onChange: onRecycleSelect }"
+        :pagination="recyclePagination"
+        row-key="id"
+        size="small"
+        @change="onRecycleTableChange"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'thumb'">
+            <img
+              v-if="record.thumbnailUrl"
+              :src="record.thumbnailUrl"
+              alt=""
+              style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px"
+            />
+            <span v-else>{{ record.extension || '-' }}</span>
+          </template>
+          <template v-else-if="column.key === 'fileSize'">
+            {{ formatFileSize(record.fileSize) }}
+          </template>
+          <template v-else-if="column.key === 'visibility'">
+            <a-tag :color="record.visibility === 'family' ? 'green' : record.visibility === 'public' ? 'blue' : 'default'">
+              {{ record.visibility === 'family' ? '家庭' : record.visibility === 'public' ? '公开' : '私有' }}
+            </a-tag>
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <a-button type="link" size="small" @click="handleRestoreSelected([record.id])">恢复</a-button>
+            <a-popconfirm title="彻底删除后不可恢复，确定？" @confirm="handleDeletePermanentlySelected([record.id])">
+              <a-button type="link" danger size="small">彻底删除</a-button>
+            </a-popconfirm>
+          </template>
+        </template>
+      </a-table>
+    </template>
 
     <!-- 上传文件模态框 -->
     <BasicModal @register="registerUploadModal" title="上传文件" @ok="handleUpload" width="500px">
@@ -163,22 +277,158 @@
         </a-select>
       </a-form-item>
     </BasicModal>
-  </div>
+
+    <BasicModal @register="registerFamilyQuotaModal" title="家庭存储配额" @ok="saveFamilyQuota" width="420px">
+      <a-form layout="vertical">
+        <a-form-item label="家庭">
+          <a-input :value="familyQuotaForm.familyName" disabled />
+        </a-form-item>
+        <a-form-item label="配额 (GB)">
+          <a-input-number v-model:value="familyQuotaForm.limitGb" :min="0.1" :max="100" :step="0.5" style="width: 100%" />
+          <div style="margin-top: 8px; font-size: 12px; color: #888">
+            默认家庭配额 {{ formatSize(spaceStats.defaultFamilyLimitBytes || 0) }}；仅对该家庭生效
+          </div>
+        </a-form-item>
+      </a-form>
+      <template #footer>
+        <a-button @click="closeFamilyQuotaModal">取消</a-button>
+        <a-button v-if="familyQuotaForm.custom" danger @click="clearFamilyQuota">恢复默认</a-button>
+        <a-button type="primary" @click="saveFamilyQuota">保存</a-button>
+      </template>
+    </BasicModal>
+  </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-storage-file" setup>
+  import { PageWrapper } from '/@/components/Page';
 import { ref, computed, onMounted } from 'vue';
   import { BasicModal, useModal } from '/@/components/Modal';
   import { defHttp } from '/@/utils/http/axios';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { Icon } from '/@/components/Icon';
-  import { familyApi } from '/@/api/homeai';
+  import { familyApi, storageApi } from '/@/api/homeai';
+  import { useUserLabel } from '../hooks/useUserLabel';
 
   const { createMessage, createConfirm } = useMessage();
+  const { resolveUserLabel, loadUserOptions } = useUserLabel();
+  loadUserOptions();
 
-  const spaceStats = ref<any>({ totalFiles: 0, totalSize: 0, perUser: [] });
+  const activeTab = ref('files');
+  const recycleType = ref<'file' | 'folder'>('file');
+  const recycleKeyword = ref('');
+  const recycleFiles = ref<any[]>([]);
+  const recycleLoading = ref(false);
+  const recycleSelectedKeys = ref<string[]>([]);
+  const recyclePagination = ref({
+    current: 1,
+    pageSize: 20,
+    total: 0,
+    showSizeChanger: true,
+    showTotal: (t: number) => `共 ${t} 条`,
+  });
+  const recycleColumns = [
+    { title: '预览', key: 'thumb', width: 64 },
+    { title: '文件名', dataIndex: 'originalName', key: 'name' },
+    { title: '扩展名', dataIndex: 'extension', width: 80 },
+    { title: '上传者', dataIndex: 'userId', width: 120, customRender: ({ text }: any) => resolveUserLabel(text) },
+    { title: '文件大小', dataIndex: 'fileSize', key: 'fileSize', width: 100 },
+    { title: '删除时间', dataIndex: 'deletedAt', width: 160 },
+    { title: '操作', key: 'action', width: 160 },
+  ];
+  const recycleFolderColumns = [
+    { title: '文件夹', dataIndex: 'name', key: 'name' },
+    { title: '可见性', dataIndex: 'visibility', key: 'visibility', width: 90 },
+    { title: '创建者', dataIndex: 'userId', width: 120, customRender: ({ text }: any) => resolveUserLabel(text) },
+    { title: '删除时间', dataIndex: 'deletedAt', width: 160 },
+    { title: '操作', key: 'action', width: 160 },
+  ];
+
+  function onMainTabChange(key: string | number) {
+    if (key === 'recycle') {
+      loadRecycleBin();
+    }
+  }
+
+  function onRecycleTypeChange() {
+    recyclePagination.value.current = 1;
+    recycleSelectedKeys.value = [];
+    loadRecycleBin();
+  }
+
+  function onRecycleSelect(keys: (string | number)[]) {
+    recycleSelectedKeys.value = keys.map(String);
+  }
+
+  function onRecycleTableChange(pag: any) {
+    recyclePagination.value.current = pag.current;
+    recyclePagination.value.pageSize = pag.pageSize;
+    loadRecycleBin();
+  }
+
+  function recyclePayload(ids: string[]) {
+    return recycleType.value === 'folder' ? { folderIds: ids } : { fileIds: ids };
+  }
+
+  async function loadRecycleBin() {
+    recycleLoading.value = true;
+    try {
+      const res: any = await storageApi.recycleBin({
+        pageNo: recyclePagination.value.current,
+        pageSize: recyclePagination.value.pageSize,
+        keyword: recycleKeyword.value || undefined,
+        type: recycleType.value,
+      });
+      recycleFiles.value = res?.records || [];
+      recyclePagination.value.total = res?.total || 0;
+      recycleSelectedKeys.value = [];
+    } catch {
+      recycleFiles.value = [];
+      recyclePagination.value.total = 0;
+    } finally {
+      recycleLoading.value = false;
+    }
+  }
+
+  async function handleRestoreSelected(ids?: string[] | Event) {
+    const targetIds = Array.isArray(ids) ? ids : recycleSelectedKeys.value;
+    if (!targetIds.length) return;
+    await storageApi.restore(recyclePayload(targetIds));
+    createMessage.success('已恢复');
+    await loadRecycleBin();
+    await loadFolderTree();
+    await loadSpaceStats();
+  }
+
+  async function doDeletePermanently(targetIds: string[]) {
+    await storageApi.deletePermanently(recyclePayload(targetIds));
+    createMessage.success('已彻底删除');
+    await loadRecycleBin();
+    await loadSpaceStats();
+  }
+
+  function handleDeletePermanentlySelected(ids?: string[] | Event) {
+    const targetIds = Array.isArray(ids) ? ids : recycleSelectedKeys.value;
+    if (!targetIds.length) return;
+    // 行内已有 Popconfirm，批量操作再弹一次确认
+    if (Array.isArray(ids)) {
+      doDeletePermanently(targetIds);
+      return;
+    }
+    const label = recycleType.value === 'folder' ? '文件夹' : '文件';
+    createConfirm({
+      iconType: 'warning',
+      title: '彻底删除',
+      content: `确定彻底删除选中的 ${targetIds.length} 个${label}？此操作不可恢复。`,
+      onOk: () => doDeletePermanently(targetIds),
+    });
+  }
+
+  const spaceStats = ref<any>({ totalFiles: 0, totalSize: 0, perUser: [], perFamily: [] });
   const topUsers = computed(() =>
     [...(spaceStats.value.perUser || [])].sort((a, b) => (b.totalSize || 0) - (a.totalSize || 0)).slice(0, 5),
+  );
+  const topFamilies = computed(() =>
+    [...(spaceStats.value.perFamily || [])].sort((a, b) => (b.totalSize || 0) - (a.totalSize || 0)).slice(0, 5),
   );
 
   async function loadSpaceStats() {
@@ -203,6 +453,51 @@ import { ref, computed, onMounted } from 'vue';
   const [registerUploadModal, { openModal: openUploadModal, closeModal: closeUploadModal }] = useModal();
   const [registerFolderModal, { openModal: openFolderModal, closeModal: closeFolderModal }] = useModal();
   const [registerConvertModal, { openModal: openConvertModalDialog, closeModal: closeConvertModal }] = useModal();
+  const [registerFamilyQuotaModal, { openModal: openFamilyQuotaModal, closeModal: closeFamilyQuotaModal }] = useModal();
+
+  const familyQuotaForm = ref({ familyId: '', familyName: '', limitGb: 5, custom: false });
+  const GB = 1024 * 1024 * 1024;
+
+  async function openFamilyQuota(f: any) {
+    if (!f?.familyId) return;
+    try {
+      const cfg: any = await storageApi.getFamilyStorageLimit(f.familyId);
+      familyQuotaForm.value = {
+        familyId: f.familyId,
+        familyName: f.familyName || f.familyId,
+        limitGb: Number(((cfg?.limitBytes || spaceStats.value.defaultFamilyLimitBytes || 5 * GB) / GB).toFixed(2)),
+        custom: !!cfg?.custom,
+      };
+    } catch {
+      familyQuotaForm.value = {
+        familyId: f.familyId,
+        familyName: f.familyName || f.familyId,
+        limitGb: Number(((f.limitBytes || 5 * GB) / GB).toFixed(2)),
+        custom: !!f.customLimit,
+      };
+    }
+    openFamilyQuotaModal(true);
+  }
+
+  async function saveFamilyQuota() {
+    const gb = Number(familyQuotaForm.value.limitGb);
+    if (!familyQuotaForm.value.familyId || !(gb > 0)) {
+      createMessage.warning('请输入有效配额');
+      return;
+    }
+    await storageApi.setFamilyStorageLimit(familyQuotaForm.value.familyId, Math.round(gb * GB));
+    createMessage.success('家庭配额已更新');
+    closeFamilyQuotaModal();
+    await loadSpaceStats();
+  }
+
+  async function clearFamilyQuota() {
+    if (!familyQuotaForm.value.familyId) return;
+    await storageApi.clearFamilyStorageLimit(familyQuotaForm.value.familyId);
+    createMessage.success('已恢复默认家庭配额');
+    closeFamilyQuotaModal();
+    await loadSpaceStats();
+  }
   const fileInputRef = ref<HTMLInputElement | null>(null);
   const selectedFile = ref<File | null>(null);
   const folderTreeData = ref<any[]>([]);
@@ -243,11 +538,12 @@ import { ref, computed, onMounted } from 'vue';
   }
 
   const folderFileColumns = [
+    { title: '预览', key: 'thumb', width: 64 },
     { title: '文件名', dataIndex: 'originalName', key: 'name' },
     { title: '扩展名', dataIndex: 'extension', width: 80 },
     { title: '可见性', dataIndex: 'visibility', key: 'visibility', width: 80 },
     { title: '收藏', dataIndex: 'isFavorite', key: 'isFavorite', width: 60 },
-    { title: '上传者', dataIndex: 'userId', width: 120 },
+    { title: '上传者', dataIndex: 'userId', width: 120, customRender: ({ text }: any) => resolveUserLabel(text) },
     { title: '文件大小', dataIndex: 'fileSize', key: 'fileSize', width: 100 },
     { title: '上传时间', dataIndex: 'createTime', width: 160 },
     { title: '操作', key: 'action', width: 220 },
@@ -399,13 +695,22 @@ import { ref, computed, onMounted } from 'vue';
     loadFolderTree();
   }
 
+  /** 树节点 familyIds 可能是数组或逗号串 */
+  function normalizeFamilyIds(raw: unknown): string[] {
+    if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
+    if (typeof raw === 'string' && raw.trim()) {
+      return raw.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+  }
+
   function openEditFolderModal(record: any) {
     folderEditId.value = record.id;
     folderForm.value = {
       name: record.name,
       parentId: undefined,
       visibility: record.visibility || 'private',
-      familyIds: record.familyIds ? [...record.familyIds] : [],
+      familyIds: normalizeFamilyIds(record.familyIds),
     };
     loadFamilyOptions();
     loadFolderTree();
@@ -510,15 +815,6 @@ import { ref, computed, onMounted } from 'vue';
 </script>
 
 <style scoped lang="less">
-  .storage-toolbar {
-    display: flex;
-    align-items: center;
-    margin-bottom: 16px;
-    padding: 12px;
-    background: #fafafa;
-    border-radius: 4px;
-  }
-
   .folder-view {
     .folder-card {
       margin-bottom: 0;

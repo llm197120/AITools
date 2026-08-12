@@ -25,18 +25,33 @@ withDefaults(
 </script>
 <style scoped>
 .home-skeleton { padding: 20rpx; }
-.sk-row { display: flex; gap: 16rpx; padding: 24rpx; background: #fff; border-radius: 12rpx; margin-bottom: 12rpx; }
+.sk-row {
+  display: flex;
+  gap: 16rpx;
+  padding: 24rpx;
+  background: var(--hai-card, #fff);
+  border-radius: var(--hai-radius-sm, 20rpx);
+  margin-bottom: 12rpx;
+  box-shadow: var(--hai-shadow, none);
+}
 .sk-icon { width: 48rpx; height: 48rpx; border-radius: 8rpx; flex-shrink: 0; }
 .sk-col { flex: 1; }
 .sk-line { height: 24rpx; border-radius: 6rpx; margin-bottom: 12rpx; }
 .sk-line.long { width: 70%; }
 .sk-line.short { width: 40%; margin-bottom: 0; }
 .sk-cards { display: flex; gap: 16rpx; }
-.sk-card { flex: 1; height: 120rpx; border-radius: 12rpx; }
-.sk-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8rpx; background: #fff; padding: 16rpx; border-radius: 16rpx; }
+.sk-card { flex: 1; height: 120rpx; border-radius: var(--hai-radius-sm, 20rpx); }
+.sk-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8rpx;
+  background: var(--hai-card, #fff);
+  padding: 16rpx;
+  border-radius: var(--hai-radius-md, 24rpx);
+}
 .sk-cell { aspect-ratio: 1; border-radius: 8rpx; }
 .sk-block {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, #ece9e2 25%, #e8e5de 50%, #ece9e2 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }

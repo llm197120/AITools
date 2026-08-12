@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <a-tabs v-model:activeKey="activeTab" @change="onTabChange">
       <a-tab-pane key="list" tab="用户列表" />
       <a-tab-pane key="recycle" tab="回收站" />
@@ -8,14 +8,14 @@
       <template #tableTitle>
         <a-button v-if="activeTab === 'list'" preIcon="ant-design:plus-outlined" type="primary" @click="handleAdd">新增</a-button>
         <a-upload v-if="activeTab === 'list'" name="file" :showUploadList="false" :customRequest="(file) => handleImportXls(file, userApi.importExcel, reload)">
-          <a-button preIcon="ant-design:import-outlined" type="primary">导入</a-button>
+          <a-button preIcon="ant-design:import-outlined">导入</a-button>
         </a-upload>
-        <a-button v-if="activeTab === 'list'" preIcon="ant-design:download-outlined" type="primary" @click="handleDownloadTemplate">下载模板</a-button>
-        <a-button v-if="activeTab === 'list'" preIcon="ant-design:export-outlined" type="primary" @click="handleExportXls('微信用户列表', userApi.exportXls)">导出</a-button>
+        <a-button v-if="activeTab === 'list'" preIcon="ant-design:download-outlined" @click="handleDownloadTemplate">下载模板</a-button>
+        <a-button v-if="activeTab === 'list'" preIcon="ant-design:export-outlined" @click="handleExportXls('微信用户列表', userApi.exportXls)">导出</a-button>
         <a-button v-if="activeTab === 'list' && selectedRowKeys.length > 0" preIcon="ant-design:delete-outlined" type="primary" danger @click="handleBatchMoveToRecycleBin">
           移入回收站({{ selectedRowKeys.length }})
         </a-button>
-        <a-button v-if="activeTab === 'recycle' && selectedRowKeys.length > 0" preIcon="ant-design:undo-outlined" type="primary" @click="handleBatchRestore">
+        <a-button v-if="activeTab === 'recycle' && selectedRowKeys.length > 0" preIcon="ant-design:undo-outlined" @click="handleBatchRestore">
           恢复({{ selectedRowKeys.length }})
         </a-button>
         <a-button v-if="activeTab === 'recycle' && selectedRowKeys.length > 0" preIcon="ant-design:delete-outlined" type="primary" danger @click="handleBatchDeletePermanently">
@@ -37,10 +37,11 @@
       </template>
     </BasicTable>
     <UserDrawer @register="registerDrawer" @success="handleSuccess" />
-  </div>
+  </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-user" setup>
+  import { PageWrapper } from '/@/components/Page';
   import { computed, onMounted, ref, watch } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';

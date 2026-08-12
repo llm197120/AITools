@@ -1,6 +1,6 @@
-<route lang="json5">{ style: { navigationBarTitleText: '学习记录' } }</route>
+<route lang="json5">{ style: { navigationBarTitleText: '学习记录', navigationBarBackgroundColor: '#F3F2EE' } }</route>
 <template>
-  <view class="page">
+  <view class="hai-page">
     <view class="month-bar">
       <text class="nav" @click="prevMonth">‹</text>
       <text class="month">{{ viewYear }}年{{ viewMonth }}月</text>
@@ -82,19 +82,19 @@ function nextMonth() {
 onShow(loadData)
 </script>
 <style scoped>
-.page { min-height: 100vh; background: #f5f5f5; padding: 20rpx; }
+/* page shell: .hai-page */
 .month-bar { display: flex; justify-content: center; align-items: center; gap: 40rpx; padding: 12rpx 0 20rpx; }
-.nav { font-size: 36rpx; color: #27ae60; }
-.month { font-size: 30rpx; font-weight: 600; }
+.nav { font-size: 36rpx; color: var(--hai-primary); }
+.month { font-size: 30rpx; font-weight: 600; color: var(--hai-text); }
 .week-head { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; margin-bottom: 8rpx; }
-.w { font-size: 22rpx; color: #999; }
-.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8rpx; background: #fff; border-radius: 12rpx; padding: 16rpx; margin-bottom: 20rpx; }
-.cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 8rpx; font-size: 24rpx; }
+.w { font-size: 22rpx; color: var(--hai-text-muted); }
+.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8rpx; background: var(--hai-card); border-radius: 28rpx; padding: 16rpx; margin-bottom: 20rpx; box-shadow: var(--hai-shadow); }
+.cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 8rpx; font-size: 24rpx; color: var(--hai-text); }
 .cell.empty { visibility: hidden; }
-.cell.studied { background: #d4edda; color: #27ae60; font-weight: 600; }
-.records { background: #fff; border-radius: 12rpx; padding: 16rpx; }
-.record { padding: 20rpx 8rpx; border-bottom: 1rpx solid #f0f0f0; }
-.title { font-size: 28rpx; color: #333; display: block; }
-.meta { font-size: 22rpx; color: #999; display: block; margin-top: 6rpx; }
-.notes { font-size: 24rpx; color: #666; display: block; margin-top: 8rpx; }
+.cell.studied { background: var(--hai-success-soft); color: var(--hai-success); font-weight: 600; }
+.records { background: var(--hai-card); border-radius: 28rpx; padding: 16rpx; box-shadow: var(--hai-shadow); }
+.record { padding: 20rpx 8rpx; border-bottom: 1rpx solid var(--hai-border); }
+.title { font-size: 28rpx; color: var(--hai-text); display: block; }
+.meta { font-size: 22rpx; color: var(--hai-text-muted); display: block; margin-top: 6rpx; }
+.notes { font-size: 24rpx; color: var(--hai-text-secondary); display: block; margin-top: 8rpx; }
 </style>

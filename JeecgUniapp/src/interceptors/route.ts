@@ -1,53 +1,14 @@
 /**
- * 路由拦截，通常也是登录拦截
- * 可以设置路由白名单，或者黑名单，看业务需要选哪一个
- * 我这里应为大部分都可以随便进入，所以使用黑名单
+ * 原 Jeecg 黑名单登录拦截（指向已删除的 /pages/login/*）
+ *
+ * HomeAI 鉴权已由 homeaiRouteInterceptor 接管：
+ * - 未登录仅可访问个人中心 Tab（/pages/homeai/profile）
+ * - Tab / 功能页拦截见 src/interceptors/homeaiRoute.ts
+ *
+ * 此处保留空 install，避免 main.ts 注册报错，且不与 homeaiRoute 双重拦截冲突。
  */
-import { useUserStore } from '@/store'
-import { needLoginPages as _needLoginPages, getNeedLoginPages } from '@/utils'
-
-// TODO Check
-const loginRoute = '/pages/login/index'
-
-const isLogined = () => {
-  const userStore = useUserStore()
-  return userStore.isLogined
-}
-
-const isDev = import.meta.env.DEV
-
-// 黑名单登录拦截器 - （适用于大部分页面不需要登录，少部分页面需要登录）
-const navigateToInterceptor = {
-  // 注意，这里的url是 '/' 开头的，如 '/pages/index/index'，跟 'pages.json' 里面的 path 不同
-  invoke({ url }: { url: string }) {
-    // console.log(url) // /pages/route-interceptor/index?name=feige&age=30
-    const path = url.split('?')[0]
-    let needLoginPages: string[] = []
-    // 为了防止开发时出现BUG，这里每次都获取一下。生产环境可以移到函数外，性能更好
-    if (isDev) {
-      needLoginPages = getNeedLoginPages()
-    } else {
-      needLoginPages = _needLoginPages
-    }
-    const isNeedLogin = needLoginPages.includes(path)
-    if (!isNeedLogin) {
-      return true
-    }
-    const hasLogin = isLogined()
-    if (hasLogin) {
-      return true
-    }
-    const redirectRoute = `${loginRoute}?redirect=${encodeURIComponent(url)}`
-    uni.navigateTo({ url: redirectRoute })
-    return false
-  },
-}
-
 export const routeInterceptor = {
   install() {
-    uni.addInterceptor('navigateTo', navigateToInterceptor)
-    uni.addInterceptor('reLaunch', navigateToInterceptor)
-    uni.addInterceptor('redirectTo', navigateToInterceptor)
-    uni.addInterceptor('switchTab', navigateToInterceptor)
+    // 鉴权由 homeaiRouteInterceptor 统一处理，此处不再注册 uni.addInterceptor
   },
 }

@@ -1,0 +1,61 @@
+# UniApp 小程序编译（nightly / 手动）
+name: UniApp MP Weixin
+
+on:
+  schedule:
+    # 每天 UTC 16:00 ≈ 北京时间 00:00
+    - cron: "0 16 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "JeecgUniapp/**"
+      - ".github/workflows/uniapp-mp-weixin.yml"
+
+concurrency:
+  group: uniapp-mp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-mp-weixin:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: JeecgUniapp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-uniapp-pnpm-${{ hashFiles('JeecgUniapp/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-uniapp-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build mp-weixin
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: pnpm run build:mp-weixin
+
+      - name: Upload dist artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mp-weixin-dist
+          path: JeecgUniapp/dist/build/mp-weixin
+          if-no-files-found: warn
+          retention-days: 7

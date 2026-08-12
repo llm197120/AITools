@@ -16,6 +16,7 @@ import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.oConvertUtils;
 import io.swagger.v3.oas.annotations.Operation;
+import org.jeecg.modules.homeai.audit.service.IHomeaiAuditLogService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
@@ -52,6 +53,9 @@ public class RecipeController {
     @Autowired private RecipeMapper recipeMapper;
     @Autowired private HomeaiSecurityUtil securityUtil;
     @Autowired private IHomeaiFileStorageService fileStorageService;
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22】菜谱审计埋点-----------
+    @Autowired private IHomeaiAuditLogService auditLogService;
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】菜谱审计埋点-----------
 
     private String getUserId(HttpServletRequest r) {
         // 优先从Shiro认证获取（管理端）
@@ -130,6 +134,66 @@ public class RecipeController {
         }
         return Result.OK(list);
     }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R26】热门菜谱-----------
+    @GetMapping("/hot")
+    @Operation(summary = "菜谱-热门排行")
+    public Result<?> hot(@RequestParam(defaultValue = "20") int limit, HttpServletRequest req) {
+        String uid = getUserId(req);
+        if (uid == null) return Result.error("未登录");
+        WxUser user = wxUserService.getById(uid);
+        List<Recipe> list = recipeService.listHotRecipes(uid, user != null ? user.getFamilyId() : null, limit);
+        if (list != null) {
+            for (Recipe item : list) {
+                resolveRecipeUrls(item);
+            }
+        }
+        return Result.OK(list);
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R26】热门菜谱-----------
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R28】轻量推荐-----------
+    @GetMapping("/recommend")
+    @Operation(summary = "菜谱-为你推荐")
+    public Result<?> recommend(@RequestParam(defaultValue = "8") int limit,
+                               @RequestParam(defaultValue = "auto") String season,
+                               HttpServletRequest req) {
+        String uid = getUserId(req);
+        if (uid == null) return Result.error("未登录");
+        WxUser user = wxUserService.getById(uid);
+        List<Map<String, Object>> list = recipeService.listRecommendRecipes(
+                uid, user != null ? user.getFamilyId() : null, limit, season);
+        if (list != null) {
+            for (Map<String, Object> item : list) {
+                Object cover = item.get("coverUrl");
+                if (cover != null && !String.valueOf(cover).startsWith("data:")) {
+                    item.put("coverUrl", fileStorageService.resolveAccessUrl(String.valueOf(cover)));
+                }
+            }
+        }
+        return Result.OK(list);
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R28】轻量推荐-----------
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R30】新菜尝鲜-----------
+    @GetMapping("/new")
+    @Operation(summary = "菜谱-新菜尝鲜")
+    public Result<?> newest(@RequestParam(defaultValue = "8") int limit,
+                            @RequestParam(defaultValue = "30") int days,
+                            HttpServletRequest req) {
+        String uid = getUserId(req);
+        if (uid == null) return Result.error("未登录");
+        WxUser user = wxUserService.getById(uid);
+        List<Recipe> list = recipeService.listNewRecipes(
+                uid, user != null ? user.getFamilyId() : null, limit, days);
+        if (list != null) {
+            for (Recipe item : list) {
+                resolveRecipeUrls(item);
+            }
+        }
+        return Result.OK(list);
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R30】新菜尝鲜-----------
 
     @GetMapping("/{id}")
     public Result<?> detail(@PathVariable String id, HttpServletRequest req) {
@@ -274,6 +338,13 @@ public class RecipeController {
         Recipe recipe = JSON.parseObject(JSON.toJSONString(body), Recipe.class);
         Result<?> categoryError = validateRecipeCategory(recipe);
         if (categoryError != null) return categoryError;
+        //update-begin---author:cursor ---date:2026-08-12 for：【菜谱可见性】管理端新增写入可见性/家庭-----------
+        try {
+            recipeService.applyAdminVisibilityOnSave(recipe);
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
+        //update-end---author:cursor ---date:2026-08-12 for：【菜谱可见性】管理端新增写入可见性/家庭-----------
         recipe.setDelFlag(0);
         List<RecipeIngredient> ingredients = JSON.parseArray(
                 JSON.toJSONString(body.get("ingredients")), RecipeIngredient.class);
@@ -292,6 +363,11 @@ public class RecipeController {
     public ModelAndView exportXls(HttpServletRequest request, Recipe recipe) {
         QueryWrapper<Recipe> queryWrapper = QueryGenerator.initQueryWrapper(recipe, request.getParameterMap());
         List<Recipe> pageList = recipeService.list(queryWrapper);
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R24】导出含食材/步骤文本-----------
+        for (Recipe r : pageList) {
+            recipeService.fillExcelRelationText(r);
+        }
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R24】导出含食材/步骤文本-----------
         ModelAndView mv = new ModelAndView(new JeecgEntityExcelView());
         String selections = request.getParameter("selections");
         if (oConvertUtils.isEmpty(selections)) {
@@ -344,7 +420,23 @@ public class RecipeController {
                     List<Recipe> list = ExcelImportUtil.importExcel(file.getInputStream(), Recipe.class, params);
                     for (Recipe item : list) {
                         try {
-                            recipeService.save(item);
+                            //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R24】Excel 含子表导入-----------
+                            if (oConvertUtils.isEmpty(item.getName())) {
+                                throw new JeecgBootException("菜谱名称不能为空");
+                            }
+                            if (oConvertUtils.isEmpty(item.getVisibility())) {
+                                item.setVisibility("private");
+                            }
+                            item.setDelFlag(0);
+                            item.setId(null);
+                            List<RecipeIngredient> ingredients = recipeService.parseIngredientsFromExcel(item.getIngredients());
+                            List<RecipeStep> steps = recipeService.parseStepsFromExcel(item.getSteps());
+                            // 清空文本列，避免被当成主表字段误解
+                            item.setIngredients(null);
+                            item.setSteps(null);
+                            recipeService.applyAdminVisibilityOnSave(item);
+                            recipeService.saveWithRelations(item, ingredients, steps);
+                            //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R24】Excel 含子表导入-----------
                             successLines++;
                         } catch (Exception ex) {
                             errorLines++;
@@ -415,8 +507,19 @@ public class RecipeController {
     @AutoLog(value="菜谱-彻底删除")
     @Operation(summary="菜谱-彻底删除")
     @RequiresPermissions("homeai:recipe:deletePermanently")
-    public Result<?> deletePermanently(@RequestBody List<String> ids) {
+    public Result<?> deletePermanently(@RequestBody List<String> ids, HttpServletRequest request) {
         recipeMapper.deletePermanentlyByIds(ids);
+        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22】菜谱彻底删除审计-----------
+        auditLogService.record(
+                getUserId(request),
+                "recipe_delete_permanently",
+                "recipe",
+                ids != null && ids.size() == 1 ? ids.get(0) : null,
+                "彻底删除菜谱 " + (ids == null ? 0 : ids.size()) + " 个",
+                Collections.singletonMap("ids", ids),
+                "success",
+                request.getRemoteAddr());
+        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】菜谱彻底删除审计-----------
         return Result.OK("彻底删除成功");
     }
 
@@ -432,6 +535,13 @@ public class RecipeController {
         recipe.setId(id);
         Result<?> categoryError = validateRecipeCategory(recipe);
         if (categoryError != null) return categoryError;
+        //update-begin---author:cursor ---date:2026-08-12 for：【菜谱可见性】管理端编辑写入可见性/家庭-----------
+        try {
+            recipeService.applyAdminVisibilityOnSave(recipe);
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
+        //update-end---author:cursor ---date:2026-08-12 for：【菜谱可见性】管理端编辑写入可见性/家庭-----------
         List<RecipeIngredient> ingredients = JSON.parseArray(
                 JSON.toJSONString(body.get("ingredients")), RecipeIngredient.class);
         List<RecipeStep> steps = JSON.parseArray(

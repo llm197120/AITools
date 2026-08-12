@@ -1,197 +1,123 @@
-﻿<route lang="json5">
-
-{ style: { navigationBarTitleText: '账单' } }
-
+<route lang="json5">
+{ style: { navigationBarTitleText: '账单', navigationBarBackgroundColor: '#F3F2EE' } }
 </route>
 
-
-
 <template>
-
-  <view class="page">
-
+  <view class="hai-page">
     <view class="toolbar">
-
-      <text class="tool-link" @click="goStatistics">📊 统计</text>
-
-      <text class="tool-link" @click="goImport">📥 导入</text>
-
+      <text class="tool-link" @click="goStatistics">统计</text>
+      <text class="tool-link" @click="goImport">导入</text>
     </view>
-
     <view class="summary">
-
       <view class="card"><text class="label">本月支出</text><text class="value red">¥{{ summary.expense }}</text></view>
-
       <view class="card"><text class="label">本月收入</text><text class="value green">¥{{ summary.income }}</text></view>
-
       <view class="card"><text class="label">结余</text><text class="value">¥{{ summary.balance }}</text></view>
-
     </view>
-
-    <view class="entry" v-for="e in entries" :key="e.id" @click="editEntry(e)">
-
+    <view class="entry" v-for="e in displayedEntries" :key="e.id" @click="editEntry(e)">
       <view class="entry-left">
-
         <text class="entry-icon">{{ e.categoryId ? getIcon(e.categoryId) : '💳' }}</text>
-
         <view>
-
           <text class="entry-name">{{ e.remark || e.categoryName || e.categoryId }}</text>
-
           <text class="entry-date">{{ e.billDate }}</text>
-
         </view>
-
       </view>
-
       <text :class="'entry-amount '+(e.type==='income'?'green':'red')">{{ e.type==='income'?'+':'-'}}¥{{ e.amount }}</text>
-
     </view>
-
-    <view v-if="entries.length === 0" class="empty">本月暂无账单</view>
-
-    <view class="tabs">
-
-      <view class="tab" @click="addEntry('expense')">💸 记支出</view>
-
-      <view class="tab" @click="addEntry('income')">💰 记收入</view>
-
+    <HomeEmpty
+      v-if="allEntries.length === 0"
+      title="本月暂无账单"
+      hint="记一笔支出或收入，开始家庭账本"
+      action-text="记支出"
+      @action="addEntry('expense')"
+    />
+    <view v-if="allEntries.length > 0" class="load-more-wrap">
+      <view v-if="hasMore" class="load-more-btn" @click="loadMore">加载更多</view>
+      <view v-else class="load-more-tip">没有更多了</view>
     </view>
-
+    <view class="hai-bottom-bar">
+      <view class="hai-bottom-btn" @click="addEntry('expense')">记支出</view>
+      <view class="hai-bottom-btn success" @click="addEntry('income')">记收入</view>
+    </view>
   </view>
-
 </template>
 
-
-
 <script lang="ts" setup>
-
-import { ref } from 'vue'
-
+import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-
 import { billApi } from '../../pages-homeai/api/bill'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+import HomeEmpty from '../../components/HomeEmpty.vue'
 
+useHomeaiPageGuard()
 
-
-const entries = ref<any[]>([])
-
+const PAGE_STEP = 20
+const allEntries = ref<any[]>([])
+const displayCount = ref(PAGE_STEP)
 const summary = ref({ expense: '0', income: '0', balance: '0' })
-
 const cats = ref<any[]>([])
 
-
+const displayedEntries = computed(() => allEntries.value.slice(0, displayCount.value))
+const hasMore = computed(() => displayCount.value < allEntries.value.length)
 
 async function loadData() {
-
   const now = new Date()
-
   const m = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-
-  entries.value = (await billApi.entries(m)) || []
-
+  allEntries.value = (await billApi.entries(m)) || []
+  displayCount.value = PAGE_STEP
   const sum: any = await billApi.summary(m)
-
   summary.value = {
-
     expense: sum.totalExpense ?? '0',
-
     income: sum.totalIncome ?? '0',
-
     balance: sum.balance ?? '0',
-
   }
-
   cats.value = (await billApi.categories()) || []
-
 }
 
-
+function loadMore() {
+  if (!hasMore.value) return
+  displayCount.value = Math.min(displayCount.value + PAGE_STEP, allEntries.value.length)
+}
 
 onShow(loadData)
 
-
-
 function getIcon(id: string) {
-
   const c = cats.value.find((x: any) => x.id === id)
-
   return c?.icon || '📌'
-
 }
-
-
 
 function addEntry(type: string) {
-
   uni.navigateTo({ url: `/pages-homeai-more/bill/add?type=${type}` })
-
 }
-
-
 
 function editEntry(e: any) {
-
   uni.navigateTo({
-
     url: `/pages-homeai-more/bill/edit?entry=${encodeURIComponent(JSON.stringify(e))}`,
-
   })
-
 }
-
-
 
 function goStatistics() {
-
   uni.navigateTo({ url: '/pages-homeai-more/bill/statistics' })
-
 }
-
-
 
 function goImport() {
-
   uni.navigateTo({ url: '/pages-homeai-more/bill/import' })
-
 }
-
 </script>
 
-
-
 <style scoped>
-
-.page{min-height:100vh;background:#f5f5f5;padding:20rpx;padding-bottom:40rpx}
-
+/* page shell: .hai-page */
 .toolbar{display:flex;justify-content:flex-end;gap:24rpx;margin-bottom:16rpx}
-
-.tool-link{font-size:26rpx;color:#667eea}
-
-.summary{display:flex;gap:16rpx;margin-bottom:30rpx}
-
-.card{flex:1;background:#fff;border-radius:12rpx;padding:20rpx;text-align:center}
-
-.label{font-size:22rpx;color:#999}
-
-.value{font-size:36rpx;font-weight:700;display:block;margin-top:8rpx}
-
-.red{color:#e74c3c}.green{color:#27ae60}
-
-.entry{display:flex;align-items:center;justify-content:space-between;padding:24rpx;background:#fff;border-radius:12rpx;margin-bottom:12rpx}
-
+.tool-link{font-size:26rpx;color:var(--hai-primary)}
+.summary{display:flex;gap:16rpx;margin-bottom:24rpx}
+.card{flex:1;background:var(--hai-card);border-radius:24rpx;padding:24rpx 16rpx;text-align:center;box-shadow:var(--hai-shadow)}
+.label{font-size:22rpx;color:var(--hai-text-muted)}
+.value{font-size:34rpx;font-weight:700;display:block;margin-top:8rpx;color:var(--hai-text)}
+.red{color:var(--hai-danger)}.green{color:var(--hai-success)}
+.entry{display:flex;align-items:center;justify-content:space-between;padding:28rpx;background:var(--hai-card);border-radius:24rpx;margin-bottom:16rpx;box-shadow:var(--hai-shadow)}
 .entry-left{display:flex;align-items:center;gap:16rpx}
-
-.entry-icon{font-size:32rpx}.entry-name{font-size:28rpx}.entry-date{font-size:22rpx;color:#999;display:block}
-
+.entry-icon{font-size:32rpx}.entry-name{font-size:28rpx;color:var(--hai-text)}.entry-date{font-size:22rpx;color:var(--hai-text-muted);display:block}
 .entry-amount{font-size:32rpx;font-weight:600}
-
-.empty{text-align:center;color:#999;padding:40rpx;font-size:26rpx}
-
-.tabs{display:flex;gap:16rpx;margin-top:40rpx}
-
-.tab{flex:1;text-align:center;padding:24rpx;background:#667eea;border-radius:12rpx;color:#fff;font-size:28rpx;font-weight:500}
-
+.load-more-wrap{padding:16rpx 0 8rpx;text-align:center}
+.load-more-btn{display:inline-block;padding:16rpx 48rpx;font-size:26rpx;color:var(--hai-primary);background:var(--hai-card);border-radius:999rpx;box-shadow:var(--hai-shadow)}
+.load-more-tip{font-size:24rpx;color:var(--hai-text-muted)}
 </style>
-
-

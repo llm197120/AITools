@@ -6,6 +6,8 @@ import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
+import org.jeecg.modules.homeai.learn.entity.LearnCategory;
+import org.jeecg.modules.homeai.learn.service.ILearnCategoryService;
 import org.jeecg.modules.homeai.recipe.entity.*;
 import org.jeecg.modules.homeai.recipe.mapper.LearnMaterialMapper;
 import org.jeecg.modules.homeai.recipe.mapper.LearnRecordMapper;
@@ -31,6 +33,9 @@ public class LearnServiceImpl extends ServiceImpl<LearnMaterialMapper, LearnMate
     @Autowired private WxUserMapper wxUserMapper;
     @Autowired private RedisUtil redisUtil;
     @Autowired private IHomeaiFileStorageService fileStorageService;
+    //update-begin---author:copilot ---date:2026-08-12 for：【第15轮】学习按分类统计-----------
+    @Autowired private ILearnCategoryService learnCategoryService;
+    //update-end---author:copilot ---date:2026-08-12 for：【第15轮】学习按分类统计-----------
     private static final String CACHE_LEARN_STATS = "homeai:cache:learn:stats:%s";
     private static final long CACHE_LEARN_TTL = 600;
     /** 学习计时会话 key，TTL 24h 防泄漏 */
@@ -160,15 +165,21 @@ public class LearnServiceImpl extends ServiceImpl<LearnMaterialMapper, LearnMate
 
     @Override
     public Map<String, Object> adminStats() {
+        return adminStats(0, null);
+    }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R29】多维统计-----------
+    @Override
+    public Map<String, Object> adminStats(int days, String userId) {
+        List<LearnRecord> records = listRecordsInRange(days, userId);
         Map<String, Object> stats = new LinkedHashMap<>();
-        List<LearnRecord> records = recordMapper.selectList(null);
         int totalDuration = records.stream().mapToInt(r -> r.getDuration() != null ? r.getDuration() : 0).sum();
         java.util.Set<String> users = new java.util.HashSet<>();
         java.util.Set<String> activeDays = new java.util.HashSet<>();
         for (LearnRecord r : records) {
             if (r.getUserId() != null) users.add(r.getUserId());
             if (r.getCreateTime() != null) {
-                java.time.LocalDate d = r.getCreateTime().toInstant()
+                LocalDate d = r.getCreateTime().toInstant()
                         .atZone(java.time.ZoneId.systemDefault()).toLocalDate();
                 activeDays.add(d.toString());
             }
@@ -177,8 +188,55 @@ public class LearnServiceImpl extends ServiceImpl<LearnMaterialMapper, LearnMate
         stats.put("totalDurationMinutes", totalDuration / 60);
         stats.put("activeUserCount", users.size());
         stats.put("activeDayCount", activeDays.size());
+        stats.put("days", days <= 0 ? 0 : Math.min(days, 90));
         return stats;
     }
+
+    @Override
+    public List<Map<String, Object>> adminStatsByUser(int days) {
+        List<LearnRecord> records = listRecordsInRange(days, null);
+        Map<String, int[]> buckets = new LinkedHashMap<>();
+        Map<String, java.util.Set<String>> activeDays = new HashMap<>();
+        for (LearnRecord r : records) {
+            if (oConvertUtils.isEmpty(r.getUserId())) continue;
+            int[] b = buckets.computeIfAbsent(r.getUserId(), k -> new int[]{0, 0});
+            b[0]++;
+            b[1] += r.getDuration() != null ? r.getDuration() : 0;
+            if (r.getCreateTime() != null) {
+                LocalDate d = r.getCreateTime().toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+                activeDays.computeIfAbsent(r.getUserId(), k -> new java.util.HashSet<>()).add(d.toString());
+            }
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Map.Entry<String, int[]> e : buckets.entrySet()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("userId", e.getKey());
+            WxUser u = wxUserMapper.selectById(e.getKey());
+            row.put("nickname", u != null && oConvertUtils.isNotEmpty(u.getNickname()) ? u.getNickname() : e.getKey());
+            row.put("recordCount", e.getValue()[0]);
+            row.put("durationMinutes", e.getValue()[1] / 60);
+            row.put("activeDays", activeDays.getOrDefault(e.getKey(), Collections.emptySet()).size());
+            result.add(row);
+        }
+        result.sort((a, b) -> Integer.compare(
+                ((Number) b.get("durationMinutes")).intValue(),
+                ((Number) a.get("durationMinutes")).intValue()));
+        return result;
+    }
+
+    private List<LearnRecord> listRecordsInRange(int days, String userId) {
+        LambdaQueryWrapper<LearnRecord> q = new LambdaQueryWrapper<>();
+        if (oConvertUtils.isNotEmpty(userId)) {
+            q.eq(LearnRecord::getUserId, userId);
+        }
+        if (days > 0) {
+            int range = Math.min(days, 90);
+            LocalDate start = LocalDate.now().minusDays(range - 1L);
+            q.ge(LearnRecord::getCreateTime, java.sql.Date.valueOf(start));
+        }
+        return recordMapper.selectList(q);
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R29】多维统计-----------
 
     @Override
     public List<Map<String, Object>> adminStatsTrend(int days) {
@@ -211,6 +269,130 @@ public class LearnServiceImpl extends ServiceImpl<LearnMaterialMapper, LearnMate
         }
         return trend;
     }
+
+    //update-begin---author:copilot ---date:2026-08-12 for：【第15轮】学习按分类统计-----------
+    @Override
+    public List<Map<String, Object>> getAdminStatsByCategory() {
+        return getAdminStatsByCategory(0, null);
+    }
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R29】分类统计支持日期/用户-----------
+    @Override
+    public List<Map<String, Object>> getAdminStatsByCategory(int days, String userId) {
+        final String uncategorizedKey = "__uncategorized__";
+        List<LearnMaterial> materials = list();
+        Map<String, LearnMaterial> materialById = new HashMap<>();
+        Map<String, int[]> buckets = new LinkedHashMap<>();
+        for (LearnMaterial m : materials) {
+            if (m.getId() != null) {
+                materialById.put(m.getId(), m);
+            }
+            String key = normalizeCategoryKey(m.getCategoryId(), uncategorizedKey);
+            int[] bucket = buckets.computeIfAbsent(key, k -> new int[]{0, 0, 0});
+            bucket[0]++;
+        }
+        List<LearnRecord> records = listRecordsInRange(days, userId);
+        for (LearnRecord r : records) {
+            LearnMaterial m = r.getMaterialId() != null ? materialById.get(r.getMaterialId()) : null;
+            if (m == null && r.getMaterialId() != null) {
+                m = getById(r.getMaterialId());
+                if (m != null) {
+                    materialById.put(m.getId(), m);
+                }
+            }
+            String key = m != null
+                    ? normalizeCategoryKey(m.getCategoryId(), uncategorizedKey)
+                    : uncategorizedKey;
+            int[] bucket = buckets.computeIfAbsent(key, k -> new int[]{0, 0, 0});
+            bucket[1]++;
+            bucket[2] += r.getDuration() != null ? r.getDuration() : 0;
+        }
+
+        Map<String, String> categoryNames = new HashMap<>();
+        List<LearnCategory> categories = learnCategoryService.list();
+        for (LearnCategory c : categories) {
+            if (c.getId() != null) {
+                categoryNames.put(c.getId(), c.getName());
+            }
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Map.Entry<String, int[]> e : buckets.entrySet()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            String key = e.getKey();
+            boolean uncategorized = uncategorizedKey.equals(key);
+            row.put("categoryId", uncategorized ? null : key);
+            row.put("categoryName", uncategorized ? "未分类" : categoryNames.getOrDefault(key, "未知分类"));
+            row.put("materialCount", e.getValue()[0]);
+            row.put("recordCount", e.getValue()[1]);
+            row.put("totalDuration", e.getValue()[2] / 60);
+            result.add(row);
+        }
+        result.sort((a, b) -> {
+            int cmp = Integer.compare(
+                    ((Number) b.get("recordCount")).intValue(),
+                    ((Number) a.get("recordCount")).intValue());
+            if (cmp != 0) return cmp;
+            return Integer.compare(
+                    ((Number) b.get("materialCount")).intValue(),
+                    ((Number) a.get("materialCount")).intValue());
+        });
+        return result;
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R29】分类统计支持日期/用户-----------
+
+    private String normalizeCategoryKey(String categoryId, String uncategorizedKey) {
+        return oConvertUtils.isEmpty(categoryId) ? uncategorizedKey : categoryId.trim();
+    }
+    //update-end---author:copilot ---date:2026-08-12 for：【第15轮】学习按分类统计-----------
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R29】每日目标-----------
+    private static final String REDIS_LEARN_GOAL = "homeai:learn:goal:";
+    private static final int DEFAULT_DAILY_GOAL_MINUTES = 30;
+
+    @Override
+    public int getDailyGoalMinutes(String userId) {
+        if (oConvertUtils.isEmpty(userId)) {
+            return DEFAULT_DAILY_GOAL_MINUTES;
+        }
+        Object v = redisUtil.get(REDIS_LEARN_GOAL + userId);
+        if (v == null) {
+            return DEFAULT_DAILY_GOAL_MINUTES;
+        }
+        try {
+            int m = Integer.parseInt(String.valueOf(v));
+            return Math.max(5, Math.min(m, 480));
+        } catch (Exception e) {
+            return DEFAULT_DAILY_GOAL_MINUTES;
+        }
+    }
+
+    @Override
+    public void setDailyGoalMinutes(String userId, int minutes) {
+        if (oConvertUtils.isEmpty(userId)) {
+            throw new JeecgBootException("未登录");
+        }
+        int m = Math.max(5, Math.min(minutes, 480));
+        redisUtil.set(REDIS_LEARN_GOAL + userId, String.valueOf(m));
+    }
+
+    @Override
+    public Map<String, Object> getTodayProgress(String userId) {
+        int goal = getDailyGoalMinutes(userId);
+        LocalDate today = LocalDate.now();
+        List<LearnRecord> records = recordMapper.selectList(new LambdaQueryWrapper<LearnRecord>()
+                .eq(LearnRecord::getUserId, userId)
+                .ge(LearnRecord::getCreateTime, java.sql.Date.valueOf(today)));
+        int seconds = records.stream().mapToInt(r -> r.getDuration() != null ? r.getDuration() : 0).sum();
+        int todayMinutes = seconds / 60;
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("goalMinutes", goal);
+        result.put("todayMinutes", todayMinutes);
+        result.put("progressPercent", goal > 0 ? Math.min(100, todayMinutes * 100.0 / goal) : 0);
+        result.put("reached", todayMinutes >= goal);
+        return result;
+    }
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R29】每日目标-----------
 
     @Override
     public List<String> getLearnCalendarDates(String userId, String yearMonth) {

@@ -1,14 +1,37 @@
-﻿<route lang="json5">
-{ style: { navigationBarTitleText: '学习模块' } }
+<route lang="json5">
+{
+  style: {
+    navigationBarTitleText: '学习模块',
+    navigationBarBackgroundColor: '#F3F2EE',
+    onReachBottomDistance: 80,
+  },
+}
 </route>
 
 <template>
-  <view class="page">
+  <view class="hai-page hai-page--fab">
     <view class="stats-card">
       <text class="stats-num">{{ stats.totalRecords || 0 }}</text>
       <text class="stats-label">次学习记录</text>
       <text class="stats-num">{{ stats.totalDuration || 0 }}</text>
       <text class="stats-label">总时长(分钟)</text>
+    </view>
+
+    <view class="goal-card" @click="editGoal">
+      <view class="goal-head">
+        <text class="goal-title">今日目标</text>
+        <text class="goal-action">设置</text>
+      </view>
+      <view class="goal-progress-row">
+        <text class="goal-num">{{ goal.todayMinutes || 0 }}</text>
+        <text class="goal-sep">/</text>
+        <text class="goal-num">{{ goal.goalMinutes || 30 }}</text>
+        <text class="goal-unit">分钟</text>
+      </view>
+      <view class="goal-bar">
+        <view class="goal-bar-inner" :style="{ width: Math.min(100, goal.progressPercent || 0) + '%' }"></view>
+      </view>
+      <text class="goal-tip">{{ goal.reached ? '今日目标已达成' : '每晚 20:00 未达标将提醒（需授权订阅）' }}</text>
     </view>
 
     <view v-if="activeSession.materialId" class="learn-bar">
@@ -49,31 +72,55 @@
           <text class="mat-title">{{ m.title }}</text>
           <text class="mat-cat">{{ m.category }} · {{ m.type }}</text>
         </view>
-        <wd-icon name="arrow-right" size="14px" color="#ccc"></wd-icon>
+        <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
       </view>
-      <view v-if="materials.length === 0" class="empty">暂无学习资料，点击右下角添加</view>
+      <HomeEmpty
+        v-if="materials.length === 0 && !loadingMore"
+        title="暂无学习资料"
+        hint="添加资料后即可开始计时学习"
+        action-text="添加资料"
+        @action="goAdd"
+      />
+      <!-- 底部加载更多：配合 onReachBottom，部分端页面滚动不触发时可用按钮兜底 -->
+      <view v-if="materials.length > 0" class="load-more-wrap">
+        <view v-if="loadingMore" class="load-more-tip">加载中...</view>
+        <view v-else-if="hasMore" class="load-more-btn" @click="loadMore">加载更多</view>
+        <view v-else class="load-more-tip">没有更多了</view>
+      </view>
     </template>
 
-    <view class="fab" @click="goAdd">+</view>
+    <view class="hai-fab" @click="goAdd">
+      <wd-icon name="add" size="24px" color="#fff" />
+    </view>
   </view>
 </template>
 
 <script lang="ts" setup>
 import { computed, ref, onUnmounted } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
-import { learnApi } from '../../pages-homeai/api/index'
+import { onShow, onReachBottom } from '@dcloudio/uni-app'
+import { learnApi, configApi } from '../../pages-homeai/api/index'
 import { preloadWhitelist } from '../../pages-homeai/utils/fileWhitelist'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+import HomeEmpty from '../../components/HomeEmpty.vue'
 
+useHomeaiPageGuard()
+
+const PAGE_SIZE = 20
 const materials = ref<any[]>([])
 const stats = ref<any>({})
+const goal = ref<any>({ goalMinutes: 30, todayMinutes: 0, progressPercent: 0, reached: false })
 const activeTab = ref('list')
 const viewYear = ref(new Date().getFullYear())
 const viewMonth = ref(new Date().getMonth() + 1)
 const studyDates = ref<string[]>([])
 const activeSession = ref<any>({})
 const displayElapsed = ref(0)
+const pageNo = ref(1)
+const hasMore = ref(true)
+const loadingMore = ref(false)
 let timerHandle: ReturnType<typeof setInterval> | null = null
 const weekLabels = ['日', '一', '二', '三', '四', '五', '六']
+const GOAL_OPTIONS = [15, 30, 45, 60, 90]
 
 const yearMonthParam = computed(() =>
   `${viewYear.value}-${String(viewMonth.value).padStart(2, '0')}`,
@@ -129,11 +176,85 @@ async function loadActiveSession() {
   startTimer(session.elapsedSeconds || 0)
 }
 
+/** 拉取一页资料；reset=true 时重置为第一页 */
+async function fetchMaterials(reset = false) {
+  if (loadingMore.value) return
+  if (!reset && !hasMore.value) return
+
+  loadingMore.value = true
+  try {
+    const nextPage = reset ? 1 : pageNo.value + 1
+    const page: any = await learnApi.materials(nextPage, PAGE_SIZE)
+    const records: any[] = page?.records || (Array.isArray(page) ? page : [])
+    if (reset) {
+      materials.value = records
+    } else {
+      materials.value = materials.value.concat(records)
+    }
+    pageNo.value = nextPage
+    // 不足一页或明确无更多
+    const total = page?.total
+    if (typeof total === 'number') {
+      hasMore.value = materials.value.length < total
+    } else {
+      hasMore.value = records.length >= PAGE_SIZE
+    }
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+async function loadGoal() {
+  try {
+    goal.value = (await learnApi.goal()) || goal.value
+  } catch {
+    // 目标加载失败不阻断页面
+  }
+}
+
+async function requestLearnSubscribe() {
+  try {
+    const cfg: any = await configApi.wechatPublic()
+    const tmplId = cfg?.learnRemindTemplateId
+    if (!tmplId) return
+    // #ifdef MP-WEIXIN
+    await new Promise<void>((resolve) => {
+      uni.requestSubscribeMessage({
+        tmplIds: [tmplId],
+        complete: () => resolve(),
+      })
+    })
+    // #endif
+  } catch {
+    // 订阅失败不阻断
+  }
+}
+
+function editGoal() {
+  uni.showActionSheet({
+    itemList: GOAL_OPTIONS.map((m) => `每日 ${m} 分钟`),
+    success: async (res) => {
+      const minutes = GOAL_OPTIONS[res.tapIndex]
+      if (!minutes) return
+      await requestLearnSubscribe()
+      goal.value = (await learnApi.setGoal(minutes)) || goal.value
+      uni.showToast({ title: '目标已更新', icon: 'success' })
+    },
+  })
+}
+
 async function loadData() {
-  const page: any = await learnApi.materials(1, 100)
-  materials.value = page?.records || page || []
+  pageNo.value = 1
+  hasMore.value = true
+  await fetchMaterials(true)
   stats.value = (await learnApi.statistics()) || {}
+  await loadGoal()
   await loadActiveSession()
+}
+
+async function loadMore() {
+  if (activeTab.value !== 'list') return
+  await fetchMaterials(false)
 }
 
 async function loadCalendar() {
@@ -156,7 +277,7 @@ function nextMonth() {
 }
 
 function startLearn(m: any) {
-  uni.navigateTo({ url: `/pages-homeai-more/learn/detail?id=${m.id}` })
+  uni.navigateTo({ url: `/pages-homeai-more/learn/detail?id=${m.id}&autoStart=1` })
 }
 
 async function stopLearn() {
@@ -181,39 +302,55 @@ onShow(() => {
   loadData()
 })
 
+onReachBottom(() => {
+  loadMore()
+})
+
 onUnmounted(() => clearTimer())
 </script>
 
 <style scoped>
-.page { min-height: 100vh; background: #f5f5f5; padding: 20rpx; padding-bottom: 120rpx; }
-.learn-bar { display: flex; align-items: center; justify-content: space-between; background: #27ae60; color: #fff; border-radius: 12rpx; padding: 20rpx 24rpx; margin-bottom: 16rpx; }
+/* page shell: .hai-page */
+.learn-bar { display: flex; align-items: center; justify-content: space-between; background: var(--hai-success); color: var(--hai-on-primary); border-radius: 28rpx; padding: 24rpx 28rpx; margin-bottom: 16rpx; box-shadow: var(--hai-shadow); }
 .learn-bar-info { flex: 1; }
 .learn-bar-title { display: block; font-size: 26rpx; margin-bottom: 6rpx; }
 .learn-bar-time { font-size: 36rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
-.learn-bar-stop { background: rgba(255,255,255,0.2); padding: 12rpx 24rpx; border-radius: 8rpx; font-size: 26rpx; }
-.stats-card { display: flex; flex-wrap: wrap; background: #fff; border-radius: 12rpx; padding: 24rpx; margin-bottom: 20rpx; }
-.stats-num { width: 50%; font-size: 36rpx; font-weight: 700; text-align: center; }
-.stats-label { width: 50%; font-size: 22rpx; color: #999; text-align: center; margin-bottom: 12rpx; }
-.tab-bar { display: flex; background: #fff; border-radius: 12rpx; margin-bottom: 16rpx; overflow: hidden; }
-.tab { flex: 1; text-align: center; padding: 20rpx; font-size: 28rpx; color: #666; }
-.tab.active { color: #27ae60; font-weight: 600; border-bottom: 4rpx solid #27ae60; }
-.tab.link { flex: 0.7; color: #667eea; font-size: 26rpx; border-bottom: none; }
-.calendar-wrap { background: #fff; border-radius: 12rpx; padding: 20rpx; margin-bottom: 16rpx; }
+.learn-bar-stop { background: rgba(255,255,255,0.2); padding: 12rpx 24rpx; border-radius: 999rpx; font-size: 26rpx; }
+.stats-card { display: flex; flex-wrap: wrap; background: var(--hai-card); border-radius: 28rpx; padding: 28rpx; margin-bottom: 20rpx; box-shadow: var(--hai-shadow); }
+.stats-num { width: 50%; font-family: 'Songti SC', 'STSong', serif; font-size: 36rpx; font-weight: 700; text-align: center; color: var(--hai-text); }
+.stats-label { width: 50%; font-size: 22rpx; color: var(--hai-text-muted); text-align: center; margin-bottom: 12rpx; }
+.goal-card { background: var(--hai-card); border-radius: 28rpx; padding: 28rpx; margin-bottom: 20rpx; box-shadow: var(--hai-shadow); }
+.goal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12rpx; }
+.goal-title { font-size: 28rpx; font-weight: 600; color: var(--hai-text); }
+.goal-action { font-size: 24rpx; color: var(--hai-primary); }
+.goal-progress-row { display: flex; align-items: baseline; gap: 8rpx; margin-bottom: 16rpx; }
+.goal-num { font-family: 'Songti SC', 'STSong', serif; font-size: 40rpx; font-weight: 700; color: var(--hai-text); }
+.goal-sep { font-size: 28rpx; color: var(--hai-text-muted); }
+.goal-unit { font-size: 24rpx; color: var(--hai-text-muted); margin-left: 4rpx; }
+.goal-bar { height: 12rpx; background: var(--hai-border, #eee); border-radius: 999rpx; overflow: hidden; margin-bottom: 12rpx; }
+.goal-bar-inner { height: 100%; background: var(--hai-primary); border-radius: 999rpx; }
+.goal-tip { font-size: 22rpx; color: var(--hai-text-muted); }
+.tab-bar { display: flex; background: var(--hai-card); border-radius: 28rpx; margin-bottom: 16rpx; overflow: hidden; box-shadow: var(--hai-shadow); }
+.tab { flex: 1; text-align: center; padding: 22rpx; font-size: 28rpx; color: var(--hai-text-secondary); }
+.tab.active { color: var(--hai-primary); font-weight: 600; border-bottom: 4rpx solid var(--hai-primary); }
+.tab.link { flex: 0.7; color: var(--hai-primary); font-size: 26rpx; border-bottom: none; }
+.calendar-wrap { background: var(--hai-card); border-radius: 28rpx; padding: 24rpx; margin-bottom: 16rpx; box-shadow: var(--hai-shadow); }
 .month-bar { display: flex; justify-content: center; align-items: center; gap: 40rpx; padding: 12rpx 0 20rpx; }
-.nav { font-size: 36rpx; color: #27ae60; }
-.month { font-size: 30rpx; font-weight: 600; }
+.nav { font-size: 36rpx; color: var(--hai-primary); }
+.month { font-family: 'Songti SC', 'STSong', serif; font-size: 30rpx; font-weight: 700; color: var(--hai-text); }
 .week-head { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; margin-bottom: 8rpx; }
-.w { font-size: 22rpx; color: #999; }
+.w { font-size: 22rpx; color: var(--hai-text-muted); }
 .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8rpx; }
-.cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 8rpx; font-size: 24rpx; }
+.cell { aspect-ratio: 1; min-height: 72rpx; display: flex; align-items: center; justify-content: center; border-radius: 12rpx; font-size: 24rpx; color: var(--hai-text); }
 .cell.empty { visibility: hidden; }
-.cell.studied { background: #d4edda; color: #27ae60; font-weight: 600; }
-.cal-tip { display: block; text-align: center; font-size: 22rpx; color: #999; margin-top: 16rpx; }
-.material-item { display: flex; align-items: center; padding: 24rpx; background: #fff; border-radius: 12rpx; margin-bottom: 12rpx; gap: 16rpx; }
+.cell.studied { background: var(--hai-success-soft); color: var(--hai-success); font-weight: 600; }
+.cal-tip { display: block; text-align: center; font-size: 22rpx; color: var(--hai-text-muted); margin-top: 16rpx; }
+.material-item { display: flex; align-items: center; padding: 28rpx; background: var(--hai-card); border-radius: 24rpx; margin-bottom: 16rpx; gap: 16rpx; box-shadow: var(--hai-shadow); }
 .mat-icon { font-size: 32rpx; }
 .mat-info { flex: 1; }
-.mat-title { font-size: 28rpx; display: block; }
-.mat-cat { font-size: 22rpx; color: #999; display: block; }
-.fab { position: fixed; right: 40rpx; bottom: 100rpx; width: 100rpx; height: 100rpx; background: #27ae60; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 48rpx; color: #fff; }
-.empty { text-align: center; color: #999; padding: 60rpx 0; font-size: 26rpx; }
+.mat-title { font-size: 28rpx; display: block; color: var(--hai-text); }
+.mat-cat { font-size: 22rpx; color: var(--hai-text-muted); display: block; }
+.load-more-wrap { padding: 24rpx 0 40rpx; text-align: center; }
+.load-more-btn { display: inline-block; padding: 16rpx 48rpx; font-size: 26rpx; color: var(--hai-primary); background: var(--hai-card); border-radius: 999rpx; box-shadow: var(--hai-shadow); }
+.load-more-tip { font-size: 24rpx; color: var(--hai-text-muted); }
 </style>

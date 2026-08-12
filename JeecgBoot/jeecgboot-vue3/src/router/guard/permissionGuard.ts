@@ -63,7 +63,10 @@ export function createPermissionGuard(router: Router) {
           if (!isSessionTimeout) {
             return (to.query?.redirect as string) || '/';
           }
-        } catch {}
+        } catch (e) {
+          // 登录页 redirect 解析失败时忽略，继续走白名单放行
+          if (import.meta.env.DEV) console.error('permissionGuard login redirect failed', e);
+        }
         // 代码逻辑说明: [issues/I5BG1I]vue3不支持auth2登录------------
       } else if (to.path === LOGIN_PATH && isOAuth2AppEnv() && !token) {
         //退出登录进入此逻辑
@@ -119,9 +122,11 @@ export function createPermissionGuard(router: Router) {
 
       // 代码逻辑说明: 【QQYUN-4713】登录代码调整逻辑有问题，改造待观察--
       if (to.fullPath) {
-        console.log("to.fullPath 1",to.fullPath)
-        console.log("to.path 2",to.path)
-        
+        if (import.meta.env.DEV) {
+          console.log('to.fullPath 1', to.fullPath);
+          console.log('to.path 2', to.path);
+        }
+
         let getFullPath = to.fullPath;
         if(getFullPath=='/' || getFullPath=='/500' || getFullPath=='/400' || getFullPath=='/login?redirect=/' || getFullPath=='/login?redirect=/login?redirect=/'){
           return;

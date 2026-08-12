@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <BasicTable @register="registerTable">
       <template #tableTitle>
         <a-button type="primary" preIcon="ant-design:plus-outlined" @click="handleAdd"> 新增规则</a-button>
@@ -16,10 +16,11 @@
       </template>
     </BasicTable>
     <ConvertRuleDrawer @register="registerDrawer" @success="reload" />
-  </div>
+  </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-convert-rule" setup>
+  import { PageWrapper } from '/@/components/Page';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
   import { useMessage } from '/@/hooks/web/useMessage';

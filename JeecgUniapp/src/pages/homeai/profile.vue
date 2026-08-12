@@ -2,6 +2,7 @@
 {
   style: {
     navigationBarTitleText: '个人中心',
+    navigationBarBackgroundColor: '#F3F2EE',
   },
 }
 </route>
@@ -32,19 +33,25 @@
     <!-- 菜单列表 -->
     <view class="menu-group" v-if="userStore.isLogin">
       <view class="menu-item" @click="goFamily">
-        <wd-icon name="home" size="20px"></wd-icon>
+        <view class="menu-icon">
+          <wd-icon name="home" size="18px" color="#1B4F8A"></wd-icon>
+        </view>
         <text class="menu-text">我的家庭</text>
-        <wd-icon name="arrow-right" size="14px" class="menu-arrow"></wd-icon>
+        <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
       </view>
       <view class="menu-item" @click="showPrivacy">
-        <wd-icon name="info" size="20px"></wd-icon>
+        <view class="menu-icon">
+          <wd-icon name="secured" size="18px" color="#1B4F8A"></wd-icon>
+        </view>
         <text class="menu-text">隐私协议</text>
-        <wd-icon name="arrow-right" size="14px" class="menu-arrow"></wd-icon>
+        <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
       </view>
       <view class="menu-item" @click="showAbout">
-        <wd-icon name="help" size="20px"></wd-icon>
+        <view class="menu-icon">
+          <wd-icon name="info" size="18px" color="#1B4F8A"></wd-icon>
+        </view>
         <text class="menu-text">关于</text>
-        <wd-icon name="arrow-right" size="14px" class="menu-arrow"></wd-icon>
+        <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
       </view>
     </view>
 
@@ -158,101 +165,146 @@ function handleLogout() {
 <style scoped>
 .profile-page {
   min-height: 100vh;
-  background: #f5f5f5;
+  box-sizing: border-box;
+  padding: 24rpx 32rpx 48rpx;
+  background: var(--hai-bg);
 }
+
 .user-card {
   display: flex;
   align-items: center;
-  gap: 30rpx;
-  padding: 60rpx 30rpx;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  gap: 24rpx;
+  padding: 36rpx 32rpx;
+  background: var(--hai-card);
+  border-radius: 28rpx;
+  box-shadow: var(--hai-shadow);
 }
+
+.avatar {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  background: var(--hai-bg);
+  flex-shrink: 0;
+}
+
+.user-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.nickname {
+  font-family: 'Songti SC', 'STSong', 'Noto Serif SC', serif;
+  font-size: 36rpx;
+  font-weight: 700;
+  color: var(--hai-text);
+}
+
+.phone,
+.guest-tip {
+  font-size: 24rpx;
+  color: var(--hai-text-secondary);
+  margin-top: 8rpx;
+}
+
 .login-btn {
   margin-left: auto;
-  padding: 12rpx 32rpx;
-  background: #fff;
+  padding: 14rpx 32rpx;
+  background: var(--hai-primary);
   border-radius: 999rpx;
-  color: #667eea;
+  color: var(--hai-on-primary);
   font-size: 26rpx;
   font-weight: 600;
   flex-shrink: 0;
 }
-.guest-tip {
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.75);
-  margin-top: 8rpx;
-}
-.avatar {
-  width: 140rpx;
-  height: 140rpx;
-  border-radius: 50%;
-  border: 4rpx solid rgba(255, 255, 255, 0.5);
-}
-.user-info {
-  display: flex;
-  flex-direction: column;
-}
-.nickname {
-  font-size: 36rpx;
-  font-weight: bold;
-  color: #fff;
-}
-.phone {
-  font-size: 26rpx;
-  color: rgba(255, 255, 255, 0.75);
-  margin-top: 8rpx;
-}
+
 .stats-card {
   display: flex;
-  margin: -40rpx 20rpx 0;
-  padding: 30rpx;
-  background: #fff;
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  margin-top: 24rpx;
+  padding: 32rpx 16rpx;
+  background: var(--hai-card);
+  border-radius: 28rpx;
+  box-shadow: var(--hai-shadow);
 }
+
 .stat-item {
   flex: 1;
   text-align: center;
+  position: relative;
 }
+
+.stat-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 10rpx;
+  bottom: 10rpx;
+  width: 1rpx;
+  background: var(--hai-border);
+}
+
 .stat-num {
-  font-size: 36rpx;
-  font-weight: bold;
-  color: #333;
+  display: block;
+  font-family: 'Songti SC', 'STSong', 'Noto Serif SC', serif;
+  font-size: 40rpx;
+  font-weight: 700;
+  color: var(--hai-text);
 }
+
 .stat-label {
-  font-size: 24rpx;
-  color: #999;
-  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: var(--hai-text-muted);
+  margin-top: 8rpx;
   display: block;
 }
+
 .menu-group {
-  margin: 30rpx 20rpx;
-  background: #fff;
-  border-radius: 16rpx;
+  margin-top: 24rpx;
+  background: var(--hai-card);
+  border-radius: 28rpx;
+  box-shadow: var(--hai-shadow);
   overflow: hidden;
 }
+
 .menu-item {
   display: flex;
   align-items: center;
   padding: 28rpx 30rpx;
   gap: 16rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid var(--hai-border);
 }
+
+.menu-item:last-child {
+  border-bottom: none;
+}
+
+.menu-icon {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 16rpx;
+  background: var(--hai-primary-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .menu-text {
   flex: 1;
   font-size: 28rpx;
-  color: #333;
+  color: var(--hai-text);
 }
-.menu-arrow {
-  color: #ccc;
-}
+
 .logout-btn {
-  margin: 60rpx 20rpx;
+  margin-top: 40rpx;
   padding: 28rpx;
   text-align: center;
-  background: #fff;
-  border-radius: 16rpx;
-  color: #e74c3c;
+  background: var(--hai-card);
+  border-radius: 28rpx;
+  box-shadow: var(--hai-shadow);
+  color: var(--hai-danger);
   font-size: 28rpx;
 }
 </style>

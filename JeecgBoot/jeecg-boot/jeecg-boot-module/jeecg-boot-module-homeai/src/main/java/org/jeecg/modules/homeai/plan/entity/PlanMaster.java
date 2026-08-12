@@ -26,6 +26,10 @@ public class PlanMaster implements Serializable {
     private Integer isAllDay;
     private String priority;
     private String category;
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】计划关联菜谱-----------
+    @Schema(description = "关联菜谱ID")
+    private String recipeId;
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】计划关联菜谱-----------
     private Integer remindMinutes;
     private Integer isRepeatMaster;
     private String repeatRule;

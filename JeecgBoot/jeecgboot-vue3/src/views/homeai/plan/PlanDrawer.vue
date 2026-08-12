@@ -12,7 +12,7 @@
   import { ref } from 'vue';
   import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
   import { BasicForm, useForm } from '/@/components/Form';
-  import { planApi } from '/@/api/homeai';
+  import { planApi, recipeApi } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';
 
   const emit = defineEmits(['success']);
@@ -20,6 +20,14 @@
   const isUpdate = ref(false);
   const recordId = ref('');
   const categoryOptions = ref<{ label: string; value: string }[]>([]);
+  const recipeOptions = ref<{ label: string; value: string }[]>([]);
+
+  const repeatRuleOptions = [
+    { label: '不重复', value: 'none' },
+    { label: '每天', value: 'daily' },
+    { label: '每周', value: 'weekly' },
+    { label: '每月', value: 'monthly' },
+  ];
 
   async function loadCategories() {
     try {
@@ -30,16 +38,41 @@
     }
   }
 
+  async function loadRecipes() {
+    try {
+      const res: any = await recipeApi.list({ pageNo: 1, pageSize: 200 });
+      const records = res?.records || res || [];
+      recipeOptions.value = (Array.isArray(records) ? records : []).map((r: any) => ({
+        label: r.name,
+        value: r.id,
+      }));
+    } catch {
+      recipeOptions.value = [];
+    }
+  }
+
   const [registerDrawer, { closeDrawer }] = useDrawerInner(async (data) => {
-    await loadCategories();
-    updateSchema({
-      field: 'category',
-      componentProps: {
-        options: categoryOptions.value,
-        placeholder: '请选择分类',
-        allowClear: true,
+    await Promise.all([loadCategories(), loadRecipes()]);
+    updateSchema([
+      {
+        field: 'category',
+        componentProps: {
+          options: categoryOptions.value,
+          placeholder: '请选择分类',
+          allowClear: true,
+        },
       },
-    });
+      {
+        field: 'recipeId',
+        componentProps: {
+          options: recipeOptions.value,
+          placeholder: '可选，关联菜谱',
+          allowClear: true,
+          showSearch: true,
+          optionFilterProp: 'label',
+        },
+      },
+    ]);
     isUpdate.value = data.isUpdate || false;
     recordId.value = data.record?.id || '';
     if (isUpdate.value && data.record) {
@@ -65,6 +98,18 @@
         },
       },
       {
+        field: 'recipeId',
+        label: '关联菜谱',
+        component: 'Select',
+        componentProps: {
+          options: recipeOptions,
+          placeholder: '可选，关联菜谱',
+          allowClear: true,
+          showSearch: true,
+          optionFilterProp: 'label',
+        },
+      },
+      {
         field: 'priority',
         label: '优先级',
         component: 'Select',
@@ -76,6 +121,60 @@
           ],
         },
         defaultValue: 'normal',
+      },
+      {
+        field: 'repeatRule',
+        label: '重复规则',
+        component: 'Select',
+        componentProps: {
+          options: repeatRuleOptions,
+          placeholder: '请选择重复规则',
+        },
+        defaultValue: 'none',
+      },
+      {
+        field: 'isAllDay',
+        label: '全天',
+        component: 'Select',
+        componentProps: {
+          options: [
+            { label: '否', value: 0 },
+            { label: '是', value: 1 },
+          ],
+        },
+        defaultValue: 0,
+      },
+      {
+        field: 'startTime',
+        label: '开始时间',
+        component: 'TimePicker',
+        componentProps: {
+          format: 'HH:mm',
+          valueFormat: 'HH:mm:ss',
+          placeholder: '请选择开始时间',
+        },
+        ifShow: ({ values }) => values.isAllDay !== 1,
+      },
+      {
+        field: 'endTime',
+        label: '结束时间',
+        component: 'TimePicker',
+        componentProps: {
+          format: 'HH:mm',
+          valueFormat: 'HH:mm:ss',
+          placeholder: '请选择结束时间',
+        },
+        ifShow: ({ values }) => values.isAllDay !== 1,
+      },
+      {
+        field: 'remindMinutes',
+        label: '提前提醒(分)',
+        component: 'InputNumber',
+        componentProps: {
+          min: 0,
+          placeholder: '提前多少分钟提醒',
+          style: { width: '100%' },
+        },
       },
       { field: 'content', label: '内容', component: 'InputTextArea' },
     ],

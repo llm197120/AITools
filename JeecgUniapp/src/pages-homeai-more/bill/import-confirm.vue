@@ -1,6 +1,6 @@
-<route lang="json5">{ style: { navigationBarTitleText: '导入确认' } }</route>
+<route lang="json5">{ style: { navigationBarTitleText: '导入确认', navigationBarBackgroundColor: '#F3F2EE' } }</route>
 <template>
-  <view class="page">
+  <view class="hai-page">
     <text class="summary">共 {{ rows.length }} 条，已选 {{ selectedCount }} 条</text>
     <view class="row" v-for="(r, i) in rows" :key="i" @click="toggle(i)">
       <text class="check">{{ r._checked !== false ? '☑' : '☐' }}</text>
@@ -60,13 +60,13 @@ async function confirm() {
 }
 </script>
 <style scoped>
-.page { min-height: 100vh; background: #f5f5f5; padding: 20rpx; padding-bottom: 40rpx; }
-.summary { display: block; font-size: 26rpx; color: #666; margin-bottom: 16rpx; padding: 0 8rpx; }
-.row { display: flex; align-items: center; gap: 16rpx; padding: 24rpx; background: #fff; border-radius: 12rpx; margin-bottom: 12rpx; }
-.check { font-size: 32rpx; color: #667eea; }
+/* page shell: .hai-page */
+.summary { display: block; font-size: 26rpx; color: var(--hai-text-secondary); margin-bottom: 16rpx; padding: 0 8rpx; }
+.row { display: flex; align-items: center; gap: 16rpx; padding: 24rpx; background: var(--hai-card); border-radius: 24rpx; margin-bottom: 12rpx; box-shadow: var(--hai-shadow); }
+.check { font-size: 32rpx; color: var(--hai-primary); }
 .info { flex: 1; }
-.line { font-size: 26rpx; color: #333; display: block; }
+.line { font-size: 26rpx; color: var(--hai-text); display: block; }
 .amount { font-size: 30rpx; font-weight: 600; display: block; margin-top: 4rpx; }
-.red { color: #e74c3c; }
-.green { color: #27ae60; }
+.red { color: var(--hai-danger); }
+.green { color: var(--hai-success); }
 </style>

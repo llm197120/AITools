@@ -2,6 +2,7 @@
 {
   style: {
     navigationBarTitleText: '我的家庭',
+    navigationBarBackgroundColor: '#F3F2EE',
   },
 }
 </route>
@@ -10,31 +11,33 @@
   <view class="family-page">
     <!-- 无家庭状态 -->
     <view class="no-family" v-if="!familyStore.hasFamily">
-      <wd-status-tip tip="您还没有加入任何家庭" image="content">
-        <template #image>
-          <wd-icon name="home" size="80px" color="#ccc"></wd-icon>
+      <HomeEmpty
+        icon-name="home"
+        icon-color="#1B4F8A"
+        icon-size="40px"
+        title="还没有家庭"
+        hint="创建或加入家庭后，资料与计划可共享使用"
+      >
+        <template #actions>
+          <view class="actions">
+            <view class="btn-primary" @click="showCreate">创建家庭</view>
+            <view class="btn-ghost" @click="showJoin">加入家庭</view>
+          </view>
         </template>
-      </wd-status-tip>
-      <view class="actions">
-        <wd-button type="primary" size="large" @click="showCreate">创建家庭</wd-button>
-        <wd-button plain size="large" @click="showJoin">加入家庭</wd-button>
-      </view>
+      </HomeEmpty>
     </view>
 
     <!-- 有家庭状态 -->
     <view class="has-family" v-else>
-      <!-- 家庭信息 -->
       <view class="family-header">
         <text class="family-name">{{ familyStore.familyInfo?.name }}</text>
         <text class="member-count">{{ familyStore.familyInfo?.memberCount || 0 }} 位成员</text>
-        <!-- 管理员可见：编辑名称 -->
-        <wd-button size="small" plain @click="showEditName" v-if="isAdmin">编辑名称</wd-button>
+        <view class="edit-name" @click="showEditName" v-if="isAdmin">编辑名称</view>
       </view>
 
-      <!-- 成员列表 -->
       <view class="section">
         <view class="section-title">
-          <text>家庭成员</text>
+          <text class="section-title-text">家庭成员</text>
           <text class="invite-btn" @click="generateInviteCode" v-if="isAdmin">+ 邀请</text>
         </view>
         <view class="member-list">
@@ -44,25 +47,24 @@
               <text class="member-name">{{ member.nickname }}</text>
               <text class="member-role">{{ roleLabel(member.role) }}</text>
             </view>
-            <wd-button v-if="isAdmin && member.userId !== currentUserId" size="small" plain type="danger" @click="removeMember(member)">移除</wd-button>
+            <view
+              v-if="isAdmin && member.userId !== currentUserId"
+              class="remove-btn"
+              @click="removeMember(member)"
+            >移除</view>
           </view>
         </view>
       </view>
 
-      <!-- 管理员操作 -->
       <view class="admin-actions" v-if="isAdmin">
-        <wd-button block plain @click="showTransfer">转让管理员</wd-button>
-        <wd-button block plain type="danger" @click="confirmDisband">解散家庭</wd-button>
+        <view class="btn-ghost block" @click="showTransfer">转让管理员</view>
+        <view class="btn-danger block" @click="confirmDisband">解散家庭</view>
       </view>
 
-      <!-- 退出家庭 -->
-      <view class="leave-btn" @click="confirmLeave" v-if="!isAdmin">
-        退出家庭
-      </view>
+      <view class="leave-btn" @click="confirmLeave" v-if="!isAdmin">退出家庭</view>
     </view>
 
-    <!-- 创建家庭弹窗 -->
-    <wd-popup v-model="createVisible" position="center" custom-style="width:80%;border-radius:16rpx;overflow:hidden">
+    <wd-popup v-model="createVisible" position="center" custom-style="width:80%;border-radius:28rpx;overflow:hidden">
       <view class="dialog-title">创建家庭</view>
       <view class="dialog-body">
         <wd-input v-model="createName" placeholder="请输入家庭名称" />
@@ -73,8 +75,7 @@
       </view>
     </wd-popup>
 
-    <!-- 加入家庭弹窗 -->
-    <wd-popup v-model="joinVisible" position="center" custom-style="width:80%;border-radius:16rpx;overflow:hidden">
+    <wd-popup v-model="joinVisible" position="center" custom-style="width:80%;border-radius:28rpx;overflow:hidden">
       <view class="dialog-title">加入家庭</view>
       <view class="dialog-body">
         <wd-input v-model="inviteCode" placeholder="请输入6位邀请码" maxlength="6" />
@@ -93,7 +94,8 @@ import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '../../pages-homeai/stores/user'
 import { useFamilyStore } from '../../pages-homeai/stores/family'
 import { get as getApi, post as postApi, del as delApi, put as putApi } from '../../pages-homeai/api'
-import { ensureProfileWhenGuest, ensureLoginForAction } from '../../pages-homeai/utils/homeaiAuth'
+import { ensureProfileWhenGuest } from '../../pages-homeai/utils/homeaiAuth'
+import HomeEmpty from '../../components/HomeEmpty.vue'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
@@ -253,104 +255,201 @@ function confirmLeave() {
 <style scoped>
 .family-page {
   min-height: 100vh;
-  background: #f5f5f5;
+  box-sizing: border-box;
+  padding: 24rpx 32rpx 48rpx;
+  background: var(--hai-bg);
 }
+
 .no-family {
-  padding-top: 120rpx;
+  padding-top: 40rpx;
 }
+
 .actions {
-  padding: 40rpx;
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: 20rpx;
+  margin-top: 28rpx;
+  padding: 0 12rpx;
 }
+
+.btn-primary,
+.btn-ghost,
+.btn-danger {
+  text-align: center;
+  padding: 24rpx;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.btn-primary {
+  background: var(--hai-primary);
+  color: var(--hai-on-primary);
+}
+
+.btn-ghost {
+  background: var(--hai-card);
+  color: var(--hai-primary);
+  border: 1rpx solid rgba(27, 79, 138, 0.25);
+}
+
+.btn-danger {
+  background: var(--hai-card);
+  color: var(--hai-danger);
+  border: 1rpx solid rgba(196, 92, 74, 0.25);
+}
+
+.btn-primary.block,
+.btn-ghost.block,
+.btn-danger.block {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .family-header {
-  padding: 40rpx 30rpx;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: #fff;
+  padding: 40rpx 32rpx;
+  background: var(--hai-card);
+  border-radius: 28rpx;
+  box-shadow: var(--hai-shadow);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12rpx;
 }
+
 .family-name {
+  font-family: 'Songti SC', 'STSong', 'Noto Serif SC', serif;
   font-size: 40rpx;
-  font-weight: bold;
+  font-weight: 700;
+  color: var(--hai-text);
 }
+
 .member-count {
-  font-size: 26rpx;
-  opacity: 0.8;
+  font-size: 24rpx;
+  color: var(--hai-text-secondary);
 }
+
+.edit-name {
+  margin-top: 8rpx;
+  padding: 10rpx 28rpx;
+  border-radius: 999rpx;
+  background: var(--hai-primary-soft);
+  color: var(--hai-primary);
+  font-size: 22rpx;
+}
+
 .section {
-  margin: 20rpx;
-  background: #fff;
-  border-radius: 16rpx;
+  margin-top: 24rpx;
+  background: var(--hai-card);
+  border-radius: 28rpx;
+  box-shadow: var(--hai-shadow);
   overflow: hidden;
 }
+
 .section-title {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 24rpx 30rpx;
-  font-size: 28rpx;
-  font-weight: bold;
-  border-bottom: 1rpx solid #f0f0f0;
+  padding: 28rpx 30rpx;
+  border-bottom: 1rpx solid var(--hai-border);
 }
+
+.section-title-text {
+  font-family: 'Songti SC', 'STSong', 'Noto Serif SC', serif;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--hai-text);
+}
+
 .invite-btn {
-  color: #667eea;
-  font-weight: normal;
+  color: var(--hai-primary);
+  font-size: 26rpx;
 }
+
 .member-list {
   padding: 0 30rpx;
 }
+
 .member-item {
   display: flex;
   align-items: center;
-  padding: 20rpx 0;
+  padding: 24rpx 0;
   gap: 20rpx;
-  border-bottom: 1rpx solid #f5f5f5;
+  border-bottom: 1rpx solid var(--hai-border);
 }
+
+.member-item:last-child {
+  border-bottom: none;
+}
+
 .member-avatar {
   width: 80rpx;
   height: 80rpx;
   border-radius: 50%;
+  background: var(--hai-bg);
 }
+
 .member-info {
   flex: 1;
+  min-width: 0;
 }
+
 .member-name {
   font-size: 28rpx;
-  color: #333;
+  color: var(--hai-text);
 }
+
 .member-role {
   font-size: 22rpx;
-  color: #999;
+  color: var(--hai-text-muted);
   margin-left: 8rpx;
 }
+
+.remove-btn {
+  min-height: 64rpx;
+  min-width: 88rpx;
+  padding: 14rpx 28rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  color: var(--hai-danger);
+  background: var(--hai-danger-soft, rgba(196, 92, 74, 0.08));
+}
+
 .admin-actions {
-  margin: 20rpx;
+  margin-top: 24rpx;
   display: flex;
   flex-direction: column;
   gap: 16rpx;
 }
+
 .leave-btn {
-  margin: 40rpx 20rpx;
+  margin-top: 40rpx;
   padding: 28rpx;
   text-align: center;
-  background: #fff;
-  border-radius: 16rpx;
-  color: #e74c3c;
+  background: var(--hai-card);
+  border-radius: 28rpx;
+  box-shadow: var(--hai-shadow);
+  color: var(--hai-danger);
   font-size: 28rpx;
 }
+
 .dialog-title {
+  font-family: 'Songti SC', 'STSong', 'Noto Serif SC', serif;
   font-size: 32rpx;
-  font-weight: 600;
+  font-weight: 700;
   text-align: center;
-  padding: 30rpx 24rpx 10rpx;
+  padding: 36rpx 24rpx 10rpx;
+  color: var(--hai-text);
 }
+
 .dialog-body {
   padding: 20rpx 30rpx;
 }
+
 .dialog-footer {
   display: flex;
   gap: 20rpx;

@@ -1,6 +1,7 @@
 // @import './iconfont.css';
 @import '../static/iconfont/iconfont.css';
 @import './chat/style.scss';
+@import './homeai-theme.scss';
 .test {
   // 可以通过 @apply 多个样式封装整体样式
   @apply mt-4 ml-4;
@@ -14,7 +15,7 @@ page {
   .uni-tabbar__label {
     margin-top: 1px !important;
   }
-  background-color: #f1f1f1;
+  background-color: #f3f2ee;
 
   --UI-BG: #fff;
   --UI-BG-1: #f7f7f7;
@@ -68,17 +69,17 @@ page {
   .cu-text-green {
     color: var(--color-green);
   }
-  // 主题色
-  --wot-color-theme: #0081ff;
+  // 主题色（HomeAI 深蓝，覆盖 Jeecg 默认蓝）
+  --wot-color-theme: #1b4f8a;
   // 导航
   --wot-navbar-color: #fff;
   --wot-navbar-desc-font-color: #fff;
   // 文字
   --wot-text-info-color: var(--UI-FG-0);
   // 输入框
-  --wot-input-color: #555;
-  --wot-cell-value-color: #555;
-  --wot-textarea-color: #555;
+  --wot-input-color: #2c271f;
+  --wot-cell-value-color: #8a857c;
+  --wot-textarea-color: #2c271f;
 
   // 重置 wot-design-uni
   --wot-input-disabled-color: #bab8b8;
@@ -86,7 +87,7 @@ page {
   --wot-input-clear-color: #8f8f8f;
   .wd-button {
     &.is-round {
-      border-radius: 4px !important;
+      border-radius: 999rpx !important;
     }
     &.is-plain {
       overflow: visible;

@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 16px">
+  <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <a-tabs v-model:activeKey="activeTab" @change="onTabChange">
       <a-tab-pane key="list" tab="账单列表" />
       <a-tab-pane key="recycle" tab="回收站" />
@@ -8,14 +8,14 @@
       <template #tableTitle>
         <a-button v-if="activeTab === 'list'" preIcon="ant-design:plus-outlined" type="primary" @click="handleAdd">新增</a-button>
         <a-upload v-if="activeTab === 'list'" name="file" :showUploadList="false" :customRequest="(file) => handleImportXls(file, billApi.importExcel, reload)">
-          <a-button preIcon="ant-design:import-outlined" type="primary">导入</a-button>
+          <a-button preIcon="ant-design:import-outlined">导入</a-button>
         </a-upload>
-        <a-button v-if="activeTab === 'list'" preIcon="ant-design:download-outlined" type="primary" @click="handleDownloadTemplate">下载模板</a-button>
-        <a-button v-if="activeTab === 'list'" preIcon="ant-design:export-outlined" type="primary" @click="handleExportXls('账单列表', billApi.exportXls)">导出</a-button>
+        <a-button v-if="activeTab === 'list'" preIcon="ant-design:download-outlined" @click="handleDownloadTemplate">下载模板</a-button>
+        <a-button v-if="activeTab === 'list'" preIcon="ant-design:export-outlined" @click="handleExportXls('账单列表', billApi.exportXls)">导出</a-button>
         <a-button v-if="activeTab === 'list' && selectedRowKeys.length > 0" preIcon="ant-design:delete-outlined" type="primary" danger @click="handleBatchMoveToRecycleBin">
           移入回收站({{ selectedRowKeys.length }})
         </a-button>
-        <a-button v-if="activeTab === 'recycle' && selectedRowKeys.length > 0" preIcon="ant-design:undo-outlined" type="primary" @click="handleBatchRestore">
+        <a-button v-if="activeTab === 'recycle' && selectedRowKeys.length > 0" preIcon="ant-design:undo-outlined" @click="handleBatchRestore">
           恢复({{ selectedRowKeys.length }})
         </a-button>
         <a-button v-if="activeTab === 'recycle' && selectedRowKeys.length > 0" preIcon="ant-design:delete-outlined" type="primary" danger @click="handleBatchDeletePermanently">
@@ -27,28 +27,36 @@
       </template>
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'type'">
-          <a-tag :color="record.type === 'income' ? 'green' : 'red'">{{ record.type === 'income' ? '收入' : '支出' }}</a-tag>
+          <span :class="record.type === 'income' ? 'hai-text-success' : 'hai-text-danger'">{{
+            record.type === 'income' ? '收入' : '支出'
+          }}</span>
         </template>
         <template v-if="column.key === 'amount'">
-          <span :style="{color: record.type==='income'?'#27ae60':'#e74c3c'}">¥{{ record.amount }}</span>
+          <span :class="record.type === 'income' ? 'hai-amount-income' : 'hai-amount-expense'">¥{{ record.amount }}</span>
+        </template>
+        <template v-else-if="column.key === 'userId' || column.dataIndex === 'userId'">
+          {{ resolveUserLabel(record.userId) }}
         </template>
       </template>
     </BasicTable>
     <BillDrawer @register="registerDrawer" @success="handleSuccess" />
-  </div>
+  </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-bill-list" setup>
-  import { computed, ref } from 'vue';
+  import { PageWrapper } from '/@/components/Page';
+  import { computed, ref, onMounted } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { useMethods } from '/@/hooks/system/useMethods';
   import { billApi } from '/@/api/homeai';
+  import { useUserLabel } from '../hooks/useUserLabel';
   import BillDrawer from './BillDrawer.vue';
 
   const { createMessage, createConfirm } = useMessage();
   const { handleExportXls, handleImportXls } = useMethods();
+  const { loadUserOptions, resolveUserLabel } = useUserLabel();
   const [registerDrawer, { openDrawer }] = useDrawer();
   const selectedRowKeys = ref<string[]>([]);
   const activeTab = ref('list');
@@ -62,7 +70,7 @@
 
   const columns = [
     { title: '日期', dataIndex: 'billDate', width: 120 },
-    { title: '用户', dataIndex: 'userId', width: 160 },
+    { title: '用户', dataIndex: 'userId', key: 'userId', width: 160 },
     { title: '类型', dataIndex: 'type', key: 'type', width: 70 },
       { title: '分类', dataIndex: 'categoryName', width: 100, customRender: ({ text, record }: any) => text || record?.categoryId || '-' },
     { title: '金额', dataIndex: 'amount', key: 'amount', width: 100 },
@@ -95,6 +103,10 @@
     selectedRowKeys.value = [];
     reload();
   }
+
+  onMounted(() => {
+    loadUserOptions();
+  });
 
   function getTableAction(record: any) {
     if (activeTab.value === 'recycle') {

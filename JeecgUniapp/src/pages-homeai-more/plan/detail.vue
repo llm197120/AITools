@@ -1,6 +1,6 @@
-<route lang="json5">{ style: { navigationBarTitleText: '计划详情' } }</route>
+<route lang="json5">{ style: { navigationBarTitleText: '计划详情', navigationBarBackgroundColor: '#F3F2EE' } }</route>
 <template>
-  <view class="page" v-if="plan.id">
+  <view class="hai-page" v-if="plan.id">
     <view class="status-bar">
       <text class="priority" :class="plan.priority || 'normal'">{{ priorityLabel(plan.priority) }}</text>
       <text class="status">{{ statusLabel(plan.status) }}</text>
@@ -74,18 +74,18 @@ onLoad(async (opts: any) => {
 })
 </script>
 <style scoped>
-.page { min-height: 100vh; background: #f5f5f5; padding: 30rpx; }
-.loading { text-align: center; padding: 80rpx; color: #999; }
+/* page shell: .hai-page */
+.loading { text-align: center; padding: 80rpx; color: var(--hai-text-muted); }
 .status-bar { display: flex; justify-content: space-between; margin-bottom: 16rpx; }
-.priority { font-size: 24rpx; padding: 6rpx 16rpx; border-radius: 8rpx; background: #eee; color: #666; }
-.priority.important { background: #fff3cd; color: #856404; }
-.priority.urgent { background: #f8d7da; color: #721c24; }
-.status { font-size: 24rpx; color: #999; }
-.title { font-size: 40rpx; font-weight: 700; color: #333; display: block; margin-bottom: 24rpx; }
-.info-card { background: #fff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 40rpx; }
-.info-row { display: flex; justify-content: space-between; padding: 20rpx 0; border-bottom: 1rpx solid #f0f0f0; font-size: 28rpx; }
+.priority { font-size: 24rpx; padding: 6rpx 16rpx; border-radius: 8rpx; background: var(--hai-border); color: var(--hai-text-secondary); }
+.priority.important { background: var(--hai-primary-soft); color: var(--hai-primary); }
+.priority.urgent { background: var(--hai-danger-soft); color: var(--hai-danger); }
+.status { font-size: 24rpx; color: var(--hai-text-muted); }
+.title { font-family: var(--hai-serif); font-size: 40rpx; font-weight: 700; color: var(--hai-text); display: block; margin-bottom: 24rpx; }
+.info-card { background: var(--hai-card); border-radius: var(--hai-radius); padding: 24rpx; margin-bottom: 40rpx; box-shadow: var(--hai-shadow); }
+.info-row { display: flex; justify-content: space-between; padding: 20rpx 0; border-bottom: 1rpx solid var(--hai-border); font-size: 28rpx; color: var(--hai-text); }
 .info-row:last-child { border-bottom: none; }
-.label { color: #999; }
+.label { color: var(--hai-text-secondary); }
 .actions { padding: 0 20rpx; }
-.expired-tip { display: block; text-align: center; color: #999; font-size: 26rpx; padding: 24rpx; }
+.expired-tip { display: block; text-align: center; color: var(--hai-text-muted); font-size: 26rpx; padding: 24rpx; }
 </style>

@@ -1,8 +1,11 @@
 package org.jeecg.modules.homeai.storage.service;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.jeecg.modules.homeai.storage.entity.StorageFolder;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -31,6 +34,18 @@ public interface IStorageFolderService extends IService<StorageFolder> {
     /** 获取子文件夹 */
     List<StorageFolder> getChildFolders(String parentId);
 
-    /** 递归删除文件夹及其内所有文件、子文件夹 */
+    /** 递归软删文件夹及其内所有文件、子文件夹（移入回收站） */
     void deleteFolderCascade(String folderId);
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】文件夹回收站-----------
+    IPage<StorageFolder> pageRecycleBin(Page<StorageFolder> page, String keyword);
+
+    //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R24】用户侧文件夹回收站-----------
+    IPage<StorageFolder> pageMyRecycleBin(Page<StorageFolder> page, String userId, String keyword);
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R24】用户侧文件夹回收站-----------
+
+    void restoreFolders(Collection<String> ids);
+
+    void deleteFoldersPermanently(Collection<String> ids);
+    //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】文件夹回收站-----------
 }
