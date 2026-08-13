@@ -50,6 +50,8 @@ jobs:
         with:
           context: JeecgBoot/jeecg-boot/jeecg-module-system/jeecg-system-start
           push: true
+          provenance: false
+          sbom: false
           tags: |
             ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.IMAGE_BACKEND }}:${{ steps.meta.outputs.image_tag }}
             ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.IMAGE_BACKEND }}:dev-latest
