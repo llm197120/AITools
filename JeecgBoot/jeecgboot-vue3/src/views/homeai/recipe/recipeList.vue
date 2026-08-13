@@ -49,6 +49,7 @@
   import RecipeDrawer from './RecipeDrawer.vue';
   import { useUserLabel } from '../hooks/useUserLabel';
   import { recipeDifficultyColor } from '../hooks/homeaiStatusColors';
+  import { useUserStore } from '/@/store/modules/user';
 
   const { createMessage, createConfirm } = useMessage();
   const { handleExportXls, handleImportXls } = useMethods();
@@ -156,13 +157,8 @@
   }
 
   function handleDownloadTemplate() {
-    const headers = ['菜名', '分类', '难度(1-5)', '烹饪时间(分)', '份数', '小贴士'];
-    const blob = new Blob(['\uFEFF' + headers.join(',') + '\n'], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = '菜谱导入模板.csv';
-    link.click();
-    URL.revokeObjectURL(link.href);
+    const token = useUserStore().getToken;
+    window.open(`/jeecg-boot/homeai/recipe/exportTemplate?token=${encodeURIComponent(token)}`, '_blank');
   }
 
   function handleSuccess() {

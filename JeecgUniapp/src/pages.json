@@ -301,10 +301,6 @@
             "navigationBarTitleText": "搜索文件",
             "navigationBarBackgroundColor": "#F3F2EE"
           }
-        },
-        {
-          "path": "storage/StorageBrowser",
-          "type": "page"
         }
       ]
     }

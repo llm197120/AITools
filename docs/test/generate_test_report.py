@@ -15,7 +15,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = Path(__file__).resolve().parent / f"test-report-homeai-{dt.datetime.now().strftime('%Y%m%d')}-r14.xlsx"
+OUT = Path(__file__).resolve().parent / f"test-report-homeai-{dt.datetime.now().strftime('%Y%m%d')}-r15.xlsx"
 
 PASS, FAIL, SKIP, WARN = "通过", "失败", "跳过", "警告"
 IS_WIN = os.name == "nt"
@@ -542,9 +542,9 @@ def collect_rows() -> list[dict]:
         (
             "文档",
             "DOC-001",
-            "路线图含第31轮摘要",
+            "路线图含第32轮摘要",
             "静态",
-            contains("docs/plan/homeai-optimization-roadmap.md", r"第 31 轮"),
+            contains("docs/plan/homeai-optimization-roadmap.md", r"第 32 轮"),
             "迭代记录",
             "homeai-optimization-roadmap.md",
         ),
@@ -587,6 +587,64 @@ def collect_rows() -> list[dict]:
             ),
             "第31轮",
             "learn stats export",
+        ),
+        (
+            "后端-功能落地",
+            "BE-ST-023",
+            "菜谱推荐做过次数加权",
+            "静态",
+            contains(
+                "JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/src/main/java/org/jeecg/modules/homeai/plan/mapper/PlanInstanceMapper.java",
+                r"countCompletedByRecipe",
+            )
+            and contains(
+                "JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/src/main/java/org/jeecg/modules/homeai/recipe/service/impl/RecipeServiceImpl.java",
+                r"loadCookCounts",
+            )
+            and contains("JeecgUniapp/src/pages-homeai-more/recipe/index.vue", r"做过多次"),
+            "第32轮",
+            "recommend cookCount",
+        ),
+        (
+            "后端-功能落地",
+            "BE-ST-024",
+            "家庭配额运营看板 API",
+            "静态",
+            contains(
+                "JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/src/main/java/org/jeecg/modules/homeai/config/controller/HomeaiConfigController.java",
+                r"/storage/families",
+            )
+            and contains(
+                "JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/src/main/java/org/jeecg/modules/homeai/storage/service/IStorageFileService.java",
+                r"listFamilyQuotaBoard",
+            )
+            and contains(
+                "JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/src/main/java/org/jeecg/modules/homeai/config/controller/HomeaiConfigController.java",
+                r"/storage/families/batch",
+            ),
+            "第32轮",
+            "family quota board",
+        ),
+        (
+            "管理端-功能落地",
+            "FE-ST-014",
+            "家庭配额看板页 + 批量调整",
+            "静态",
+            exists("JeecgBoot/jeecgboot-vue3/src/views/homeai/storage/familyQuota.vue")
+            and contains(
+                "JeecgBoot/jeecgboot-vue3/src/api/homeai/index.ts",
+                r"familyQuotaBoard",
+            )
+            and contains(
+                "JeecgBoot/jeecgboot-vue3/src/api/homeai/index.ts",
+                r"batchFamilyStorageLimit",
+            )
+            and contains(
+                "JeecgBoot/jeecgboot-vue3/src/views/homeai/storage/fileList.vue",
+                r"goFamilyQuota",
+            ),
+            "第32轮",
+            "familyQuota.vue",
         ),
         (
             "后端-功能落地",
@@ -1379,6 +1437,7 @@ def collect_rows() -> list[dict]:
         ("联调-后端", "RT-BE-005", "存储配额配置", "/homeai/config/storage", "GET", "admin", PASS),
         ("联调-后端", "RT-BE-006", "存储空间统计", "/homeai/storage/stats", "GET", "admin", PASS),
         ("联调-后端", "RT-BE-007", "综合统计 plan-learn", "/homeai/dashboard/plan-learn?days=7", "GET", "admin", WARN),
+        ("联调-后端", "RT-BE-009", "家庭配额运营看板", "/homeai/config/storage/families", "GET", "admin", PASS),
         ("联调-小程序", "RT-MP-003", "学习目标查询", "/homeai/learn/goal", "GET", "mp", PASS),
         ("联调-小程序", "RT-MP-004", "学习目标设置", "/homeai/learn/goal?minutes=30", "PUT", "mp", PASS),
         ("联调-小程序", "RT-MP-005", "菜谱推荐", "/homeai/recipe/recommend?limit=3", "GET", "mp", PASS),

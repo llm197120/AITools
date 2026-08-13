@@ -388,16 +388,17 @@ CREATE TABLE IF NOT EXISTS `homeai_plan_master` (
     `user_id`         VARCHAR(32)  NULL COMMENT '创建者用户ID（NULL=管理端录入）',
     `title`           VARCHAR(100) NOT NULL COMMENT '计划标题',
     `content`         TEXT                   COMMENT '计划内容',
-    `category`        VARCHAR(20)  DEFAULT '生活' COMMENT '分类:工作/学习/生活/运动/家庭/其他',
-    `recipe_id`       VARCHAR(32)           COMMENT '关联菜谱ID',
-    `priority`        VARCHAR(10)  DEFAULT 'normal' COMMENT '优先级:normal/important/urgent',
-    `is_all_day`      VARCHAR(2)   DEFAULT '0' COMMENT '是否全天:1=全天 0=定时',
+    `plan_date`       DATE                   COMMENT '计划日期',
     `start_time`      TIME                   COMMENT '开始时间',
     `end_time`        TIME                   COMMENT '结束时间',
-    `remind_before`   INT          DEFAULT 0 COMMENT '提前提醒分钟数:0=不提醒',
-    `repeat_type`     VARCHAR(20)  DEFAULT 'none' COMMENT '重复类型:none/daily/weekly/monthly/custom',
-    `repeat_end_date` DATE                   COMMENT '重复结束日期（NULL=永久）',
-    `is_repeat_master` VARCHAR(2)  DEFAULT '0' COMMENT '是否为重复计划主记录:1=是 0=否',
+    `is_all_day`      INT          DEFAULT 0 COMMENT '是否全天:1=全天 0=定时',
+    `priority`        VARCHAR(10)  DEFAULT 'normal' COMMENT '优先级:normal/important/urgent',
+    `category`        VARCHAR(20)  DEFAULT '生活' COMMENT '分类:工作/学习/生活/运动/家庭/其他',
+    `recipe_id`       VARCHAR(32)           COMMENT '关联菜谱ID',
+    `remind_minutes`  INT          DEFAULT 0 COMMENT '提前提醒分钟数:0=不提醒',
+    `is_repeat_master` INT         DEFAULT 0 COMMENT '是否为重复计划主记录:1=是 0=否',
+    `repeat_rule`     VARCHAR(200)          COMMENT '重复规则:none/daily/weekly/monthly',
+    `version`         INT          DEFAULT 0 COMMENT '乐观锁版本号',
     `create_by`       VARCHAR(50)           COMMENT '创建人',
     `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_by`       VARCHAR(50)           COMMENT '更新人',
@@ -405,7 +406,8 @@ CREATE TABLE IF NOT EXISTS `homeai_plan_master` (
     `del_flag`        TINYINT      DEFAULT 0 COMMENT '删除状态(0-正常,1-已删除)',
     PRIMARY KEY (`id`),
     KEY `idx_hw_plan_master_user` (`user_id`),
-    KEY `idx_hw_plan_master_repeat` (`is_repeat_master`)
+    KEY `idx_hw_plan_master_repeat` (`is_repeat_master`),
+    KEY `idx_hw_plan_master_recipe` (`recipe_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='计划主表' ROW_FORMAT=DYNAMIC;
 
 -- =============================================================
@@ -434,31 +436,21 @@ CREATE TABLE IF NOT EXISTS `homeai_plan_category` (
 -- =============================================================
 CREATE TABLE IF NOT EXISTS `homeai_plan_instance` (
     `id`              VARCHAR(32)  NOT NULL COMMENT '主键',
-    `master_id`       VARCHAR(32)           COMMENT '主计划ID（NULL=一次性计划）',
-    `user_id`         VARCHAR(32)  NOT NULL COMMENT '用户ID',
+    `master_id`       VARCHAR(32)           COMMENT '主计划ID',
     `plan_date`       DATE         NOT NULL COMMENT '计划日期',
-    `title`           VARCHAR(100) NOT NULL COMMENT '计划标题',
-    `content`         TEXT                   COMMENT '计划内容',
-    `category`        VARCHAR(20)  DEFAULT '生活' COMMENT '分类',
-    `priority`        VARCHAR(10)  DEFAULT 'normal' COMMENT '优先级',
-    `start_time`      TIME                   COMMENT '开始时间',
-    `end_time`        TIME                   COMMENT '结束时间',
-    `remind_at`       DATETIME              COMMENT '提醒时间',
-    `reminded`        VARCHAR(2)   DEFAULT '0' COMMENT '是否已提醒:1=是 0=否',
     `status`          VARCHAR(20)  DEFAULT 'pending' COMMENT '状态:pending/completed/cancelled/expired',
-    `completed_at`    DATETIME              COMMENT '完成时间',
+    `reminded`        INT          DEFAULT 0 COMMENT '是否已提醒:1=是 0=否',
+    `version`         INT          DEFAULT 0 COMMENT '乐观锁版本号',
+    `user_id`         VARCHAR(32)  NULL COMMENT '用户ID（展示冗余，可空）',
+    `title`           VARCHAR(100) NULL COMMENT '计划标题（展示冗余，可空）',
     `create_by`       VARCHAR(50)           COMMENT '创建人',
     `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_by`       VARCHAR(50)           COMMENT '更新人',
     `update_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    `del_flag`        TINYINT      DEFAULT 0 COMMENT '删除状态(0-正常,1-已删除)',
-    `deleted_at`      DATETIME              COMMENT '删除时间',
     PRIMARY KEY (`id`),
     KEY `idx_hw_plan_inst_master` (`master_id`),
-    KEY `idx_hw_plan_inst_user_date` (`user_id`, `plan_date`),
     KEY `idx_hw_plan_inst_date` (`plan_date`),
-    KEY `idx_hw_plan_inst_status` (`status`),
-    KEY `idx_hw_plan_inst_remind` (`reminded`, `remind_at`)
+    KEY `idx_hw_plan_inst_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='计划实例' ROW_FORMAT=DYNAMIC;
 
 -- =============================================================

@@ -105,6 +105,12 @@ const homeai: AppRouteModule = {
           component: () => import('/@/views/homeai/storage/fileWhitelist.vue'),
           meta: { title: '文件白名单', icon: 'ant-design:safety-outlined' },
         },
+        {
+          path: 'familyQuota',
+          name: 'HomeaiStorageFamilyQuota',
+          component: () => import('/@/views/homeai/storage/familyQuota.vue'),
+          meta: { title: '家庭配额看板', icon: 'ant-design:cloud-server-outlined' },
+        },
       ],
     },
     {

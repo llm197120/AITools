@@ -37,13 +37,19 @@
         <text class="home-form-value">{{ form.remindMinutes === 0 ? '不提醒' : form.remindMinutes + '分钟' }}</text>
       </picker>
     </view>
+    <view class="home-form-row">
+      <text>关联菜谱</text>
+      <picker :range="recipeNames" @change="onRecipeChange">
+        <text class="home-form-value">{{ selectedRecipeName }}</text>
+      </picker>
+    </view>
     <wd-button size="large" type="primary" block @click="save">保存</wd-button>
   </HomeFormCard>
 </template>
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { planApi, configApi } from '../../pages-homeai/api/index'
+import { planApi, configApi, recipeApi } from '../../pages-homeai/api/index'
 import HomeFormCard from '../../components/HomeFormCard.vue'
 
 const priorityLabels = ['普通', '重要', '紧急']
@@ -65,7 +71,12 @@ const form = ref({
   isAllDay: 1,
   remindMinutes: 0,
   repeatRule: 'none',
+  recipeId: '',
 })
+
+const recipes = ref<any[]>([])
+const recipeNames = ref<string[]>(['不关联'])
+const selectedRecipeName = ref('不关联')
 
 onLoad((options: any) => {
   if (options?.planDate) form.value.planDate = options.planDate
@@ -75,6 +86,13 @@ onMounted(async () => {
   categories.value = (await planApi.categories()) || []
   categoryNames.value = categories.value.map((c) => c.name)
   if (categoryNames.value.length) form.value.category = categoryNames.value[0]
+  try {
+    const page: any = await recipeApi.list({ pageNo: '1', pageSize: '50' })
+    recipes.value = page?.records || (Array.isArray(page) ? page : [])
+  } catch {
+    recipes.value = []
+  }
+  recipeNames.value = ['不关联', ...recipes.value.map((r) => r.name).filter(Boolean)]
 })
 
 function onPriorityChange(e: any) {
@@ -95,6 +113,18 @@ function onRepeatChange(e: any) {
 function onRemindChange(e: any) {
   const mins = [0, 15, 30, 60]
   form.value.remindMinutes = mins[Number(e.detail.value)] ?? 0
+}
+
+function onRecipeChange(e: any) {
+  const idx = Number(e.detail.value)
+  if (!idx) {
+    form.value.recipeId = ''
+    selectedRecipeName.value = '不关联'
+    return
+  }
+  const recipe = recipes.value[idx - 1]
+  form.value.recipeId = recipe?.id || ''
+  selectedRecipeName.value = recipe?.name || '不关联'
 }
 
 async function requestPlanSubscribe() {

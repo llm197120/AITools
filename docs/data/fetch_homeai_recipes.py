@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-从开源项目 Anduin2017/HowToCook 解析常用菜谱，导出为 HomeAI Excel 导入格式。
+从开源菜谱源拉取并转换为 HomeAI Excel 导入格式。
 
-数据源：https://github.com/Anduin2017/HowToCook （社区开源菜谱）
+数据源（按优先级去重合并）：
+1. Anduin2017/HowToCook（社区开源中文菜谱，Unlicense）
+2. Gar-b-age/CookLikeHOC（老乡鸡菜品溯源整理）
+3. XiaChuFang Recipe Corpus（HuggingFace，MIT，按菜名去重补齐）
+
 输出列对齐 docs/guide/recipe-excel-import.md
 """
 
@@ -10,18 +14,26 @@ from __future__ import annotations
 
 import argparse
 import io
+import json
 import re
 import ssl
 import zipfile
 from pathlib import Path
 from typing import Optional
+from urllib.error import URLError
 
 from openpyxl import Workbook
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SRC = ROOT / "tmp" / "HowToCook-master" / "dishes"
+DEFAULT_HOC = ROOT / "tmp" / "CookLikeHOC-main"
 DEFAULT_OUT = Path(__file__).resolve().parent / "homeai-recipes-import.xlsx"
 ZIP_URL = "https://codeload.github.com/Anduin2017/HowToCook/zip/refs/heads/master"
+HOC_ZIP_URL = "https://codeload.github.com/Gar-b-age/CookLikeHOC/zip/refs/heads/main"
+XCF_URLS = [
+    "https://huggingface.co/datasets/xzm1999/XiaChuFang_Recipe_Corpus/resolve/main/recipe_corpus_full.json",
+    "https://hf-mirror.com/datasets/xzm1999/XiaChuFang_Recipe_Corpus/resolve/main/recipe_corpus_full.json",
+]
 
 # HowToCook 目录 -> 系统分类 ID（init_homeai_recipe_category.sql）
 CATEGORY_MAP = {
@@ -35,6 +47,34 @@ CATEGORY_MAP = {
     "drink": "rc_drink",
     "condiment": "rc_other",
     "semi-finished": "rc_other",
+}
+
+# CookLikeHOC 目录 -> 系统分类 ID
+HOC_CATEGORY_MAP = {
+    "凉拌": "rc_cold",
+    "汤": "rc_soup",
+    "主食": "rc_staple",
+    "早餐": "rc_staple",
+    "饮品": "rc_drink",
+    "炸品": "rc_snack",
+    "配料": None,
+}
+
+HOC_COOK_TIME = {
+    "炒菜": 25,
+    "炖菜": 90,
+    "炸品": 20,
+    "烤类": 40,
+    "烫菜": 15,
+    "煮锅": 50,
+    "砂锅菜": 60,
+    "蒸菜": 35,
+    "卤菜": 80,
+    "凉拌": 15,
+    "汤": 60,
+    "主食": 40,
+    "早餐": 20,
+    "饮品": 10,
 }
 
 # 优先收录的家常菜（按常见程度）
@@ -74,29 +114,97 @@ HEADER = [
 ]
 
 
+def ssl_context(unverified: bool = False):
+    if unverified:
+        return ssl._create_unverified_context()
+    try:
+        import certifi
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
+def urlopen_bytes(url: str, timeout: int = 180):
+    import urllib.request
+
+    headers = {"User-Agent": "Mozilla/5.0 HomeAI-RecipeFetcher"}
+    last_err: Exception | None = None
+    for unverified in (False, True):
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, context=ssl_context(unverified), timeout=timeout) as resp:
+                return resp.read()
+        except Exception as e:
+            last_err = e
+    raise last_err or URLError(url)
+
+
+def urlopen_stream(url: str, timeout: int = 180):
+    import urllib.request
+
+    headers = {"User-Agent": "Mozilla/5.0 HomeAI-RecipeFetcher"}
+    last_err: Exception | None = None
+    for unverified in (False, True):
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            return urllib.request.urlopen(req, context=ssl_context(unverified), timeout=timeout)
+        except Exception as e:
+            last_err = e
+    raise last_err or URLError(url)
+
+
 def download_source(dest_root: Path) -> Path:
     dest_root.mkdir(parents=True, exist_ok=True)
     dishes = dest_root / "HowToCook-master" / "dishes"
     if dishes.exists() and any(dishes.rglob("*.md")):
         return dishes
     print("下载 HowToCook 仓库 zip ...")
-    ctx = ssl.create_default_context()
-    try:
-        import certifi
-
-        ctx = ssl.create_default_context(cafile=certifi.where())
-    except Exception:
-        pass
-    import urllib.request
-
-    req = urllib.request.Request(ZIP_URL, headers={"User-Agent": "Mozilla/5.0 HomeAI-RecipeFetcher"})
-    with urllib.request.urlopen(req, context=ctx, timeout=180) as resp:
-        data = resp.read()
+    data = urlopen_bytes(ZIP_URL, timeout=180)
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         zf.extractall(dest_root)
     if not dishes.exists():
         raise RuntimeError(f"解压后未找到 dishes 目录: {dishes}")
     return dishes
+
+
+def download_hoc(dest_root: Path) -> Path:
+    dest_root.mkdir(parents=True, exist_ok=True)
+    root = dest_root / "CookLikeHOC-main"
+    if root.exists() and any(root.rglob("*.md")):
+        return root
+    print("下载 CookLikeHOC 仓库 zip ...")
+    data = urlopen_bytes(HOC_ZIP_URL, timeout=180)
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        zf.extractall(dest_root)
+    if not root.exists():
+        raise RuntimeError(f"解压后未找到 CookLikeHOC 目录: {root}")
+    return root
+
+
+def norm_name(name: str) -> str:
+    s = (name or "").strip()
+    s = re.sub(r"的(家常|详细|最正宗)?做法$", "", s)
+    s = re.sub(r"[（(][^）)]{0,40}[）)]", "", s)
+    s = re.sub(r"\s+", "", s)
+    return s.lower()
+
+
+def infer_category(name: str, extra: str = "") -> str:
+    text = f"{name} {extra}"
+    if any(k in text for k in ("凉拌", "拍黄", "白切", "口水鸡", "凉皮", "沙拉", "冷盘", "皮蛋豆腐")):
+        return "rc_cold"
+    if any(k in text for k in ("蛋糕", "饼干", "面包", "烘焙", "马芬", "曲奇", "泡芙", "蛋挞", "司康")):
+        return "rc_bake"
+    if any(k in text for k in ("奶茶", "豆浆", "咖啡", "果汁", "柠檬水", "酸梅汤", "饮品")):
+        return "rc_drink"
+    if "汤圆" not in text and any(k in text for k in ("汤", "羹", "煲")):
+        return "rc_soup"
+    if any(k in text for k in ("粥", "炒饭", "盖饭", "面条", "拌面", "炒面", "饼", "包子", "饺子", "馒头", "花卷", "馄饨", "米线", "米粉", "凉粉")):
+        return "rc_staple"
+    if any(k in text for k in ("小吃", "零食", "薯条", "炸鸡")):
+        return "rc_snack"
+    return "rc_hot"
 
 
 def category_id(folder: str, name: str) -> str:
@@ -432,8 +540,236 @@ def parse_recipe(path: Path, folder: str) -> Optional[dict]:
         "tips": parse_tips(text),
         "visibility": "public",
         "folder": folder,
-        "source": str(path),
+        "source": "HowToCook",
     }
+
+
+def parse_hoc_recipe(path: Path, folder: str) -> Optional[dict]:
+    text = path.read_text(encoding="utf-8")
+    name = path.stem.strip()
+    if name in ("README", "index") or folder == "配料":
+        return None
+    cat = HOC_CATEGORY_MAP.get(folder, "rc_hot")
+    if cat is None:
+        return None
+    if any(k in name for k in COLD_KEYWORDS):
+        cat = "rc_cold"
+
+    ing_block = extract_section(text, "配料") or extract_section(text, "原料")
+    step_block = extract_section(text, "步骤") or extract_section(text, "做法") or extract_section(text, "操作")
+    items: list[str] = []
+    seen = set()
+    for raw in ing_block.splitlines():
+        line = re.sub(r"^[-*+]\s*", "", raw.strip())
+        if not line or line.startswith("#") or line.startswith("!"):
+            continue
+        parsed = parse_ingredient_line(line, allow_name_only=True)
+        if not parsed:
+            name_only = re.split(r"[（(]", line, maxsplit=1)[0].strip()
+            if 1 <= len(name_only) <= 20:
+                parsed = f"{name_only}||"
+            else:
+                continue
+        key = parsed.split("|", 1)[0]
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(parsed)
+        if len(items) >= 18:
+            break
+
+    steps: list[str] = []
+    for raw in step_block.splitlines():
+        line = re.sub(r"^[-*+]\s*", "", raw.strip())
+        m = re.match(r"^(\d+)[\\.、)．]\s*(.+)$", line)
+        if m:
+            desc = re.sub(r"\s+", " ", m.group(2)).strip()
+            if desc:
+                steps.append(desc)
+            continue
+        if line and not line.startswith("#") and not line.startswith("!") and len(line) >= 6:
+            steps.append(re.sub(r"\s+", " ", line))
+    if not items or not steps:
+        return None
+    n_steps = len(steps)
+    difficulty = 1 if n_steps <= 3 else 2 if n_steps <= 5 else 3 if n_steps <= 8 else 4 if n_steps <= 12 else 5
+    return {
+        "name": name,
+        "categoryId": cat,
+        "difficulty": difficulty,
+        "cookTime": HOC_COOK_TIME.get(folder, 40),
+        "servings": 2,
+        "ingredients": ";".join(items),
+        "steps": ";".join(steps[:15]),
+        "tips": "整理自《老乡鸡菜品溯源报告》开源项目 CookLikeHOC",
+        "visibility": "public",
+        "folder": folder,
+        "source": "CookLikeHOC",
+    }
+
+
+def collect_hoc(hoc_root: Path, used: set[str], limit: int) -> list[dict]:
+    selected: list[dict] = []
+    if limit <= 0:
+        return selected
+    md_files = [
+        p
+        for p in hoc_root.rglob("*.md")
+        if p.name not in ("README.md", "index.md") and "docs" not in p.parts
+    ]
+    for path in sorted(md_files, key=lambda p: p.stem):
+        if len(selected) >= limit:
+            break
+        folder = path.relative_to(hoc_root).parts[0] if path.parent != hoc_root else ""
+        key = norm_name(path.stem)
+        if not key or key in used:
+            continue
+        recipe = parse_hoc_recipe(path, folder)
+        if not recipe:
+            continue
+        used.add(key)
+        used.add(norm_name(recipe["name"]))
+        selected.append(recipe)
+    return selected
+
+
+XCF_NAME_BAD = re.compile(
+    r"(怎么做|的做法|最正宗|视频|点击|http|微信|分享|第.天|宝宝辅食教程|懒人日志)"
+)
+
+
+def clean_xcf_name(name: str, dish: str) -> Optional[str]:
+    n = (dish if dish and dish not in ("Unknown", "unknown") else name) or ""
+    n = n.strip()
+    n = re.sub(r"的(家常|详细|最正宗)?做法$", "", n).strip()
+    n = re.split(r"[，,。！!？?\|／/]", n)[0].strip()
+    n = re.sub(r"[（(][^）)]{0,40}[）)]$", "", n).strip()
+    if not n or len(n) < 2 or len(n) > 16:
+        return None
+    if XCF_NAME_BAD.search(n):
+        return None
+    if not re.search(r"[\u4e00-\u9fff]", n):
+        return None
+    if n.count("的") >= 2:
+        return None
+    return n
+
+
+def xcf_to_recipe(obj: dict) -> Optional[dict]:
+    name = clean_xcf_name(str(obj.get("name") or ""), str(obj.get("dish") or ""))
+    if not name:
+        return None
+    ings_raw = obj.get("recipeIngredient") or []
+    steps_raw = obj.get("recipeInstructions") or []
+    if not isinstance(ings_raw, list) or not isinstance(steps_raw, list):
+        return None
+    items: list[str] = []
+    seen = set()
+    for raw in ings_raw:
+        line = str(raw).strip()
+        parsed = parse_ingredient_line(line, allow_name_only=True)
+        if not parsed:
+            continue
+        key = parsed.split("|", 1)[0]
+        if key in seen or len(key) > 20:
+            continue
+        seen.add(key)
+        items.append(parsed)
+        if len(items) >= 16:
+            break
+    steps: list[str] = []
+    for raw in steps_raw:
+        desc = re.sub(r"\s+", " ", str(raw).strip())
+        desc = re.sub(r"^\d+[\\.、)]\s*", "", desc)
+        if len(desc) < 2:
+            continue
+        steps.append(desc[:200])
+        if len(steps) >= 15:
+            break
+    if len(items) < 2 or len(steps) < 3:
+        return None
+    keywords = obj.get("keywords") or []
+    extra = " ".join(str(k) for k in keywords) if isinstance(keywords, list) else str(keywords)
+    n_steps = len(steps)
+    difficulty = 1 if n_steps <= 4 else 2 if n_steps <= 6 else 3 if n_steps <= 9 else 4
+    tips = str(obj.get("description") or "").strip()
+    tips = re.sub(r"\s+", " ", tips)[:500]
+    return {
+        "name": name,
+        "categoryId": infer_category(name, extra),
+        "difficulty": difficulty,
+        "cookTime": {1: 20, 2: 30, 3: 45, 4: 60, 5: 90}.get(difficulty, 30),
+        "servings": 2,
+        "ingredients": ";".join(items),
+        "steps": ";".join(steps),
+        "tips": tips,
+        "visibility": "public",
+        "folder": "xiachufang",
+        "source": "XiaChuFang",
+        "score": len(items) + len(steps) * 2 + min(len(tips), 80) // 20,
+    }
+
+
+def collect_xiachufang(used: set[str], limit: int, max_scan: int = 80000) -> list[dict]:
+    selected: list[dict] = []
+    if limit <= 0:
+        return selected
+    best: dict[str, dict] = {}
+    scanned = 0
+    last_err: Exception | None = None
+    for url in XCF_URLS:
+        try:
+            print(f"流式读取下厨房语料: {url}")
+            resp = urlopen_stream(url, timeout=180)
+            try:
+                for raw in resp:
+                    scanned += 1
+                    if scanned > max_scan and len(best) >= limit:
+                        break
+                    if scanned > max_scan * 2:
+                        break
+                    line = raw.decode("utf-8", "replace").strip() if isinstance(raw, (bytes, bytearray)) else str(raw).strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    recipe = xcf_to_recipe(obj)
+                    if not recipe:
+                        continue
+                    key = norm_name(recipe["name"])
+                    if not key or key in used:
+                        continue
+                    prev = best.get(key)
+                    if prev is None or recipe["score"] > prev["score"]:
+                        best[key] = recipe
+                    if scanned % 5000 == 0:
+                        print(f"  已扫描 {scanned} 条，候选菜名 {len(best)}")
+                    if len(best) >= limit * 3 and scanned >= 15000:
+                        break
+            finally:
+                resp.close()
+            last_err = None
+            break
+        except Exception as e:
+            last_err = e
+            print(f"下厨房语料读取失败: {e}")
+    if last_err and not best:
+        print("跳过下厨房语料补齐")
+        return selected
+    ranked = sorted(best.values(), key=lambda r: r.get("score", 0), reverse=True)
+    for recipe in ranked:
+        if len(selected) >= limit:
+            break
+        key = norm_name(recipe["name"])
+        if key in used:
+            continue
+        used.add(key)
+        recipe.pop("score", None)
+        selected.append(recipe)
+    print(f"下厨房语料扫描 {scanned} 条，补齐 {len(selected)} 道")
+    return selected
 
 
 def collect_recipes(dishes_dir: Path, limit: int = 100) -> list[dict]:
@@ -497,6 +833,8 @@ def collect_recipes(dishes_dir: Path, limit: int = 100) -> list[dict]:
         "dessert": 5,
         "drink": 5,
     }
+    if limit > 150:
+        quotas = {k: limit for k in quotas}
     folder_counts: dict[str, int] = {}
     for r in selected:
         folder_counts[r["folder"]] = folder_counts.get(r["folder"], 0) + 1
@@ -539,21 +877,27 @@ def write_excel(rows: list[dict], out_path: Path) -> None:
     ws = wb.active
     ws.title = "导出信息"
     # 对齐 AutoPoi: titleRows=2, headRows=1
+    sources = sorted({str(r.get("source") or "") for r in rows if r.get("source")})
     ws.append(["菜谱列表数据"])
-    ws.append(["导出人:系统", "数据来源:Anduin2017/HowToCook"])
+    ws.append(["导出人:系统", "数据来源:" + "+".join(sources)])
     ws.append(HEADER)
+
+    def _cell(v, max_len: int = 8000) -> str:
+        s = "" if v is None else str(v)
+        return s[:max_len]
+
     for r in rows:
         ws.append(
             [
-                r["name"],
-                r["categoryId"],
+                _cell(r["name"], 80),
+                _cell(r["categoryId"], 32),
                 r["difficulty"],
                 r["cookTime"],
                 r["servings"],
-                r["ingredients"],
-                r["steps"],
-                r["tips"],
-                r["visibility"],
+                _cell(r["ingredients"]),
+                _cell(r["steps"]),
+                _cell(r["tips"], 500),
+                _cell(r["visibility"], 20),
             ]
         )
     from openpyxl.utils import get_column_letter
@@ -566,9 +910,10 @@ def write_excel(rows: list[dict], out_path: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="拉取 HowToCook 并导出 HomeAI 菜谱 Excel")
-    parser.add_argument("--limit", type=int, default=100, help="导出条数，默认 100")
-    parser.add_argument("--src", type=Path, default=DEFAULT_SRC, help="本地 dishes 目录")
+    parser = argparse.ArgumentParser(description="拉取开源菜谱并导出 HomeAI 菜谱 Excel")
+    parser.add_argument("--limit", type=int, default=1000, help="导出条数，默认 1000")
+    parser.add_argument("--src", type=Path, default=DEFAULT_SRC, help="本地 HowToCook dishes 目录")
+    parser.add_argument("--hoc", type=Path, default=DEFAULT_HOC, help="本地 CookLikeHOC 目录")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="输出 xlsx 路径")
     parser.add_argument("--download", action="store_true", help="强制重新下载源数据")
     args = parser.parse_args()
@@ -578,18 +923,33 @@ def main() -> None:
         dishes = download_source(ROOT / "tmp")
 
     rows = collect_recipes(dishes, limit=args.limit)
+    used = {norm_name(r["name"]) for r in rows}
+    print(f"HowToCook 已收录 {len(rows)} 道")
+
+    if len(rows) < args.limit:
+        hoc_root = args.hoc
+        if args.download or not hoc_root.exists():
+            hoc_root = download_hoc(ROOT / "tmp")
+        hoc_rows = collect_hoc(hoc_root, used, args.limit - len(rows))
+        rows.extend(hoc_rows)
+        print(f"CookLikeHOC 新增 {len(hoc_rows)} 道，合计 {len(rows)}")
+
+    if len(rows) < args.limit:
+        xcf_rows = collect_xiachufang(used, args.limit - len(rows))
+        rows.extend(xcf_rows)
+
+    rows = rows[: args.limit]
     write_excel(rows, args.out)
 
-    # 统计
     from collections import Counter
 
     cat = Counter(r["categoryId"] for r in rows)
-    folder = Counter(r["folder"] for r in rows)
+    folder = Counter(r.get("source") or r.get("folder") for r in rows)
     with_ing = sum(1 for r in rows if r["ingredients"])
     with_steps = sum(1 for r in rows if r["steps"])
     print(f"已导出 {len(rows)} 条 -> {args.out}")
     print(f"分类分布: {dict(cat)}")
-    print(f"来源目录: {dict(folder)}")
+    print(f"数据来源: {dict(folder)}")
     print(f"含食材 {with_ing} / 含步骤 {with_steps}")
     print("示例:")
     for r in rows[:5]:

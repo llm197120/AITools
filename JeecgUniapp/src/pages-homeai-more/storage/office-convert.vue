@@ -20,6 +20,7 @@
 
 <script lang="ts" setup>
 import { ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi } from '../../pages-homeai/api/request'
 
 const sourceFormat = ref('')

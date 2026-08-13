@@ -10,6 +10,7 @@ import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.family.entity.FamilyMember;
 import org.jeecg.modules.homeai.family.service.IFamilyMemberService;
 import org.jeecg.modules.homeai.plan.entity.PlanInstance;
+import org.jeecg.modules.homeai.plan.mapper.PlanInstanceMapper;
 import org.jeecg.modules.homeai.plan.service.IPlanService;
 import org.jeecg.modules.homeai.recipe.constant.RecipeVisibility;
 import org.jeecg.modules.homeai.recipe.entity.*;
@@ -39,6 +40,9 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
     @Lazy
     @Autowired private IPlanService planService;
     @Autowired private IFamilyMemberService familyMemberService;
+    //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R32】做过次数统计-----------
+    @Autowired private PlanInstanceMapper planInstanceMapper;
+    //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R32】做过次数统计-----------
 
     @Override
     public Recipe getDetail(String id) {
@@ -97,6 +101,9 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
     public List<Map<String, Object>> listRecommendRecipes(String userId, String familyId, int limit, String season) {
         int size = limit <= 0 ? 8 : Math.min(limit, 20);
         LinkedHashMap<String, Map<String, Object>> ordered = new LinkedHashMap<>();
+        //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R32】做过次数加权-----------
+        Map<String, Integer> cookCounts = loadCookCounts(userId, familyId);
+        //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R32】做过次数加权-----------
 
         // 1) 今日计划关联菜
         try {
@@ -106,7 +113,7 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
                     if (inst == null || oConvertUtils.isEmpty(inst.getRecipeId())) {
                         continue;
                     }
-                    appendRecommend(ordered, inst.getRecipeId(), userId, familyId, "today_plan", size);
+                    appendRecommend(ordered, inst.getRecipeId(), userId, familyId, "today_plan", size, cookCounts);
                     if (ordered.size() >= size) {
                         return new ArrayList<>(ordered.values());
                     }
@@ -121,7 +128,7 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
         if (myFav != null) {
             for (Recipe r : myFav) {
                 if (r == null) continue;
-                appendRecommendRecipe(ordered, r, "my_favorite", size);
+                appendRecommendRecipe(ordered, r, "my_favorite", size, cookCounts);
                 if (ordered.size() >= size) {
                     return new ArrayList<>(ordered.values());
                 }
@@ -148,22 +155,39 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
                 }
                 favCount.entrySet().stream()
                         .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
-                        .forEach(e -> appendRecommend(ordered, e.getKey(), userId, familyId, "family_favorite", size));
+                        .forEach(e -> appendRecommend(ordered, e.getKey(), userId, familyId, "family_favorite", size, cookCounts));
                 if (ordered.size() >= size) {
                     return new ArrayList<>(ordered.values());
                 }
             }
         }
 
-        // 4) 加权热门兜底（含季节分类加权）
+        //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R32】做过次数优先补位-----------
+        cookCounts.entrySet().stream()
+                .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
+                .forEach(e -> appendRecommend(ordered, e.getKey(), userId, familyId, "cooked", size, cookCounts));
+        if (ordered.size() >= size) {
+            return new ArrayList<>(ordered.values());
+        }
+        //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R32】做过次数优先补位-----------
+
+        // 4) 加权热门兜底（含季节分类 / 做过次数加权）
         Set<String> seasonCats = resolveSeasonCategories(season);
         List<Recipe> hot = listHotRecipes(userId, familyId, Math.max(size * 3, 30));
         if (hot != null) {
-            hot.sort((a, b) -> Double.compare(recommendScore(b, seasonCats), recommendScore(a, seasonCats)));
+            hot.sort((a, b) -> Double.compare(
+                    recommendScore(b, seasonCats, cookCounts), recommendScore(a, seasonCats, cookCounts)));
             for (Recipe r : hot) {
-                String reason = (r.getCategoryId() != null && seasonCats.contains(r.getCategoryId()))
-                        ? "season" : "hot";
-                appendRecommendRecipe(ordered, r, reason, size);
+                String reason;
+                int cooked = cookCounts.getOrDefault(r.getId(), 0);
+                if (cooked > 0) {
+                    reason = "cooked";
+                } else if (r.getCategoryId() != null && seasonCats.contains(r.getCategoryId())) {
+                    reason = "season";
+                } else {
+                    reason = "hot";
+                }
+                appendRecommendRecipe(ordered, r, reason, size, cookCounts);
                 if (ordered.size() >= size) {
                     break;
                 }
@@ -219,7 +243,7 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
 
     private void appendRecommend(LinkedHashMap<String, Map<String, Object>> ordered,
                                  String recipeId, String userId, String familyId,
-                                 String reason, int size) {
+                                 String reason, int size, Map<String, Integer> cookCounts) {
         if (ordered.size() >= size || ordered.containsKey(recipeId)) {
             return;
         }
@@ -227,11 +251,12 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
         if (recipe == null || !canViewRecipe(recipe, userId, familyId)) {
             return;
         }
-        appendRecommendRecipe(ordered, recipe, reason, size);
+        appendRecommendRecipe(ordered, recipe, reason, size, cookCounts);
     }
 
     private void appendRecommendRecipe(LinkedHashMap<String, Map<String, Object>> ordered,
-                                       Recipe recipe, String reason, int size) {
+                                       Recipe recipe, String reason, int size,
+                                       Map<String, Integer> cookCounts) {
         if (recipe == null || oConvertUtils.isEmpty(recipe.getId()) || ordered.size() >= size) {
             return;
         }
@@ -249,10 +274,68 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
         row.put("categoryId", recipe.getCategoryId());
         row.put("visibility", recipe.getVisibility());
         row.put("reason", reason);
+        //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R32】推荐返回做过次数-----------
+        int cooked = 0;
+        if (cookCounts != null && recipe.getId() != null) {
+            cooked = cookCounts.getOrDefault(recipe.getId(), 0);
+        }
+        row.put("cookCount", cooked);
+        //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R32】推荐返回做过次数-----------
         ordered.put(recipe.getId(), row);
     }
 
-    private static double recommendScore(Recipe r, Set<String> seasonCats) {
+    //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R32】做过次数加权-----------
+    private Map<String, Integer> loadCookCounts(String userId, String familyId) {
+        LinkedHashSet<String> userIds = new LinkedHashSet<>();
+        if (oConvertUtils.isNotEmpty(userId)) {
+            userIds.add(userId);
+        }
+        if (oConvertUtils.isNotEmpty(familyId)) {
+            List<FamilyMember> members = familyMemberService.getByFamilyId(familyId);
+            if (members != null) {
+                for (FamilyMember m : members) {
+                    if (m != null && oConvertUtils.isNotEmpty(m.getUserId())) {
+                        userIds.add(m.getUserId());
+                    }
+                }
+            }
+        }
+        if (userIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<Map<String, Object>> rows = planInstanceMapper.countCompletedByRecipe(new ArrayList<>(userIds));
+        Map<String, Integer> result = new HashMap<>();
+        if (rows == null) {
+            return result;
+        }
+        for (Map<String, Object> row : rows) {
+            if (row == null) {
+                continue;
+            }
+            Object rid = firstNonNull(row, "recipeId", "recipeid", "recipe_id");
+            Object cnt = firstNonNull(row, "cookCount", "cookcount", "cook_count");
+            if (rid == null || cnt == null) {
+                continue;
+            }
+            try {
+                result.put(String.valueOf(rid), Integer.parseInt(String.valueOf(cnt)));
+            } catch (NumberFormatException ignored) {
+                // skip malformed count
+            }
+        }
+        return result;
+    }
+
+    private static Object firstNonNull(Map<String, Object> row, String... keys) {
+        for (String key : keys) {
+            if (row.containsKey(key) && row.get(key) != null) {
+                return row.get(key);
+            }
+        }
+        return null;
+    }
+
+    private static double recommendScore(Recipe r, Set<String> seasonCats, Map<String, Integer> cookCounts) {
         if (r == null) return 0;
         int views = r.getViewCount() != null ? r.getViewCount() : 0;
         int favs = r.getFavoriteCount() != null ? r.getFavoriteCount() : 0;
@@ -264,8 +347,16 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
         if (r.getCategoryId() != null && seasonCats.contains(r.getCategoryId())) {
             score += 0.15 * Math.max(views + favs, 1);
         }
+        int cooked = 0;
+        if (cookCounts != null && r.getId() != null) {
+            cooked = cookCounts.getOrDefault(r.getId(), 0);
+        }
+        if (cooked > 0) {
+            score += cooked * 1.5;
+        }
         return score;
     }
+    //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R32】做过次数加权-----------
 
     private static Set<String> resolveSeasonCategories(String season) {
         String s = season;

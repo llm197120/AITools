@@ -12,8 +12,10 @@ import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileWhitelistService;
 import org.jeecg.modules.homeai.config.service.IHomeaiStorageConfigService;
+import org.jeecg.modules.homeai.family.entity.Family;
 import org.jeecg.modules.homeai.family.entity.FamilyMember;
 import org.jeecg.modules.homeai.family.service.IFamilyMemberService;
+import org.jeecg.modules.homeai.family.service.IFamilyService;
 import org.jeecg.modules.homeai.storage.constant.StorageVisibility;
 import org.jeecg.modules.homeai.storage.util.StorageFileNameUtil;
 import org.jeecg.modules.homeai.storage.util.StorageVisibilityQueryUtil;
@@ -74,6 +76,11 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
 
     @Autowired
     private IFamilyMemberService familyMemberService;
+
+    //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R32】家庭配额看板-----------
+    @Autowired
+    private IFamilyService familyService;
+    //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R32】家庭配额看板-----------
 
     @Override
     public List<StorageFile> getFilesByFolder(String folderId) {
@@ -452,6 +459,71 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
         return sum;
     }
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R28】家庭存储用量-----------
+
+    //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R32】家庭配额运营看板-----------
+    @Override
+    public List<Map<String, Object>> listFamilyQuotaBoard(String keyword, Boolean onlyWarn, Boolean onlyCustom) {
+        int warnPercent = storageConfigService.getWarnPercent();
+        List<Family> families = familyService.list(new LambdaQueryWrapper<Family>()
+                .eq(Family::getDelFlag, 0)
+                .ne(Family::getStatus, "disbanded"));
+        String kw = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Family fam : families) {
+            if (fam == null || oConvertUtils.isEmpty(fam.getId())) {
+                continue;
+            }
+            if (!kw.isEmpty()) {
+                String name = fam.getName() == null ? "" : fam.getName().toLowerCase(Locale.ROOT);
+                if (!name.contains(kw) && !fam.getId().toLowerCase(Locale.ROOT).contains(kw)) {
+                    continue;
+                }
+            }
+            long used = sumUsedBytesByFamily(fam.getId());
+            long thisFamilyLimit = storageConfigService.getFamilyLimitBytes(fam.getId());
+            boolean customLimit = storageConfigService.hasFamilyLimitOverride(fam.getId());
+            if (Boolean.TRUE.equals(onlyCustom) && !customLimit) {
+                continue;
+            }
+            List<FamilyMember> memberList = familyMemberService.getByFamilyId(fam.getId());
+            int memberCount = memberList == null ? 0 : memberList.size();
+            long fileCount = 0L;
+            if (memberList != null && !memberList.isEmpty()) {
+                Set<String> memberIds = new HashSet<>();
+                for (FamilyMember m : memberList) {
+                    if (m != null && oConvertUtils.isNotEmpty(m.getUserId())) {
+                        memberIds.add(m.getUserId());
+                    }
+                }
+                if (!memberIds.isEmpty()) {
+                    fileCount = count(new LambdaQueryWrapper<StorageFile>()
+                            .in(StorageFile::getUserId, memberIds)
+                            .eq(StorageFile::getDelFlag, 0));
+                }
+            }
+            double usedPercent = thisFamilyLimit > 0 ? Math.min(100, used * 100.0 / thisFamilyLimit) : 0;
+            boolean overWarn = thisFamilyLimit > 0 && used * 100.0 / thisFamilyLimit >= warnPercent;
+            if (Boolean.TRUE.equals(onlyWarn) && !overWarn) {
+                continue;
+            }
+            Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("familyId", fam.getId());
+            row.put("familyName", fam.getName());
+            row.put("memberCount", memberCount);
+            row.put("fileCount", fileCount);
+            row.put("totalSize", used);
+            row.put("limitBytes", thisFamilyLimit);
+            row.put("customLimit", customLimit);
+            row.put("usedPercent", usedPercent);
+            row.put("overWarn", overWarn);
+            rows.add(row);
+        }
+        rows.sort((a, b) -> Double.compare(
+                ((Number) b.getOrDefault("usedPercent", 0)).doubleValue(),
+                ((Number) a.getOrDefault("usedPercent", 0)).doubleValue()));
+        return rows;
+    }
+    //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R32】家庭配额运营看板-----------
 
     private static String formatBytes(long bytes) {
         if (bytes < 1024) {

@@ -43,7 +43,7 @@
               <a-list-item>
                 <a-list-item-meta
                   :title="item.title"
-                  :description="`${item.category || '-'} · ${resolveUserLabel(item.userId)} · ${statusLabel(item.status)}${item.repeatRule && item.repeatRule !== 'none' ? ' · ' + repeatLabel(item.repeatRule) : ''}`"
+                  :description="`${item.category || '-'} · ${resolveUserLabel(item.userId)} · ${statusLabel(item.status)}${item.recipeName ? ' · ' + item.recipeName : ''}${item.repeatRule && item.repeatRule !== 'none' ? ' · ' + repeatLabel(item.repeatRule) : ''}`"
                 />
               </a-list-item>
             </template>

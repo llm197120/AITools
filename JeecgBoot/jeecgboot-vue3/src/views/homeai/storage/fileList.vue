@@ -45,7 +45,10 @@
               :show-info="false"
             />
           </div>
-          <div style="font-size: 12px; color: #888; margin: 8px 0 4px">家庭</div>
+          <div style="font-size: 12px; color: #888; margin: 8px 0 4px; display: flex; justify-content: space-between; align-items: center">
+            <span>家庭</span>
+            <a-button type="link" size="small" style="padding: 0; height: auto" @click="goFamilyQuota">配额看板</a-button>
+          </div>
           <div v-for="f in topFamilies" :key="'f-' + f.familyId" style="padding: 2px 0; cursor: pointer" @click="openFamilyQuota(f)">
             <div style="display: flex; justify-content: space-between; font-size: 12px">
               <span>
@@ -308,10 +311,12 @@ import { ref, computed, onMounted } from 'vue';
   import { Icon } from '/@/components/Icon';
   import { familyApi, storageApi } from '/@/api/homeai';
   import { useUserLabel } from '../hooks/useUserLabel';
+  import { useGo } from '/@/hooks/web/usePage';
 
   const { createMessage, createConfirm } = useMessage();
   const { resolveUserLabel, loadUserOptions } = useUserLabel();
   loadUserOptions();
+  const go = useGo();
 
   const activeTab = ref('files');
   const recycleType = ref<'file' | 'folder'>('file');
@@ -430,6 +435,10 @@ import { ref, computed, onMounted } from 'vue';
   const topFamilies = computed(() =>
     [...(spaceStats.value.perFamily || [])].sort((a, b) => (b.totalSize || 0) - (a.totalSize || 0)).slice(0, 5),
   );
+
+  function goFamilyQuota() {
+    go('/homeai/storage/familyQuota');
+  }
 
   async function loadSpaceStats() {
     try {

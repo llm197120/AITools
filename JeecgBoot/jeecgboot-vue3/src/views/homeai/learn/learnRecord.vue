@@ -106,7 +106,11 @@
 
   const [registerTable, { reload }] = useTable({
     title: '学习记录',
-    api: (params: any) => defHttp.get({ url: '/homeai/learn/admin/records', params }),
+    api: (params: any) =>
+      defHttp.get({
+        url: '/homeai/learn/admin/records',
+        params: { ...params, userId: filterUserId.value || undefined },
+      }),
     columns: [
       { title: '用户', dataIndex: 'nickname', width: 140 },
       { title: '用户ID', dataIndex: 'userId', width: 170 },
@@ -187,7 +191,7 @@
   }
 
   async function reloadAll() {
-    await Promise.all([loadStats(), loadTrend(), loadDims()]);
+    await Promise.all([loadStats(), loadTrend(), loadDims(), reload()]);
   }
 
   function exportStats() {

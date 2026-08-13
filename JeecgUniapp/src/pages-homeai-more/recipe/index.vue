@@ -11,7 +11,7 @@
         <view class="recommend-card" v-for="r in recommends" :key="r.id" @click="detail(r.id)">
           <image class="recommend-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill"/>
           <text class="recommend-name">{{ r.name }}</text>
-          <text class="recommend-reason">{{ reasonLabel(r.reason) }}</text>
+          <text class="recommend-reason">{{ reasonLabel(r.reason, r.cookCount) }}</text>
         </view>
       </view>
     </scroll-view>
@@ -81,15 +81,20 @@ const emptyTitle = computed(() => {
   return '暂无菜谱'
 })
 
-function reasonLabel(reason?: string) {
+function reasonLabel(reason?: string, cookCount?: number) {
   const map: Record<string, string> = {
     today_plan: '今日计划',
     my_favorite: '我的收藏',
     family_favorite: '家庭常做',
+    cooked: '做过多次',
     season: '当季推荐',
     hot: '热门',
   }
-  return map[reason || ''] || '推荐'
+  const base = map[reason || ''] || '推荐'
+  if (cookCount && cookCount > 0) {
+    return reason === 'cooked' ? `做过 ${cookCount} 次` : `${base} · 做过 ${cookCount} 次`
+  }
+  return base
 }
 
 async function loadRecommend() {

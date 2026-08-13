@@ -74,6 +74,9 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
             "/homeai/bill/moveToRecycleBin",
             "/homeai/bill/restore",
             "/homeai/bill/deletePermanently",
+            //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R24】管理端账单统计须控制台 JWT-----------
+            "/homeai/bill/admin",
+            //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R24】管理端账单统计须控制台 JWT-----------
             "/homeai/plan/list",
             "/homeai/plan/add",
             "/homeai/plan/exportXls",
@@ -87,9 +90,13 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
             "/homeai/plan/admin/completion",
             "/homeai/plan/admin/calendar",
             "/homeai/plan/admin/date",
+            //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R24】补跑接口须控制台 JWT-----------
+            "/homeai/plan/admin/repeat",
+            //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R24】补跑接口须控制台 JWT-----------
             "/homeai/dashboard/plan-learn",
             "/homeai/recipe/add",
             "/homeai/recipe/exportXls",
+            "/homeai/recipe/exportTemplate",
             "/homeai/recipe/importExcel",
             "/homeai/recipe/recycleBin",
             "/homeai/recipe/moveToRecycleBin",
@@ -268,6 +275,9 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
         if (path.equals("/homeai/config/storage") && ("PUT".equals(m) || "GET".equals(m))) return true;
         //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R30】家庭级配额覆盖管理端-----------
         if (path.startsWith("/homeai/config/storage/family/")) return true;
+        //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R32】家庭配额看板管理端-----------
+        if (path.startsWith("/homeai/config/storage/families")) return true;
+        //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R32】家庭配额看板管理端-----------
         //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R30】家庭级配额覆盖管理端-----------
         //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R31】学习提醒模板联调管理端-----------
         if (path.equals("/homeai/config/wechat-learn-remind") && "GET".equals(m)) return true;

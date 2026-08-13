@@ -390,6 +390,20 @@ public class RecipeController {
         return mv;
     }
 
+    //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R24】菜谱导入模板与 @Excel 列对齐-----------
+    @GetMapping("/exportTemplate")
+    @Operation(summary = "菜谱-导出导入模板")
+    @RequiresPermissions("homeai:recipe:exportXls")
+    public ModelAndView exportTemplate() {
+        ModelAndView mv = new ModelAndView(new JeecgEntityExcelView());
+        mv.addObject(NormalExcelConstants.DATA_LIST, new ArrayList<Recipe>());
+        mv.addObject(NormalExcelConstants.FILE_NAME, "菜谱导入模板");
+        mv.addObject(NormalExcelConstants.CLASS, Recipe.class);
+        mv.addObject(NormalExcelConstants.PARAMS, new ExportParams("菜谱导入模板", "模板", "导入模板", ExcelType.XSSF));
+        return mv;
+    }
+    //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R24】菜谱导入模板与 @Excel 列对齐-----------
+
     /**
      * 导入Excel
      */

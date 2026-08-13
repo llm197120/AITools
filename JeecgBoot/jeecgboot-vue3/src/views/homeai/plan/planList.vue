@@ -153,6 +153,7 @@
     { title: '标题', dataIndex: 'title', width: 200 },
     { title: '日期', dataIndex: 'planDate', width: 110 },
     { title: '分类', dataIndex: 'category', width: 80 },
+    { title: '关联菜谱', dataIndex: 'recipeName', width: 140 },
     { title: '重复', dataIndex: 'repeatRule', width: 80, customRender: ({ text }: { text: string }) => repeatLabel(text) },
     { title: '优先级', dataIndex: 'priority', key: 'priority', width: 70 },
     { title: '用户', dataIndex: 'userId', key: 'userId', width: 160 },

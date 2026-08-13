@@ -86,7 +86,8 @@ VALUES
 ('homeai_menu_storage_template', 'homeai_menu_storage', '文档模板',     '/homeai/storage/officeTemplate',  '/views/homeai/storage/officeTemplate',  1, 'homeai:storage:template:list',   1, 'ant-design:file-word-outlined',   2.0, 1, 0, NOW()),
 ('homeai_menu_storage_rule',     'homeai_menu_storage', '转换规则',     '/homeai/storage/convertRule',     '/views/homeai/storage/convertRule',     1, 'homeai:storage:rule:list',       1, 'ant-design:swap-outlined',        3.0, 1, 0, NOW()),
 ('homeai_menu_storage_history',  'homeai_menu_storage', '处理记录',     '/homeai/storage/officeHistory',   '/views/homeai/storage/officeHistory',   1, 'homeai:storage:history:list',    1, 'ant-design:history-outlined',     4.0, 1, 0, NOW()),
-('homeai_menu_storage_whitelist','homeai_menu_storage', '文件白名单',   '/homeai/storage/fileWhitelist',   '/views/homeai/storage/fileWhitelist',   1, 'homeai:config:whitelist:list',   1, 'ant-design:safety-outlined',      5.0, 1, 0, NOW());
+('homeai_menu_storage_whitelist','homeai_menu_storage', '文件白名单',   '/homeai/storage/fileWhitelist',   '/views/homeai/storage/fileWhitelist',   1, 'homeai:config:whitelist:list',   1, 'ant-design:safety-outlined',      5.0, 1, 0, NOW()),
+('homeai_menu_storage_quota',    'homeai_menu_storage', '家庭配额看板', '/homeai/storage/familyQuota',     '/views/homeai/storage/familyQuota',     1, 'homeai:storage:file:list',       1, 'ant-design:cloud-server-outlined', 6.0, 1, 0, NOW());
 
 INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `sort_no`, `status`, `del_flag`, `create_time`) VALUES
 ('homeai_btn_whitelist_edit', 'homeai_menu_storage_whitelist', '保存配置', NULL, NULL, 0, 'homeai:config:whitelist:edit', 2, 1.0, 1, 0, NOW()),

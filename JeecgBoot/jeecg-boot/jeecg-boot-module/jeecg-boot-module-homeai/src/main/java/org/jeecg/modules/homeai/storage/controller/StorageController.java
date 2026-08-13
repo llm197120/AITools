@@ -85,9 +85,6 @@ public class StorageController {
     @Autowired
     private IFamilyService familyService;
 
-    @Autowired
-    private org.jeecg.modules.homeai.family.service.IFamilyMemberService familyMemberService;
-
     //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22】资料审计埋点-----------
     @Autowired
     private IHomeaiAuditLogService auditLogService;
@@ -1010,46 +1007,7 @@ public class StorageController {
         }
         //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R28】家庭维度统计-----------
         long familyLimitBytes = storageConfigService.getDefaultFamilyLimitBytes();
-        java.util.List<Family> families = familyService.list(new LambdaQueryWrapper<Family>()
-                .eq(Family::getDelFlag, 0)
-                .ne(Family::getStatus, "disbanded"));
-        java.util.List<java.util.Map<String, Object>> perFamily = new java.util.ArrayList<>();
-        for (Family fam : families) {
-            if (fam == null || oConvertUtils.isEmpty(fam.getId())) {
-                continue;
-            }
-            long used = fileService.sumUsedBytesByFamily(fam.getId());
-            //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R30】家庭级配额覆盖-----------
-            long thisFamilyLimit = storageConfigService.getFamilyLimitBytes(fam.getId());
-            boolean customLimit = storageConfigService.hasFamilyLimitOverride(fam.getId());
-            //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R30】家庭级配额覆盖-----------
-            java.util.List<org.jeecg.modules.homeai.family.entity.FamilyMember> memberList =
-                    familyMemberService.getByFamilyId(fam.getId());
-            java.util.Set<String> memberIds = new java.util.HashSet<>();
-            if (memberList != null) {
-                for (org.jeecg.modules.homeai.family.entity.FamilyMember m : memberList) {
-                    if (m != null && oConvertUtils.isNotEmpty(m.getUserId())) {
-                        memberIds.add(m.getUserId());
-                    }
-                }
-            }
-            long fileCount = 0L;
-            for (StorageFile f : files) {
-                if (f.getUserId() != null && memberIds.contains(f.getUserId())) {
-                    fileCount++;
-                }
-            }
-            java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
-            row.put("familyId", fam.getId());
-            row.put("familyName", fam.getName());
-            row.put("fileCount", fileCount);
-            row.put("totalSize", used);
-            row.put("limitBytes", thisFamilyLimit);
-            row.put("customLimit", customLimit);
-            row.put("usedPercent", thisFamilyLimit > 0 ? Math.min(100, used * 100.0 / thisFamilyLimit) : 0);
-            row.put("overWarn", thisFamilyLimit > 0 && used * 100.0 / thisFamilyLimit >= warnPercent);
-            perFamily.add(row);
-        }
+        java.util.List<java.util.Map<String, Object>> perFamily = fileService.listFamilyQuotaBoard(null, null, null);
         //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R28】家庭维度统计-----------
         java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("totalFiles", files.size());

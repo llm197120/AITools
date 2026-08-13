@@ -170,6 +170,7 @@ export const recipeApi = {
   edit: (id: string, data: Partial<HomeaiRecipe> | HomeaiPayload) =>
     defHttp.put({ url: `${BASE}/recipe/${id}`, data }),
   exportXls: `${BASE}/recipe/exportXls`,
+  exportTemplate: `${BASE}/recipe/exportTemplate`,
   importExcel: `${BASE}/recipe/importExcel`,
   recycleBin: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/recipe/recycleBin`, params }),
   moveToRecycleBin: (ids: string[]) => defHttp.put({ url: `${BASE}/recipe/moveToRecycleBin`, data: ids }),
@@ -294,6 +295,12 @@ export const storageApi = {
     defHttp.put({ url: `${BASE}/config/storage/family/${familyId}`, data: { limitBytes } }),
   clearFamilyStorageLimit: (familyId: string) =>
     defHttp.delete({ url: `${BASE}/config/storage/family/${familyId}` }),
+  familyQuotaBoard: (params?: { keyword?: string; onlyWarn?: boolean; onlyCustom?: boolean }) =>
+    defHttp.get({ url: `${BASE}/config/storage/families`, params }),
+  batchFamilyStorageLimit: (data: {
+    items?: { familyId: string; limitBytes: number | null }[];
+    resetIds?: string[];
+  }) => defHttp.put({ url: `${BASE}/config/storage/families/batch`, data }),
   checkGenerateQuota: (instruction?: string) =>
     defHttp.get({
       url: `${BASE}/storage/office/generate/quota-check`,

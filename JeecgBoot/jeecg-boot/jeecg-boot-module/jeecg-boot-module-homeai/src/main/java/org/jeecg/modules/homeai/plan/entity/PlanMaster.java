@@ -29,6 +29,11 @@ public class PlanMaster implements Serializable {
     //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】计划关联菜谱-----------
     @Schema(description = "关联菜谱ID")
     private String recipeId;
+    //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R24】列表展示菜谱名-----------
+    @TableField(exist = false)
+    @Schema(description = "关联菜谱名称")
+    private String recipeName;
+    //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R24】列表展示菜谱名-----------
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】计划关联菜谱-----------
     private Integer remindMinutes;
     private Integer isRepeatMaster;

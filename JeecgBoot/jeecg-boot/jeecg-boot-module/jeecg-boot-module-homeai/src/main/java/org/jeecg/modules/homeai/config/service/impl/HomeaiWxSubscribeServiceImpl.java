@@ -72,8 +72,10 @@ public class HomeaiWxSubscribeServiceImpl implements IHomeaiWxSubscribeService {
             return false;
         }
         if (oConvertUtils.isEmpty(planRemindTemplateId) || oConvertUtils.isEmpty(appid) || oConvertUtils.isEmpty(secret)) {
+            //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R24】模拟推送不记成功，避免 dedupe 跳过真发-----------
             log.info("[计划提醒-模拟推送] openid={}, title={}, time={}", openid, planTitle, planTimeText);
-            return true;
+            return false;
+            //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R24】模拟推送不记成功，避免 dedupe 跳过真发-----------
         }
         try {
             String accessToken = getAccessToken();
@@ -115,8 +117,10 @@ public class HomeaiWxSubscribeServiceImpl implements IHomeaiWxSubscribeService {
         JSONObject data = buildLearnRemindData(goalMinutes, todayMinutes);
         String tip = "今日已学" + todayMinutes + "分钟，目标" + goalMinutes + "分钟";
         if (oConvertUtils.isEmpty(learnRemindTemplateId) || oConvertUtils.isEmpty(appid) || oConvertUtils.isEmpty(secret)) {
+            //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R24】模拟推送不记成功，避免 dedupe 跳过真发-----------
             log.info("[学习提醒-模拟推送] openid={}, tip={}, data={}", openid, tip, data);
-            return true;
+            return false;
+            //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R24】模拟推送不记成功，避免 dedupe 跳过真发-----------
         }
         try {
             String accessToken = getAccessToken();

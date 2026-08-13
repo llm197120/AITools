@@ -11,6 +11,10 @@
       <view class="info-row"><text class="label">分类</text><text>{{ plan.category || '-' }}</text></view>
       <view class="info-row"><text class="label">重复</text><text>{{ repeatLabel(plan.repeatRule) }}</text></view>
       <view class="info-row"><text class="label">全天</text><text>{{ plan.isAllDay === 1 ? '是' : '否' }}</text></view>
+      <view class="info-row" v-if="plan.recipeId">
+        <text class="label">关联菜谱</text>
+        <text class="recipe-link" @click="goRecipe">{{ plan.recipeName || '查看菜谱' }}</text>
+      </view>
     </view>
     <view class="actions">
       <wd-button
@@ -63,6 +67,11 @@ async function toggleComplete() {
   await loadPlan()
 }
 
+function goRecipe() {
+  if (!plan.value.recipeId) return
+  uni.navigateTo({ url: `/pages-homeai-more/recipe/detail?id=${plan.value.recipeId}` })
+}
+
 onLoad(async (opts: any) => {
   instanceId.value = opts?.id || ''
   planDate.value = opts?.planDate || new Date().toISOString().substring(0, 10)
@@ -86,6 +95,7 @@ onLoad(async (opts: any) => {
 .info-row { display: flex; justify-content: space-between; padding: 20rpx 0; border-bottom: 1rpx solid var(--hai-border); font-size: 28rpx; color: var(--hai-text); }
 .info-row:last-child { border-bottom: none; }
 .label { color: var(--hai-text-secondary); }
+.recipe-link { color: var(--hai-primary); }
 .actions { padding: 0 20rpx; }
 .expired-tip { display: block; text-align: center; color: var(--hai-text-muted); font-size: 26rpx; padding: 24rpx; }
 </style>

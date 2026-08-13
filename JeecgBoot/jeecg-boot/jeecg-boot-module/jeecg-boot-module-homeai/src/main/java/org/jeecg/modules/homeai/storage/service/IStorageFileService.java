@@ -64,6 +64,11 @@ public interface IStorageFileService extends IService<StorageFile> {
     //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R28】家庭存储用量-----------
     /** 家庭已用空间：家庭成员上传文件之和（未删除） */
     long sumUsedBytesByFamily(String familyId);
+
+    //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R32】家庭配额运营看板-----------
+    /** 家庭配额看板：用量 + 限额 + 告警（可按关键词/告警/自定义过滤） */
+    List<java.util.Map<String, Object>> listFamilyQuotaBoard(String keyword, Boolean onlyWarn, Boolean onlyCustom);
+    //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R32】家庭配额运营看板-----------
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R28】家庭存储用量-----------
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】用户存储用量-----------
 

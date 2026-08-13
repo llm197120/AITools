@@ -170,3 +170,37 @@ HomeaiChatServiceImpl 已直接复用 IAiragChatService.send() 实现 SSE 流式
 涉及的文件：
   jeecg-boot-module-homeai/pom.xml（移除 jeecg-boot-starter-cloud；OSS 不依赖该 starter）
   jeecg-module-system/jeecg-system-start/src/main/resources/application.yml（单体关闭 nacos + optional:nacos: 兜底）
+-- author:admin---date:20260813--for: 【HomeAI-R32】菜谱推荐按做过次数加权 + 家庭配额运营看板 ---
+涉及的文件：
+  jeecg-boot-module-homeai/.../plan/mapper/PlanInstanceMapper.java（完成计划按 recipe_id 计数）
+  jeecg-boot-module-homeai/.../recipe/service/impl/RecipeServiceImpl.java（cookCount 加权 / reason=cooked）
+  jeecg-boot-module-homeai/.../storage/service/IStorageFileService.java
+  jeecg-boot-module-homeai/.../storage/service/impl/StorageFileServiceImpl.java（listFamilyQuotaBoard）
+  jeecg-boot-module-homeai/.../config/controller/HomeaiConfigController.java（/storage/families + batch）
+  jeecg-boot-module-homeai/.../config/HomeaiAuthInterceptor.java
+  jeecg-boot-module-homeai/sql/alter_homeai_menus_iteration32.sql
+  jeecg-boot-module-homeai/sql/init_homeai_menus.sql
+  jeecgboot-vue3/src/views/homeai/storage/familyQuota.vue
+  jeecgboot-vue3/src/views/homeai/storage/fileList.vue
+  jeecgboot-vue3/src/api/homeai/index.ts
+  jeecgboot-vue3/src/router/routes/modules/homeai/homeai.ts
+  JeecgUniapp/src/pages-homeai-more/recipe/index.vue
+  docs/plan/homeai-optimization-roadmap.md
+-- author:admin---date:20260813--for: 【HomeAI-R24补强】拦截器/init SQL/模拟推送/菜谱模板/学习筛选/计划菜谱/小程序补洞 ---
+涉及的文件：
+  jeecg-boot-module-homeai/.../config/HomeaiAuthInterceptor.java（bill/admin、plan/admin/repeat、recipe/exportTemplate）
+  jeecg-boot-module-homeai/.../config/service/impl/HomeaiWxSubscribeServiceImpl.java（未配模板模拟推送 return false）
+  jeecg-boot-module-homeai/sql/init_homeai_tables.sql（计划主表/实例表与实体对齐）
+  jeecg-boot-module-homeai/.../recipe/controller/RecipeController.java（GET /exportTemplate）
+  jeecg-boot-module-homeai/.../plan/entity/PlanMaster.java（recipeName 非表字段）
+  jeecg-boot-module-homeai/.../plan/controller/PlanController.java（列表填充 recipeName）
+  jeecgboot-vue3/src/views/homeai/recipe/recipeList.vue（下载 xlsx 模板）
+  jeecgboot-vue3/src/views/homeai/learn/learnRecord.vue（顶部筛选联动明细表）
+  jeecgboot-vue3/src/views/homeai/plan/planList.vue + PlanCalendarTab.vue（展示菜谱名）
+  jeecgboot-vue3/src/api/homeai/index.ts
+  JeecgUniapp/src/pages-homeai-more/storage/office-convert.vue（补 onLoad 导入）
+  JeecgUniapp/src/pages-homeai-more/plan/add.vue + detail.vue（关联 recipeId）
+  JeecgUniapp/src/pages.json + src/types/uni-pages.d.ts（去掉 StorageBrowser 误注册）
+  JeecgUniapp/src/pages-homeai-more/recipe/index.vue（做过 N 次）
+  docs/plan/homeai-optimization-roadmap.md
+

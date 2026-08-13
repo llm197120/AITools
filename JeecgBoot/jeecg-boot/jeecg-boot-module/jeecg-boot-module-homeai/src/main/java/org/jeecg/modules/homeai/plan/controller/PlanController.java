@@ -23,6 +23,8 @@ import org.jeecg.modules.homeai.plan.entity.PlanInstance;
 import org.jeecg.modules.homeai.plan.mapper.PlanMasterMapper;
 import org.jeecg.modules.homeai.plan.service.IPlanCategoryService;
 import org.jeecg.modules.homeai.plan.service.IPlanService;
+import org.jeecg.modules.homeai.recipe.entity.Recipe;
+import org.jeecg.modules.homeai.recipe.service.IRecipeService;
 import org.jeecg.modules.homeai.user.service.IWxUserService;
 import org.jeecgframework.poi.excel.ExcelImportUtil;
 import org.jeecgframework.poi.excel.def.NormalExcelConstants;
@@ -62,6 +64,11 @@ public class PlanController {
 
     @Autowired
     private IHomeaiAuditLogService auditLogService;
+
+    //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R24】列表填充菜谱名-----------
+    @Autowired
+    private IRecipeService recipeService;
+    //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R24】列表填充菜谱名-----------
 
     private static final String ACTION_PLAN_ROLL_FORWARD = "plan_repeat_roll_forward";
 
@@ -171,8 +178,35 @@ public class PlanController {
                           @RequestParam(defaultValue = "10") int pageSize, HttpServletRequest req) {
         QueryWrapper<PlanMaster> qw = QueryGenerator.initQueryWrapper(m, req.getParameterMap());
         qw.eq("del_flag", 0).orderByDesc("create_time");
-        return Result.OK(planService.page(new Page<>(pageNo, pageSize), qw));
+        Page<PlanMaster> page = planService.page(new Page<>(pageNo, pageSize), qw);
+        //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R24】列表填充菜谱名-----------
+        fillRecipeNames(page.getRecords());
+        //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R24】列表填充菜谱名-----------
+        return Result.OK(page);
     }
+
+    //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R24】列表填充菜谱名-----------
+    private void fillRecipeNames(List<PlanMaster> records) {
+        if (records == null || records.isEmpty()) {
+            return;
+        }
+        Set<String> ids = records.stream()
+                .map(PlanMaster::getRecipeId)
+                .filter(oConvertUtils::isNotEmpty)
+                .collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return;
+        }
+        Map<String, String> names = recipeService.listByIds(ids).stream()
+                .filter(r -> r != null && oConvertUtils.isNotEmpty(r.getId()))
+                .collect(Collectors.toMap(Recipe::getId, Recipe::getName, (a, b) -> a));
+        for (PlanMaster pm : records) {
+            if (pm != null && oConvertUtils.isNotEmpty(pm.getRecipeId())) {
+                pm.setRecipeName(names.get(pm.getRecipeId()));
+            }
+        }
+    }
+    //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R24】列表填充菜谱名-----------
 
     /**
      * 计划完成率统计（管理端）

@@ -49,6 +49,11 @@ public class HomeaiConfigController {
     private org.jeecg.modules.homeai.config.service.IHomeaiWxSubscribeService wxSubscribeService;
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R31】学习提醒模板联调-----------
 
+    //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R32】家庭配额运营看板-----------
+    @Autowired
+    private org.jeecg.modules.homeai.storage.service.IStorageFileService storageFileService;
+    //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R32】家庭配额运营看板-----------
+
     @GetMapping("/file-whitelist")
     @Operation(summary = "文件白名单-查询(小程序/管理端)")
     public Result<?> getFileWhitelist() {
@@ -146,6 +151,87 @@ public class HomeaiConfigController {
         storageConfigService.clearFamilyLimitBytes(familyId);
         return Result.OK("已恢复默认家庭配额");
     }
+
+    //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R32】家庭配额运营看板-----------
+    @GetMapping("/storage/families")
+    @Operation(summary = "家庭存储配额运营看板")
+    @RequiresPermissions("homeai:storage:file:list")
+    public Result<?> familyStorageBoard(@RequestParam(required = false) String keyword,
+                                        @RequestParam(required = false) Boolean onlyWarn,
+                                        @RequestParam(required = false) Boolean onlyCustom) {
+        java.util.List<java.util.Map<String, Object>> items =
+                storageFileService.listFamilyQuotaBoard(keyword, onlyWarn, onlyCustom);
+        long warnCount = 0;
+        long customCount = 0;
+        long totalUsed = 0;
+        for (java.util.Map<String, Object> row : items) {
+            if (Boolean.TRUE.equals(row.get("overWarn"))) {
+                warnCount++;
+            }
+            if (Boolean.TRUE.equals(row.get("customLimit"))) {
+                customCount++;
+            }
+            Object size = row.get("totalSize");
+            if (size instanceof Number) {
+                totalUsed += ((Number) size).longValue();
+            }
+        }
+        java.util.Map<String, Object> data = new HashMap<>();
+        data.put("defaultFamilyLimitBytes", storageConfigService.getDefaultFamilyLimitBytes());
+        data.put("warnPercent", storageConfigService.getWarnPercent());
+        java.util.Map<String, Object> summary = new HashMap<>();
+        summary.put("familyCount", items.size());
+        summary.put("warnCount", warnCount);
+        summary.put("customCount", customCount);
+        summary.put("totalUsed", totalUsed);
+        data.put("summary", summary);
+        data.put("items", items);
+        return Result.OK(data);
+    }
+
+    @PutMapping("/storage/families/batch")
+    @AutoLog(value = "家庭存储配额-批量调整")
+    @Operation(summary = "家庭存储配额批量调整（items 设覆盖，resetIds 恢复默认）")
+    @RequiresPermissions("homeai:storage:file:list")
+    public Result<?> batchFamilyStorageLimit(@RequestBody Map<String, Object> body) {
+        int updated = 0;
+        int reset = 0;
+        if (body != null) {
+            Object itemsObj = body.get("items");
+            if (itemsObj instanceof java.util.List<?> items) {
+                for (Object item : items) {
+                    if (!(item instanceof Map<?, ?> row)) {
+                        continue;
+                    }
+                    Object fid = row.get("familyId");
+                    if (fid == null) {
+                        continue;
+                    }
+                    Long limitBytes = null;
+                    if (row.get("limitBytes") != null) {
+                        limitBytes = Long.valueOf(String.valueOf(row.get("limitBytes")));
+                    }
+                    storageConfigService.setFamilyLimitBytes(String.valueOf(fid), limitBytes);
+                    updated++;
+                }
+            }
+            Object resetObj = body.get("resetIds");
+            if (resetObj instanceof java.util.List<?> ids) {
+                for (Object id : ids) {
+                    if (id == null) {
+                        continue;
+                    }
+                    storageConfigService.clearFamilyLimitBytes(String.valueOf(id));
+                    reset++;
+                }
+            }
+        }
+        Map<String, Object> data = new HashMap<>();
+        data.put("updated", updated);
+        data.put("reset", reset);
+        return Result.OK("批量调整完成", data);
+    }
+    //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R32】家庭配额运营看板-----------
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R30】家庭级配额覆盖 API-----------
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】存储配额配置 API-----------
 
