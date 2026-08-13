@@ -28,18 +28,25 @@ import org.jeecg.modules.homeai.recipe.service.IRecipeCategoryService;
 import org.jeecg.modules.homeai.recipe.service.IRecipeService;
 import org.jeecg.modules.homeai.user.entity.WxUser;
 import org.jeecg.modules.homeai.user.service.IWxUserService;
-import org.jeecgframework.poi.excel.ExcelImportUtil;
 import org.jeecgframework.poi.excel.def.NormalExcelConstants;
 import org.jeecgframework.poi.excel.entity.ExportParams;
-import org.jeecgframework.poi.excel.entity.ImportParams;
 import org.jeecgframework.poi.excel.entity.enmus.ExcelType;
 import org.jeecgframework.poi.excel.view.JeecgEntityExcelView;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
 import org.springframework.web.servlet.ModelAndView;
 
+import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -426,12 +433,8 @@ public class RecipeController {
             for (Map.Entry<String, MultipartFile> entity : fileMap.entrySet()) {
                 MultipartFile file = entity.getValue();
                 if (file.isEmpty()) continue;
-                ImportParams params = new ImportParams();
-                params.setTitleRows(2);
-                params.setHeadRows(1);
-                params.setNeedSave(true);
                 try {
-                    List<Recipe> list = ExcelImportUtil.importExcel(file.getInputStream(), Recipe.class, params);
+                    List<Recipe> list = parseRecipeExcel(file.getInputStream());
                     for (Recipe item : list) {
                         try {
                             //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R24】Excel 含子表导入-----------
@@ -648,4 +651,125 @@ public class RecipeController {
             return Result.error("视频上传失败: " + e.getMessage());
         }
     }
+
+    //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R24】修复 openpyxl 内联字符串 Excel 导入文本列为空 ----------
+    /** Excel 列名与实体字段映射（基于 @Excel 注解，保持与模板列一致） */
+    private static final Map<String, Field> RECIPE_EXCEL_FIELDS = new HashMap<>();
+
+    static {
+        for (Field f : Recipe.class.getDeclaredFields()) {
+            org.jeecgframework.poi.excel.annotation.Excel ex = f.getAnnotation(org.jeecgframework.poi.excel.annotation.Excel.class);
+            if (ex != null) {
+                RECIPE_EXCEL_FIELDS.put(ex.name(), f);
+            }
+        }
+    }
+
+    /**
+     * 直接使用 POI 解析上传的菜谱 Excel。
+     * 说明：AutoPoi 2.0.5 读取字符串单元格时会调用 cell.setCellType(STRING)，
+     * 对 openpyxl 生成的内联字符串(inlineStr)单元格会清空内容，导致所有文本列导入为空；
+     * 这里改为直接读取单元格值，不再经过 AutoPoi 的类型转换。
+     */
+    private List<Recipe> parseRecipeExcel(InputStream in) throws Exception {
+        List<Recipe> list = new ArrayList<>();
+        try (Workbook book = WorkbookFactory.create(in)) {
+            Sheet sheet = book.getSheetAt(0);
+            int titleRows = 2;
+            int headRows = 1;
+            Row headerRow = sheet.getRow(titleRows);
+            if (headerRow == null) {
+                throw new JeecgBootException("未识别到表头行，请使用“下载模板”导出的模板填写");
+            }
+            Map<Integer, String> titleMap = new HashMap<>();
+            int matchedColumns = 0;
+            for (Cell cell : headerRow) {
+                String v = readCellText(cell);
+                if (oConvertUtils.isNotEmpty(v)) {
+                    String title = v.trim();
+                    titleMap.put(cell.getColumnIndex(), title);
+                    if (RECIPE_EXCEL_FIELDS.containsKey(title)) {
+                        matchedColumns++;
+                    }
+                }
+            }
+            if (titleMap.isEmpty() || matchedColumns == 0) {
+                throw new JeecgBootException("Excel 表头与模板不匹配，请使用“下载模板”导出的模板填写");
+            }
+            for (int r = titleRows + headRows; r <= sheet.getLastRowNum(); r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) {
+                    continue;
+                }
+                Recipe item = new Recipe();
+                boolean hasData = false;
+                for (Map.Entry<Integer, String> entry : titleMap.entrySet()) {
+                    String value = readCellText(row.getCell(entry.getKey()));
+                    if (oConvertUtils.isEmpty(value)) {
+                        continue;
+                    }
+                    hasData = true;
+                    Field field = RECIPE_EXCEL_FIELDS.get(entry.getValue());
+                    if (field == null) {
+                        continue;
+                    }
+                    Object converted = value.trim();
+                    if (field.getType() == Integer.class || field.getType() == int.class) {
+                        converted = parseInteger((String) converted);
+                        if (converted == null) {
+                            continue;
+                        }
+                    }
+                    field.setAccessible(true);
+                    field.set(item, converted);
+                }
+                if (hasData) {
+                    list.add(item);
+                }
+            }
+        }
+        return list;
+    }
+
+    /** 读取单元格文本，不改变单元格类型（避免 inlineStr 单元格内容被清空） */
+    private String readCellText(Cell cell) {
+        if (cell == null) {
+            return null;
+        }
+        try {
+            CellType type = cell.getCellType();
+            switch (type) {
+                case STRING:
+                    return cell.getStringCellValue();
+                case NUMERIC:
+                    double d = cell.getNumericCellValue();
+                    if (d == Math.floor(d) && !Double.isInfinite(d)) {
+                        return String.valueOf((long) d);
+                    }
+                    return BigDecimal.valueOf(d).stripTrailingZeros().toPlainString();
+                case BOOLEAN:
+                    return String.valueOf(cell.getBooleanCellValue());
+                case FORMULA:
+                    try {
+                        return cell.getStringCellValue();
+                    } catch (Exception e) {
+                        return String.valueOf(cell.getNumericCellValue());
+                    }
+                default:
+                    return null;
+            }
+        } catch (Exception e) {
+            log.warn("读取 Excel 单元格失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private Integer parseInteger(String value) {
+        try {
+            return new BigDecimal(value.trim()).intValue();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+    //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R24】修复 openpyxl 内联字符串 Excel 导入文本列为空 ----------
 }
