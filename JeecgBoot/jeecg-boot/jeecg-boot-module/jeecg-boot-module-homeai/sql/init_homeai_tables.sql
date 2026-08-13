@@ -497,7 +497,7 @@ CREATE TABLE IF NOT EXISTS `homeai_recipe_ingredient` (
     `recipe_id`       VARCHAR(32)  NOT NULL COMMENT '菜谱ID',
     `name`            VARCHAR(100) NOT NULL COMMENT '食材名',
     `quantity`        DECIMAL(10,2)         COMMENT '数量',
-    `unit`            VARCHAR(20)           COMMENT '单位:克/毫升/个/根/块/勺等',
+    `unit`            VARCHAR(100)          COMMENT '单位:克/毫升/个/根/块/勺等',
     `sort_order`      INT          DEFAULT 0 COMMENT '排序号',
     `create_by`       VARCHAR(50)           COMMENT '创建人',
     `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
