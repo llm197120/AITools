@@ -70,6 +70,18 @@
   }
   const categoryOptions = ref<{ label: string; value: string }[]>([]);
   const categoryNameMap = ref<Record<string, string>>({});
+  const difficultyOptions = [
+    { label: '入门', value: 1 },
+    { label: '简单', value: 2 },
+    { label: '中等', value: 3 },
+    { label: '较难', value: 4 },
+    { label: '困难', value: 5 },
+  ];
+  const visibilityOptions = [
+    { label: '公开', value: 'public' },
+    { label: '家庭', value: 'family' },
+    { label: '仅自己', value: 'private' },
+  ];
 
   async function loadCategoryOptions() {
     try {
@@ -124,6 +136,34 @@
       schemas: [
         { field: 'name', label: '菜名', component: 'Input', colProps: { span: 8 } },
         { field: 'categoryId', label: '分类', component: 'Select', colProps: { span: 8 }, componentProps: { options: categoryOptions, allowClear: true, placeholder: '请选择分类' } },
+        {
+          field: 'difficulty',
+          label: '难度',
+          component: 'Select',
+          colProps: { span: 8 },
+          componentProps: { options: difficultyOptions, allowClear: true, placeholder: '请选择难度' },
+        },
+        {
+          field: 'cookTime_begin',
+          label: '烹饪时间≥',
+          component: 'InputNumber',
+          colProps: { span: 8 },
+          componentProps: { min: 0, placeholder: '最短(分)' },
+        },
+        {
+          field: 'cookTime_end',
+          label: '烹饪时间≤',
+          component: 'InputNumber',
+          colProps: { span: 8 },
+          componentProps: { min: 0, placeholder: '最长(分)' },
+        },
+        {
+          field: 'visibility',
+          label: '可见性',
+          component: 'Select',
+          colProps: { span: 8 },
+          componentProps: { options: visibilityOptions, allowClear: true, placeholder: '请选择可见性' },
+        },
         { field: 'userId', label: '用户', component: 'Select', colProps: { span: 8 }, componentProps: { options: userOptions, allowClear: true, showSearch: true, optionFilterProp: 'label', placeholder: '请选择用户' } },
       ],
     },
