@@ -129,7 +129,7 @@ export default defineManifestConfig({
        * 校验合法域名。本地连 127.0.0.1 时请在微信开发者工具勾选「不校验合法域名」。
        * 正式上架前需在公众平台配置 request / uploadFile 合法域名。
        */
-      urlCheck: true,
+      urlCheck: false,
       minified: true,
       es6: true,
     },
