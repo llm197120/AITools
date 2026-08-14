@@ -1,6 +1,7 @@
 package org.jeecg.modules.homeai.storage.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -38,6 +39,7 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -415,17 +417,13 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
         if (oConvertUtils.isEmpty(userId)) {
             return 0L;
         }
-        List<StorageFile> files = list(new LambdaQueryWrapper<StorageFile>()
-                .eq(StorageFile::getUserId, userId)
-                .eq(StorageFile::getDelFlag, 0)
-                .select(StorageFile::getFileSize));
-        long sum = 0L;
-        for (StorageFile f : files) {
-            if (f.getFileSize() != null) {
-                sum += f.getFileSize();
-            }
-        }
-        return sum;
+        //update-begin---author:cursor ---date:2026-08-13 for：【性能优化】改为 SQL SUM，避免全量加载到内存累加-----------
+        QueryWrapper<StorageFile> qw = new QueryWrapper<>();
+        qw.select("COALESCE(SUM(file_size), 0) AS total")
+                .eq("user_id", userId)
+                .eq("del_flag", 0);
+        return sumBytesFromQuery(qw);
+        //update-end---author:cursor ---date:2026-08-13 for：【性能优化】改为 SQL SUM-----------
     }
 
     //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R28】家庭存储用量-----------
@@ -446,18 +444,29 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
         if (userIds.isEmpty()) {
             return 0L;
         }
-        List<StorageFile> files = list(new LambdaQueryWrapper<StorageFile>()
-                .in(StorageFile::getUserId, userIds)
-                .eq(StorageFile::getDelFlag, 0)
-                .select(StorageFile::getFileSize));
-        long sum = 0L;
-        for (StorageFile f : files) {
-            if (f.getFileSize() != null) {
-                sum += f.getFileSize();
-            }
-        }
-        return sum;
+        //update-begin---author:cursor ---date:2026-08-13 for：【性能优化】改为 SQL SUM，避免全量加载到内存累加-----------
+        QueryWrapper<StorageFile> qw = new QueryWrapper<>();
+        qw.select("COALESCE(SUM(file_size), 0) AS total")
+                .in("user_id", userIds)
+                .eq("del_flag", 0);
+        return sumBytesFromQuery(qw);
+        //update-end---author:cursor ---date:2026-08-13 for：【性能优化】改为 SQL SUM-----------
     }
+
+    /** 执行 SQL 聚合取 SUM(file_size)，兼容多数据库（COALESCE） */
+    private long sumBytesFromQuery(QueryWrapper<StorageFile> qw) {
+        List<Map<String, Object>> rows = listMaps(qw);
+        if (rows == null || rows.isEmpty()) {
+            return 0L;
+        }
+        Map<String, Object> row = rows.get(0);
+        Object val = row.get("total");
+        if (val == null && !row.isEmpty()) {
+            val = row.values().iterator().next();
+        }
+        return val == null ? 0L : new BigDecimal(val.toString()).longValue();
+    }
+    //update-end---author:cursor ---date:2026-08-13 for：【性能优化】存储用量 SQL SUM-----------
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R28】家庭存储用量-----------
 
     //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R32】家庭配额运营看板-----------

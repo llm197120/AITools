@@ -1,6 +1,7 @@
 package org.jeecg.modules.homeai.storage.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -18,13 +19,16 @@ import org.jeecg.modules.homeai.storage.service.IStorageFolderService;
 import org.jeecg.modules.homeai.storage.service.IStorageResourceFamilyService;
 import org.jeecg.modules.homeai.storage.util.StorageVisibilityQueryUtil;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -62,14 +66,47 @@ public class StorageFolderServiceImpl extends ServiceImpl<StorageFolderMapper, S
     }
 
     private List<StorageFolder> buildFolderTreeWithCounts(List<StorageFolder> allFolders) {
-        for (StorageFolder folder : allFolders) {
-            folder.setFileCount(Math.toIntExact(fileMapper.selectCount(
-                    new LambdaQueryWrapper<StorageFile>()
-                            .eq(StorageFile::getFolderId, folder.getId())
-                            .eq(StorageFile::getDelFlag, 0))));
+        //update-begin---author:cursor ---date:2026-08-13 for：【性能优化】文件数由逐文件夹 selectCount(N+1) 改为单条 GROUP BY 批量查询-----------
+        if (allFolders != null && !allFolders.isEmpty()) {
+            List<String> folderIds = allFolders.stream()
+                    .map(StorageFolder::getId)
+                    .collect(Collectors.toList());
+            Map<String, Integer> countMap = new HashMap<>();
+            List<Map<String, Object>> rows = fileMapper.selectMaps(new QueryWrapper<StorageFile>()
+                    .select("folder_id AS fid, COUNT(*) AS cnt")
+                    .in("folder_id", folderIds)
+                    .eq("del_flag", 0)
+                    .groupBy("folder_id"));
+            for (Map<String, Object> row : rows) {
+                Object fid = extractMapValue(row, "fid");
+                Object cnt = extractMapValue(row, "cnt");
+                if (fid != null) {
+                    countMap.put(fid.toString(), cnt instanceof Number ? ((Number) cnt).intValue() : 0);
+                }
+            }
+            for (StorageFolder folder : allFolders) {
+                folder.setFileCount(countMap.getOrDefault(folder.getId(), 0));
+            }
         }
+        //update-end---author:cursor ---date:2026-08-13 for：【性能优化】文件夹文件数批量统计-----------
         resourceFamilyService.enrichFolders(allFolders);
         return buildTree(allFolders, null);
+    }
+
+    /** 大小写不敏感地从聚合行取值（兼容不同数据库别名返回大小写） */
+    private static Object extractMapValue(Map<String, Object> row, String key) {
+        if (row == null) {
+            return null;
+        }
+        if (row.containsKey(key)) {
+            return row.get(key);
+        }
+        for (Map.Entry<String, Object> e : row.entrySet()) {
+            if (e.getKey().equalsIgnoreCase(key)) {
+                return e.getValue();
+            }
+        }
+        return null;
     }
 
     @Override
@@ -185,6 +222,7 @@ public class StorageFolderServiceImpl extends ServiceImpl<StorageFolderMapper, S
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteFolderCascade(String folderId) {
         if (oConvertUtils.isEmpty(folderId)) {
             return;
