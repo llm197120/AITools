@@ -2,19 +2,16 @@
   <BasicDrawer v-bind="$attrs" @register="registerDrawer" :title="isUpdate ? '编辑菜谱' : '新增菜谱'" width="40%">
     <BasicForm @register="registerForm" @submit="handleSubmit">
       <template #coverUrlSlot="{ model, field }">
-        <div style="display: flex; gap: 8px; align-items: center">
-          <a-input v-model:value="model[field]" placeholder="封面图片地址" style="flex: 1" />
-          <input ref="coverInputRef" type="file" accept="image/*" style="display: none" @change="(e: any) => onFileChange(e, 'cover')" />
-          <a-button size="small" @click="coverInputRef?.click()">上传</a-button>
-          <a-image v-if="model[field]" :src="model[field]" width="48" height="48" style="border-radius: 4px" />
-        </div>
+        <HomeaiMediaUpload v-model:value="model[field]" mode="image" :upload-url="`${BASE}/recipe/cover`" tip="支持 jpg/png/webp，建议比例 16:9" />
       </template>
       <template #videoUrlSlot="{ model, field }">
-        <div style="display: flex; gap: 8px; align-items: center">
-          <a-input v-model:value="model[field]" placeholder="做菜视频地址" style="flex: 1" />
-          <input ref="videoInputRef" type="file" accept="video/*" style="display: none" @change="(e: any) => onFileChange(e, 'video')" />
-          <a-button size="small" @click="videoInputRef?.click()">上传</a-button>
-        </div>
+        <HomeaiMediaUpload
+          v-model:value="model[field]"
+          mode="video"
+          :upload-url="`${BASE}/recipe/video`"
+          :max-size="200"
+          tip="支持 mp4/webm/mov 等常见视频格式"
+        />
       </template>
     </BasicForm>
 
@@ -28,7 +25,11 @@
     </a-card>
 
     <a-card size="small" title="烹饪步骤" :bordered="false" style="margin-top: 12px; background: var(--hai-admin-bg, #f3f2ee)">
-      <div v-for="(s, i) in steps" :key="i" style="border: 1px solid var(--hai-admin-border, #ece9e2); border-radius: 8px; padding: 8px; margin-bottom: 8px; background: #fff">
+      <div
+        v-for="(s, i) in steps"
+        :key="i"
+        style="border: 1px solid var(--hai-admin-border, #ece9e2); border-radius: 8px; padding: 8px; margin-bottom: 8px; background: #fff"
+      >
         <div style="display: flex; justify-content: space-between; margin-bottom: 6px">
           <span style="font-weight: 600">第 {{ i + 1 }} 步</span>
           <span>
@@ -38,12 +39,7 @@
           </span>
         </div>
         <a-textarea v-model:value="s.description" :rows="2" placeholder="步骤说明" style="margin-bottom: 6px" />
-        <div style="display: flex; gap: 8px; align-items: center">
-          <a-input v-model:value="s.imageUrl" placeholder="步骤图片地址" style="flex: 1" />
-          <input type="file" accept="image/*" style="display: none" :id="`stepImg-${i}`" @change="(e: any) => onStepImageChange(e, i)" />
-          <a-button size="small" @click="triggerStepImage(i)">上传图</a-button>
-          <a-image v-if="s.imageUrl" :src="s.imageUrl" width="48" height="48" style="border-radius: 4px" />
-        </div>
+        <HomeaiMediaUpload v-model:value="s.imageUrl" mode="image" :upload-url="`${BASE}/recipe/step-image`" tip="可选：上传该步骤图片" />
       </div>
       <a-button type="dashed" block size="small" @click="steps.push({ description: '', imageUrl: '' })">+ 添加步骤</a-button>
     </a-card>
@@ -60,12 +56,14 @@
   import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
   import { BasicForm, useForm } from '/@/components/Form';
   import { recipeApi, familyApi } from '/@/api/homeai';
-  import { defHttp } from '/@/utils/http/axios';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import type { HomeaiCategory, HomeaiRecipe, HomeaiRecipeStep } from '/@/api/homeai';
   import type { HomeaiRecipeIngredient } from '/@/api/homeai/types';
+  import HomeaiMediaUpload from '/@/views/homeai/components/HomeaiMediaUpload.vue';
 
   const emit = defineEmits(['success']);
   const { createMessage } = useMessage();
+  const BASE = '/homeai';
 
   /** 展示用量 → quantity/unit（与小程序 recipeIngredient 对齐，跨项目内联） */
   function parseAmountToQuantityUnit(amount: string): { quantity?: number; unit?: string } {
@@ -82,11 +80,7 @@
   }
 
   /** quantity/unit → 展示用量 */
-  function formatQuantityUnit(
-    quantity?: number | string | null,
-    unit?: string | null,
-    amountFallback?: string,
-  ): string {
+  function formatQuantityUnit(quantity?: number | string | null, unit?: string | null, amountFallback?: string): string {
     const hasQuantity = quantity !== undefined && quantity !== null && quantity !== '';
     if (hasQuantity) return `${quantity}${unit || ''}`;
     if (unit) return String(unit);
@@ -98,8 +92,6 @@
   const saving = ref(false);
   const categoryOptions = ref<{ label: string; value: string }[]>([]);
   const familyOptions = ref<{ label: string; value: string }[]>([]);
-  const coverInputRef = ref<HTMLInputElement | null>(null);
-  const videoInputRef = ref<HTMLInputElement | null>(null);
   const ingredients = ref<HomeaiRecipeIngredient[]>([{ name: '', amount: '' }]);
   const steps = ref<Array<{ description: string; imageUrl?: string }>>([{ description: '', imageUrl: '' }]);
 
@@ -113,7 +105,7 @@
     }
   }
 
-  const [registerDrawer, { closeDrawer }] = useDrawerInner(async (data: any) => {
+  const [registerDrawer, { closeDrawer }] = useDrawerInner(async (data: { isUpdate?: boolean; record?: HomeaiRecipe }) => {
     isUpdate.value = data.isUpdate || false;
     recordId.value = data.record?.id || '';
     resetFields();
@@ -121,7 +113,7 @@
     steps.value = [{ description: '', imageUrl: '' }];
     await loadFamilyOptions();
     try {
-      const list: any[] = (await recipeApi.categories()) || [];
+      const list: HomeaiCategory[] = (await recipeApi.categories()) || [];
       categoryOptions.value = list.map((c) => ({ label: c.name, value: c.id }));
       updateSchema([
         {
@@ -140,7 +132,7 @@
       setFieldsValue({ ...data.record });
       // 加载食材/步骤
       try {
-        const detail: any = await recipeApi.getById(data.record.id);
+        const detail = await recipeApi.getById(data.record.id);
         const d = detail?.recipe || detail;
         if (d) {
           setFieldsValue({
@@ -155,9 +147,9 @@
         ingredients.value = ings.length
           ? ings.map((x) => ({ name: x.name, amount: formatQuantityUnit(x.quantity, x.unit, x.amount) }))
           : [{ name: '', amount: '' }];
-        const sts = detail?.steps || [];
+        const sts: HomeaiRecipeStep[] = detail?.steps || [];
         steps.value = sts.length
-          ? sts.map((x: { description?: string; imageUrl?: string }) => ({
+          ? sts.map((x) => ({
               description: x.description || '',
               imageUrl: x.imageUrl,
             }))
@@ -170,7 +162,7 @@
     }
   });
 
-  const [registerForm, { setFieldsValue, resetFields, validate, submit, updateSchema }] = useForm({
+  const [registerForm, { setFieldsValue, resetFields, submit, updateSchema }] = useForm({
     labelWidth: 100,
     schemas: [
       { field: 'name', label: '菜名', component: 'Input', required: true },
@@ -185,7 +177,15 @@
         field: 'difficulty',
         label: '难度',
         component: 'Select',
-        componentProps: { options: [{ label: '简单', value: 1 }, { label: '中等', value: 3 }, { label: '困难', value: 5 }] },
+        componentProps: {
+          options: [
+            { label: '入门', value: 1 },
+            { label: '简单', value: 2 },
+            { label: '中等', value: 3 },
+            { label: '较难', value: 4 },
+            { label: '困难', value: 5 },
+          ],
+        },
         defaultValue: 3,
       },
       { field: 'cookTime', label: '烹饪时间(分)', component: 'InputNumber' },
@@ -227,42 +227,6 @@
     steps.value[j] = tmp;
   }
 
-  function triggerStepImage(i: number) {
-    (document.getElementById(`stepImg-${i}`) as HTMLInputElement | null)?.click();
-  }
-
-  async function uploadFile(file: File, url: string): Promise<string> {
-    const formData = new FormData();
-    formData.append('file', file);
-    const res: any = await defHttp.uploadFile({ url, data: formData });
-    return typeof res === 'string' ? res : res?.url || '';
-  }
-
-  async function onFileChange(e: any, type: 'cover' | 'video') {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const url = type === 'cover'
-        ? await uploadFile(file, '/homeai/recipe/cover')
-        : await uploadFile(file, '/homeai/recipe/video');
-      setFieldsValue({ [type === 'cover' ? 'coverUrl' : 'videoUrl']: url });
-      createMessage.success('上传成功');
-    } catch (err: any) {
-      createMessage.error(err?.message || '上传失败');
-    }
-  }
-
-  async function onStepImageChange(e: any, i: number) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      steps.value[i].imageUrl = await uploadFile(file, '/homeai/recipe/step-image');
-      createMessage.success('上传成功');
-    } catch (err: any) {
-      createMessage.error(err?.message || '上传失败');
-    }
-  }
-
   async function handleSubmit(values: any) {
     try {
       if (values.visibility === 'family' && !values.familyId) {
@@ -279,11 +243,13 @@
             const { quantity, unit } = parseAmountToQuantityUnit(x.amount || '');
             return { name: x.name, quantity, unit };
           }),
-        steps: steps.value.filter((x: any) => x.description).map((x: any, i: number) => ({
-          description: x.description,
-          imageUrl: x.imageUrl || null,
-          stepNum: i + 1,
-        })),
+        steps: steps.value
+          .filter((x: any) => x.description)
+          .map((x: any, i: number) => ({
+            description: x.description,
+            imageUrl: x.imageUrl || null,
+            stepNum: i + 1,
+          })),
       };
       if (isUpdate.value) {
         await recipeApi.edit(recordId.value, payload);
