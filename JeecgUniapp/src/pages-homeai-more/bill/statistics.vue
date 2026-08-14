@@ -34,10 +34,11 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { billApi } from '../../pages-homeai/api/bill'
+import { localMonthStr } from '../../pages-homeai/utils/date'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 
-const currentMonth = ref(new Date().toISOString().substring(0, 7))
+const currentMonth = ref(localMonthStr())
 const summary = ref({ expense: '0', income: '0', balance: '0' })
 const categoryStats = ref<any[]>([])
 const loading = ref(true)
@@ -65,7 +66,7 @@ async function loadStats() {
 function changeMonth(d: number) {
   const [y, m] = currentMonth.value.split('-').map(Number)
   const dt = new Date(y, m - 1 + d)
-  currentMonth.value = dt.toISOString().substring(0, 7)
+  currentMonth.value = localMonthStr(dt)
   loadStats()
 }
 

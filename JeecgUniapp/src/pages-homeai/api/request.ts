@@ -1,7 +1,8 @@
 /**
  * HomeAI 小程序 API 请求封装
  */
-import { getToken, removeToken } from '../utils/auth'
+import { getToken } from '../utils/auth'
+import { useUserStore } from '../stores/user'
 import { getEnvBaseUrl } from '@/utils/index'
 
 const BASE_URL = '/homeai'
@@ -89,8 +90,8 @@ async function request<T = any>(options: RequestOptions): Promise<T> {
         if (data.success) {
           resolve(data.result)
         } else if (data.code === 401) {
-          // Token 过期，重定向到登录
-          removeToken()
+          // Token 过期：清理登录态（storage + Pinia store），避免 isLogin 残留
+          useUserStore().logout()
           uni.switchTab({ url: '/pages/homeai/profile' })
           reject(new Error(data.message || '登录已过期'))
         } else {

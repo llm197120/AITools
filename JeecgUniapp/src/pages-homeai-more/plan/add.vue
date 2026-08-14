@@ -1,4 +1,4 @@
-﻿<route lang="json5">{ style: { navigationBarTitleText: '新增计划', navigationBarBackgroundColor: '#F3F2EE' } }</route>
+<route lang="json5">{ style: { navigationBarTitleText: '新增计划', navigationBarBackgroundColor: '#F3F2EE' } }</route>
 <template>
   <HomeFormCard>
     <input class="home-form-input" v-model="form.title" placeholder="计划标题..." />
@@ -50,6 +50,7 @@
 import { ref, onMounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { planApi, configApi, recipeApi } from '../../pages-homeai/api/index'
+import { localDateStr } from '../../pages-homeai/utils/date'
 import HomeFormCard from '../../components/HomeFormCard.vue'
 
 const priorityLabels = ['普通', '重要', '紧急']
@@ -65,7 +66,7 @@ const repeatIndex = ref(0)
 const form = ref({
   title: '',
   content: '',
-  planDate: new Date().toISOString().substring(0, 10),
+  planDate: localDateStr(),
   priority: 'normal',
   category: '',
   isAllDay: 1,

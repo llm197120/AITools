@@ -41,6 +41,7 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { billApi } from '../../pages-homeai/api/bill'
+import { localDateStr } from '../../pages-homeai/utils/date'
 import HomeFormCard from '../../components/HomeFormCard.vue'
 
 const entryId = ref('')
@@ -70,19 +71,19 @@ function onDateChange(e: any) {
 }
 
 onLoad(async (opts: any) => {
-  if (!opts?.entry) {
+  if (!opts?.id) {
     uni.showToast({ title: '参数错误', icon: 'none' })
     setTimeout(() => uni.navigateBack(), 800)
     return
   }
   try {
-    const entry = JSON.parse(decodeURIComponent(opts.entry))
+    const entry = await billApi.entryById(opts.id)
     entryId.value = entry.id
     form.value = {
       type: entry.type || 'expense',
       amount: String(entry.amount ?? ''),
       categoryId: entry.categoryId || '',
-      billDate: entry.billDate || new Date().toISOString().substring(0, 10),
+      billDate: entry.billDate || localDateStr(),
       paymentMethod: entry.paymentMethod || '微信',
       remark: entry.remark || '',
     }

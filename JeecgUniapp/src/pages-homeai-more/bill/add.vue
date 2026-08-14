@@ -50,13 +50,14 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { billApi } from '../../pages-homeai/api/bill'
+import { localDateStr } from '../../pages-homeai/utils/date'
 import HomeFormCard from '../../components/HomeFormCard.vue'
 
 const form = ref({
   type: 'expense',
   amount: '',
   categoryId: '',
-  billDate: new Date().toISOString().substring(0, 10),
+  billDate: localDateStr(),
   paymentMethod: '微信',
   remark: '',
 })

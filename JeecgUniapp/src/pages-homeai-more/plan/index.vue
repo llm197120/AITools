@@ -64,13 +64,14 @@
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { planApi } from '../../pages-homeai/api/index'
+import { localDateStr } from '../../pages-homeai/utils/date'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 
 useHomeaiPageGuard()
 
 const weekLabels = ['日', '一', '二', '三', '四', '五', '六']
-const selectedDate = ref(new Date().toISOString().substring(0, 10))
+const selectedDate = ref(localDateStr())
 const viewYear = ref(new Date().getFullYear())
 const viewMonth = ref(new Date().getMonth() + 1)
 const planDates = ref<string[]>([])
@@ -85,7 +86,7 @@ const calendarCells = computed(() => {
   const first = new Date(viewYear.value, viewMonth.value - 1, 1)
   const lastDay = new Date(viewYear.value, viewMonth.value, 0).getDate()
   const startWeek = first.getDay()
-  const today = new Date().toISOString().substring(0, 10)
+  const today = localDateStr()
   const cells: any[] = []
   for (let i = 0; i < startWeek; i++) cells.push({})
   for (let d = 1; d <= lastDay; d++) {

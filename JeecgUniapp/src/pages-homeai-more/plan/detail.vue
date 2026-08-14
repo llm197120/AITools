@@ -38,6 +38,7 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { planApi } from '../../pages-homeai/api/plan'
+import { localDateStr } from '../../pages-homeai/utils/date'
 
 const plan = ref<any>({})
 const instanceId = ref('')
@@ -74,7 +75,7 @@ function goRecipe() {
 
 onLoad(async (opts: any) => {
   instanceId.value = opts?.id || ''
-  planDate.value = opts?.planDate || new Date().toISOString().substring(0, 10)
+  planDate.value = opts?.planDate || localDateStr()
   if (!instanceId.value) {
     uni.showToast({ title: '参数错误', icon: 'none' })
     return

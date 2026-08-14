@@ -89,11 +89,9 @@ function addEntry(type: string) {
   uni.navigateTo({ url: `/pages-homeai-more/bill/add?type=${type}` })
 }
 
-function editEntry(e: any) {
-  uni.navigateTo({
-    url: `/pages-homeai-more/bill/edit?entry=${encodeURIComponent(JSON.stringify(e))}`,
-  })
-}
+  function editEntry(e: any) {
+    uni.navigateTo({ url: `/pages-homeai-more/bill/edit?id=${e.id}` })
+  }
 
 function goStatistics() {
   uni.navigateTo({ url: '/pages-homeai-more/bill/statistics' })

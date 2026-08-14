@@ -69,6 +69,7 @@ import { useUserStore } from '../../pages-homeai/stores/user'
 import { billApi } from '../../pages-homeai/api/bill'
 import { learnApi } from '../../pages-homeai/api/learn'
 import { get as getApi } from '../../pages-homeai/api/request'
+import { localMonthStr } from '../../pages-homeai/utils/date'
 import { wechatLogin } from '../../pages-homeai/utils/homeaiAuth'
 
 const userStore = useUserStore()
@@ -80,6 +81,27 @@ const stats = ref([
   { label: '账单数', count: 0 },
 ])
 
+// 统计短 TTL 缓存：避免频繁切 Tab 重复拉取 3 个统计接口
+const STATS_TTL = 30 * 1000
+let lastStatsAt = 0
+
+async function loadStats() {
+  try {
+    const learnStats: any = await learnApi.statistics()
+    const month = localMonthStr()
+    const entries = (await billApi.entries(month)) || []
+    const convs = (await getApi('/ai/conversations/mine')) || []
+    stats.value = [
+      { label: '对话次数', count: Array.isArray(convs) ? convs.length : 0 },
+      { label: '学习次数', count: learnStats?.totalRecords ?? 0 },
+      { label: '账单数', count: entries.length },
+    ]
+    lastStatsAt = Date.now()
+  } catch {
+    // 统计加载失败不影响页面
+  }
+}
+
 onShow(async () => {
   if (!userStore.isLogin) {
     stats.value = [
@@ -90,19 +112,10 @@ onShow(async () => {
     return
   }
   await userStore.refreshUserInfo()
-  try {
-    const learnStats: any = await learnApi.statistics()
-    const month = new Date().toISOString().substring(0, 7)
-    const entries = (await billApi.entries(month)) || []
-    const convs = (await getApi('/ai/conversations/mine')) || []
-    stats.value = [
-      { label: '对话次数', count: Array.isArray(convs) ? convs.length : 0 },
-      { label: '学习次数', count: learnStats?.totalRecords ?? 0 },
-      { label: '账单数', count: entries.length },
-    ]
-  } catch {
-    // 统计加载失败不影响页面
+  if (Date.now() - lastStatsAt < STATS_TTL && stats.value.some((s) => s.count > 0)) {
+    return
   }
+  await loadStats()
 })
 
 function goFamily() {
@@ -117,15 +130,7 @@ async function handleLogin() {
     await wechatLogin()
     uni.showToast({ title: '登录成功', icon: 'success' })
     await userStore.refreshUserInfo()
-    const learnStats: any = await learnApi.statistics()
-    const month = new Date().toISOString().substring(0, 7)
-    const entries = (await billApi.entries(month)) || []
-    const convs = (await getApi('/ai/conversations/mine')) || []
-    stats.value = [
-      { label: '对话次数', count: Array.isArray(convs) ? convs.length : 0 },
-      { label: '学习次数', count: learnStats?.totalRecords ?? 0 },
-      { label: '账单数', count: entries.length },
-    ]
+    await loadStats()
   } catch (e) {
     console.error('登录失败', e)
     uni.showToast({ title: '登录失败，请重试', icon: 'none' })
