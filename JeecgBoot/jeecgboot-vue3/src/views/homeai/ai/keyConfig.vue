@@ -3,7 +3,6 @@
     <BasicTable @register="registerTable">
       <template #tableTitle>
         <a-button type="primary" preIcon="ant-design:plus-outlined" @click="handleAdd"> 新增</a-button>
-        <a-button preIcon="ant-design:export-outlined" @click="onExportXls"> 导出</a-button>
       </template>
       <template #action="{ record }">
         <TableAction :actions="getTableAction(record)" />
@@ -104,9 +103,5 @@
   async function setDefault(record: Recordable) {
     await keyConfigApi.setDefault(String(record.id));
     reload();
-  }
-
-  function onExportXls() {
-    // TODO
   }
 </script>

@@ -24,8 +24,9 @@
   import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
   import { Description } from '/@/components/Description';
   import { BasicForm, useForm } from '/@/components/Form';
-  import { defHttp } from '/@/utils/http/axios';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import { storageRuleApi } from '/@/api/homeai';
+  import type { HomeaiPayload } from '/@/api/homeai';
 
   const emit = defineEmits(['success']);
   const { createMessage } = useMessage();
@@ -93,19 +94,20 @@
     showResetButton: false,
   });
 
-  async function handleSubmit(values: any) {
+  async function handleSubmit(values: HomeaiPayload) {
     try {
       if (isUpdate.value) {
-        await defHttp.put({ url: '/homeai/storage/rule', data: { id: record.value.id, ...values } });
+        await storageRuleApi.update({ id: record.value.id, ...values });
         createMessage.success('编辑成功');
       } else {
-        await defHttp.post({ url: '/homeai/storage/rule', data: values });
+        await storageRuleApi.create(values);
         createMessage.success('新增成功');
       }
       closeDrawer();
       emit('success');
       return true;
-    } catch {
+    } catch (e: any) {
+      createMessage.error(e?.message || '保存失败');
       return false;
     }
   }

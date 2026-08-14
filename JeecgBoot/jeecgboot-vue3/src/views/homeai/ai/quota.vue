@@ -69,6 +69,7 @@
   import { BasicForm, useForm } from '/@/components/Form';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { quotaApi } from '/@/api/homeai';
+  import type { HomeaiQuotaRecord } from '/@/api/homeai';
   import { useUserLabel } from '../hooks/useUserLabel';
   import { quotaStrokeColor } from '../hooks/homeaiStatusColors';
 
@@ -158,7 +159,7 @@
 
   const editUserId = ref('');
   const [registerModal, { openModal, closeModal }] = useModal();
-  const [registerForm, { setFieldsValue, resetFields, submit }] = useForm({
+  const [registerForm, { setFieldsValue, submit }] = useForm({
     labelWidth: 100,
     schemas: [
       { field: 'nickname', label: '用户', component: 'Input', componentProps: { disabled: true } },
@@ -170,7 +171,7 @@
     showResetButton: false,
   });
 
-  function openEdit(record: any) {
+  function openEdit(record: HomeaiQuotaRecord) {
     editUserId.value = record.userId;
     setFieldsValue({
       nickname: record.nickname,

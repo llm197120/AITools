@@ -35,8 +35,8 @@
   import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
   import { Description } from '/@/components/Description';
   import { BasicForm, useForm } from '/@/components/Form';
-  import { defHttp } from '/@/utils/http/axios';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import { keyConfigApi } from '/@/api/homeai';
 
   const emit = defineEmits(['success']);
   const { createMessage } = useMessage();
@@ -79,7 +79,7 @@
     }
   });
 
-  const [registerForm, { setFieldsValue, resetFields, validate, submit }] = useForm({
+  const [registerForm, { setFieldsValue, submit }] = useForm({
     labelWidth: 100,
     schemas: [
       {
@@ -108,10 +108,10 @@
   async function handleSubmit(values: any) {
     try {
       if (isUpdate.value) {
-        await defHttp.put({ url: '/homeai/ai/key-config', data: { id: record.value.id, ...values } });
+        await keyConfigApi.edit({ id: record.value.id, ...values });
         createMessage.success('编辑成功');
       } else {
-        await defHttp.post({ url: '/homeai/ai/key-config', data: values });
+        await keyConfigApi.add(values);
         createMessage.success('新增成功');
       }
       closeDrawer();

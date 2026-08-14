@@ -19,13 +19,14 @@
 <script lang="ts" name="homeai-office-history" setup>
   import { PageWrapper } from '/@/components/Page';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
-  import { defHttp } from '/@/utils/http/axios';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import { storageOfficeApi } from '/@/api/homeai';
+  import type { HomeaiConvertTask, HomeaiPageParams } from '/@/api/homeai';
 
   const { createMessage, createConfirm } = useMessage();
   const [registerTable, { reload }] = useTable({
     title: 'Office处理记录',
-    api: (params: any) => defHttp.get({ url: '/homeai/storage/office/list', params }),
+    api: (params: HomeaiPageParams) => storageOfficeApi.list(params),
     columns: [
       { title: '文件ID', dataIndex: 'fileId', width: 250 },
       { title: '处理类型', dataIndex: 'convertType', width: 120 },
@@ -53,7 +54,7 @@
     },
   });
 
-  function getTableAction(record: any) {
+  function getTableAction(record: HomeaiConvertTask) {
     return [
       {
         icon: 'ant-design:download-outlined',
@@ -70,12 +71,12 @@
     ];
   }
 
-  function handleDelete(record: any) {
+  function handleDelete(record: HomeaiConvertTask) {
     createConfirm({
       title: '确认删除',
       content: '确定删除该处理记录吗？',
       onOk: async () => {
-        await defHttp.delete({ url: `/homeai/storage/office/${record.id}` });
+        await storageOfficeApi.deleteTask(record.id);
         createMessage.success('删除成功');
         reload();
       },

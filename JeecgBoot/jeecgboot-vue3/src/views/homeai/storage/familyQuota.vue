@@ -74,6 +74,7 @@
   import { PageWrapper } from '/@/components/Page';
   import { computed, onMounted, reactive, ref } from 'vue';
   import { storageApi } from '/@/api/homeai';
+  import type { HomeaiFamilyQuotaItem } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';
 
   const { createMessage, createConfirm } = useMessage();
@@ -83,7 +84,7 @@
   const keyword = ref('');
   const onlyWarn = ref(false);
   const onlyCustom = ref(false);
-  const items = ref<any[]>([]);
+  const items = ref<HomeaiFamilyQuotaItem[]>([]);
   const summary = reactive({ familyCount: 0, warnCount: 0, customCount: 0, totalUsed: 0 });
   const defaultFamilyLimitBytes = ref(5 * GB);
   const warnPercent = ref(80);
@@ -125,7 +126,7 @@
   async function load() {
     loading.value = true;
     try {
-      const data: any = await storageApi.familyQuotaBoard({
+      const data = await storageApi.familyQuotaBoard({
         keyword: keyword.value || undefined,
         onlyWarn: onlyWarn.value || undefined,
         onlyCustom: onlyCustom.value || undefined,
@@ -142,7 +143,7 @@
     }
   }
 
-  function openSingle(record: any) {
+  function openSingle(record: HomeaiFamilyQuotaItem) {
     batchFamilyId.value = record.familyId;
     batchGb.value = Number(((record.limitBytes || defaultFamilyLimitBytes.value) / GB).toFixed(2));
     batchVisible.value = true;
@@ -173,7 +174,7 @@
     }
   }
 
-  async function resetOne(record: any) {
+  async function resetOne(record: HomeaiFamilyQuotaItem) {
     await storageApi.clearFamilyStorageLimit(record.familyId);
     createMessage.success('已恢复默认');
     await load();

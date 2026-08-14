@@ -24,7 +24,8 @@
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
   import { useMessage } from '/@/hooks/web/useMessage';
-  import { defHttp } from '/@/utils/http/axios';
+  import { storageRuleApi } from '/@/api/homeai';
+  import type { HomeaiConvertRule, HomeaiPageParams } from '/@/api/homeai';
   import ConvertRuleDrawer from './ConvertRuleDrawer.vue';
 
   const { createMessage, createConfirm } = useMessage();
@@ -32,7 +33,7 @@
 
   const [registerTable, { reload }] = useTable({
     title: '格式转换规则',
-    api: (params: any) => defHttp.get({ url: '/homeai/storage/rule/list', params }),
+    api: (params: HomeaiPageParams) => storageRuleApi.list(params),
     columns: [
       { title: '源格式', dataIndex: 'sourceFormat', width: 150 },
       { title: '目标格式', dataIndex: 'targetFormat', width: 150 },
@@ -50,7 +51,7 @@
     },
   });
 
-  function getTableAction(record: any) {
+  function getTableAction(record: HomeaiConvertRule) {
     return [
       { icon: 'ant-design:eye-outlined', onClick: () => openDrawer(true, { record, isUpdate: false }), title: '查看' },
       { icon: 'ant-design:edit-outlined', onClick: () => handleEdit(record), title: '编辑' },
@@ -62,31 +63,25 @@
     openDrawer(true, { isUpdate: false });
   }
 
-  function handleEdit(record: any) {
+  function handleEdit(record: HomeaiConvertRule) {
     openDrawer(true, { record, isUpdate: true });
   }
 
-  async function handleDelete(record: any) {
+  async function handleDelete(record: HomeaiConvertRule) {
     createConfirm({
       iconType: 'warning',
       title: '确认删除',
       content: `确定要删除规则「${record.sourceFormat} → ${record.targetFormat}」吗？`,
       onOk: async () => {
-        await defHttp.delete({ url: `/homeai/storage/rule/${record.id}` });
+        await storageRuleApi.delete(record.id);
         createMessage.success('删除成功');
         reload();
       },
     });
   }
 
-  async function toggleStatus(record: any, checked: boolean) {
-    await defHttp.put(
-      {
-        url: `/homeai/storage/rule/${record.id}/status`,
-        params: { isEnabled: checked ? '1' : '0' },
-      },
-      { joinParamsToUrl: true }
-    );
+  async function toggleStatus(record: HomeaiConvertRule, checked: boolean) {
+    await storageRuleApi.toggleStatus(record.id, checked ? '1' : '0');
     reload();
   }
 </script>

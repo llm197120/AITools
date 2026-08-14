@@ -45,6 +45,7 @@
   import { BasicModal, useModal } from '/@/components/Modal';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { conversationApi } from '/@/api/homeai';
+  import type { HomeaiConversation, HomeaiPageParams } from '/@/api/homeai';
   import { useUserLabel } from '../hooks/useUserLabel';
 
   const { createMessage, createConfirm } = useMessage();
@@ -63,7 +64,7 @@
 
   const [registerTable, { reload }] = useTable({
     title: 'AI对话管理',
-    api: (params: any) => conversationApi.list(params),
+    api: (params: HomeaiPageParams) => conversationApi.list(params),
     columns: [
       { title: '对话标题', dataIndex: 'title', width: 250 },
       { title: '用户', dataIndex: 'userId', key: 'userId', width: 160 },
@@ -93,7 +94,7 @@
     loadUserOptions();
   });
 
-  function getTableAction(record: any) {
+  function getTableAction(record: HomeaiConversation) {
     return [
       {
         icon: 'ant-design:message-outlined',
@@ -109,7 +110,7 @@
     ];
   }
 
-  async function handleViewMessages(record: any) {
+  async function handleViewMessages(record: HomeaiConversation) {
     msgLoading.value = true;
     messages.value = [];
     openMsgModal(true);
@@ -122,7 +123,7 @@
     }
   }
 
-  async function handleDelete(record: any) {
+  async function handleDelete(record: HomeaiConversation) {
     createConfirm({
       iconType: 'warning',
       title: '确认删除',
@@ -141,10 +142,19 @@
       title: '确认删除',
       content: `确定删除选中的 ${selectedRowKeys.value.length} 个对话吗？`,
       onOk: async () => {
+        let failed = 0;
         for (const id of selectedRowKeys.value) {
-          await conversationApi.delete(id);
+          try {
+            await conversationApi.delete(id);
+          } catch {
+            failed++;
+          }
         }
-        createMessage.success('删除成功');
+        if (failed === 0) {
+          createMessage.success('删除成功');
+        } else {
+          createMessage.warning(`删除完成，${failed} 个删除失败`);
+        }
         selectedRowKeys.value = [];
         reload();
       },

@@ -34,10 +34,11 @@
   import { onMounted, ref } from 'vue';
   import { BasicTable, useTable } from '/@/components/Table';
   import { configApi } from '/@/api/homeai';
+  import type { HomeaiFileWhitelistItem } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';
 
   const { createMessage } = useMessage();
-  const items = ref<any[]>([]);
+  const items = ref<HomeaiFileWhitelistItem[]>([]);
   const saving = ref(false);
 
   const categoryOptions = [
@@ -65,14 +66,18 @@
   });
 
   async function loadData() {
-    const res: any = await configApi.getFileWhitelist();
-    items.value = (res?.items || []).map((r: any, i: number) => ({
-      ...r,
-      sortOrder: r.sortOrder ?? i + 1,
-      isEnabled: r.isEnabled ?? 1,
-      category: r.category || 'other',
-    }));
-    setTableData(items.value);
+    try {
+      const res = await configApi.getFileWhitelist();
+      items.value = (res?.items || []).map((r: HomeaiFileWhitelistItem, i: number) => ({
+        ...r,
+        sortOrder: r.sortOrder ?? i + 1,
+        isEnabled: r.isEnabled ?? 1,
+        category: r.category || 'other',
+      }));
+      setTableData(items.value);
+    } catch (e: any) {
+      createMessage.error(e?.message || '文件白名单加载失败');
+    }
   }
 
   function handleAdd() {
@@ -85,7 +90,7 @@
     setTableData([...items.value]);
   }
 
-  function handleRemove(record: any) {
+  function handleRemove(record: HomeaiFileWhitelistItem) {
     const index = items.value.indexOf(record);
     if (index >= 0) items.value.splice(index, 1);
     setTableData([...items.value]);
