@@ -76,6 +76,7 @@
   import { BasicTable, useTable } from '/@/components/Table';
   import { defHttp } from '/@/utils/http/axios';
   import { learnApi } from '/@/api/homeai';
+  import type { HomeaiPageParams } from '/@/api/homeai';
   import { useECharts } from '/@/hooks/web/useECharts';
   import { useMethods } from '/@/hooks/system/useMethods';
 
@@ -83,8 +84,13 @@
   const days = ref(30);
   const filterUserId = ref('');
   const stats = ref({ totalRecords: 0, totalDurationMinutes: 0, activeUserCount: 0, activeDayCount: 0 });
-  const byCategory = ref<any[]>([]);
-  const byUser = ref<any[]>([]);
+    /** 分类统计行 */
+  interface LearnCategoryStat { categoryName?: string; materialCount?: number; recordCount?: number; totalDuration?: number }
+  /** 用户统计行 */
+  interface LearnUserStat { nickname?: string; userId?: string; recordCount?: number; durationMinutes?: number; activeDays?: number }
+
+  const byCategory = ref<LearnCategoryStat[]>([]);
+  const byUser = ref<LearnUserStat[]>([]);
   const chartRef = ref<HTMLDivElement | null>(null);
   const { setOptions } = useECharts(chartRef as Ref<HTMLDivElement>);
 
@@ -106,7 +112,7 @@
 
   const [registerTable, { reload }] = useTable({
     title: '学习记录',
-    api: (params: any) =>
+    api: (params: HomeaiPageParams) =>
       defHttp.get({
         url: '/homeai/learn/admin/records',
         params: { ...params, userId: filterUserId.value || undefined },
@@ -144,7 +150,7 @@
       return;
     }
     try {
-      const trend: any[] = (await learnApi.adminStatsTrend(days.value)) || [];
+      const trend: { date?: string; count?: number; durationMinutes?: number }[] = (await learnApi.adminStatsTrend(days.value)) || [];
       setOptions({
         tooltip: { trigger: 'axis' },
         legend: { data: ['记录数', '时长(分钟)'] },
@@ -201,18 +207,7 @@
     });
   }
 
-  async function showLearnRemindMeta() {
-    try {
-      const meta: any = await defHttp.get({ url: '/homeai/config/wechat-learn-remind' });
-      // 仅控制台输出，避免每次进页弹 toast
-      console.info('[学习提醒模板联调]', meta);
-    } catch {
-      // ignore
-    }
-  }
-
   onMounted(() => {
     reloadAll();
-    showLearnRemindMeta();
   });
 </script>
