@@ -58,7 +58,7 @@ const canEdit = ref(false)
 const isFavorited = ref(false)
 const recipeId = ref('')
 function diffLabel(d: any) {
-  const map: Record<number, string> = { 1: '简单', 2: '简单', 3: '中等', 4: '中等', 5: '困难' }
+  const map: Record<number, string> = { 1: '入门', 2: '简单', 3: '中等', 4: '较难', 5: '困难' }
   return map[Number(d)] || '中等'
 }
 function visibilityLabel(v?: string) {

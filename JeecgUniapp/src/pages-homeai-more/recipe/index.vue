@@ -9,7 +9,7 @@
       <view class="recommend-head"><text class="recommend-title">为你推荐</text></view>
       <view class="recommend-row">
         <view class="recommend-card" v-for="r in recommends" :key="r.id" @click="detail(r.id)">
-          <image class="recommend-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill"/>
+          <image class="recommend-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill" lazy-load />
           <text class="recommend-name">{{ r.name }}</text>
           <text class="recommend-reason">{{ reasonLabel(r.reason, r.cookCount) }}</text>
         </view>
@@ -19,7 +19,7 @@
       <view class="recommend-head"><text class="recommend-title">新菜尝鲜</text></view>
       <view class="recommend-row">
         <view class="recommend-card" v-for="r in newRecipes" :key="'n-' + r.id" @click="detail(r.id)">
-          <image class="recommend-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill"/>
+          <image class="recommend-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill" lazy-load />
           <text class="recommend-name">{{ r.name }}</text>
           <text class="recommend-reason">新上架</text>
         </view>
@@ -34,7 +34,7 @@
     <view v-if="loading"><HomeSkeleton variant="list" :rows="4" /></view>
     <view v-else class="recipe-grid">
       <view class="recipe-card" v-for="r in recipes" :key="r.id" @click="detail(r.id)">
-        <image class="recipe-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill"/>
+        <image class="recipe-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill" lazy-load />
         <view class="recipe-info">
           <text class="recipe-name">{{ r.name }}</text>
           <view class="recipe-meta-row">
@@ -97,17 +97,26 @@ function reasonLabel(reason?: string, cookCount?: number) {
   return base
 }
 
+// 推荐/新菜为慢变数据，60s TTL 缓存（主列表 load() 保持实时）
+const REC_LOAD_TTL = 60 * 1000
+let lastRecLoadAt = 0
+let lastNewLoadAt = 0
+
 async function loadRecommend() {
+  if (Date.now() - lastRecLoadAt < REC_LOAD_TTL && recommends.value.length) return
   try {
     recommends.value = (await recipeApi.recommend(8)) || []
+    lastRecLoadAt = Date.now()
   } catch {
     recommends.value = []
   }
 }
 
 async function loadNewRecipes() {
+  if (Date.now() - lastNewLoadAt < REC_LOAD_TTL && newRecipes.value.length) return
   try {
     newRecipes.value = (await recipeApi.newest(8, 30)) || []
+    lastNewLoadAt = Date.now()
   } catch {
     newRecipes.value = []
   }
@@ -141,7 +150,7 @@ onShow(() => {
 })
 
 function diffLabel(d: any) {
-  const map: Record<number, string> = { 1: '简单', 2: '简单', 3: '中等', 4: '中等', 5: '困难' }
+  const map: Record<number, string> = { 1: '入门', 2: '简单', 3: '中等', 4: '较难', 5: '困难' }
   return map[Number(d)] || '中等'
 }
 

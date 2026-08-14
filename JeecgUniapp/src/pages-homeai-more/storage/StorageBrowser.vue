@@ -51,6 +51,7 @@
           class="file-thumb"
           :src="file.thumbnailUrl"
           mode="aspectFill"
+          lazy-load
         />
         <HomeFileIcon v-else :ext="file.extension" :name="getStorageDisplayName(file)" />
         <view class="file-info">
@@ -130,8 +131,8 @@ function ownerLabel(uid: string) {
 }
 
 onMounted(async () => {
+  // 首次进入由父页面 onShow 触发 refresh，此处仅加载成员标签避免重复拉取
   await loadMemberLabels()
-  await refresh()
 })
 
 function formatSize(bytes: number) {

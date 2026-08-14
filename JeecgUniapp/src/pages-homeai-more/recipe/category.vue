@@ -12,7 +12,7 @@
     </scroll-view>
     <view class="grid">
       <view class="card" v-for="r in recipes" :key="r.id" @click="goDetail(r.id)">
-        <image class="cover" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill" />
+        <image class="cover" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill" lazy-load />
         <text class="name">{{ r.name }}</text>
         <text class="meta">{{ r.cookTime }}分钟</text>
       </view>

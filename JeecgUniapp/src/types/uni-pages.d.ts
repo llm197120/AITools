@@ -34,7 +34,8 @@ interface NavigateToOptions {
        "/pages-homeai-more/storage/office-history" |
        "/pages-homeai-more/storage/preview" |
        "/pages-homeai-more/storage/recycle" |
-       "/pages-homeai-more/storage/search";
+       "/pages-homeai-more/storage/search" |
+       "/pages-homeai-more/storage/StorageBrowser";
 }
 interface RedirectToOptions extends NavigateToOptions {}
 

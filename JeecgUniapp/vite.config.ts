@@ -40,6 +40,31 @@ export default ({ command, mode }) => {
   console.log('UNI_PLATFORM -> ', UNI_PLATFORM) // 得到 mp-weixin, h5, app 等
 
   const env = loadEnv(mode, path.resolve(process.cwd(), 'env'))
+  //update-begin---author:cursor ---date:2026-08-13 for：【P0 上线守卫】生产构建禁止携带本机/非 HTTPS 地址-----------
+  if (mode === 'production') {
+    const bad: string[] = []
+    const releaseVars: Record<string, string | undefined> = {
+      VITE_SERVER_BASEURL: env.VITE_SERVER_BASEURL,
+      VITE_UPLOAD_BASEURL: env.VITE_UPLOAD_BASEURL,
+      VITE_SERVER_BASEURL__WEIXIN_RELEASE: env.VITE_SERVER_BASEURL__WEIXIN_RELEASE,
+      VITE_UPLOAD_BASEURL__WEIXIN_RELEASE: env.VITE_UPLOAD_BASEURL__WEIXIN_RELEASE,
+    }
+    for (const [key, value] of Object.entries(releaseVars)) {
+      if (!value) continue
+      if (/(127\.0\.0\.1|localhost)(:\d+)?/.test(value)) {
+        bad.push(`${key}=${value}（仍为本机地址）`)
+      } else if (key.includes('WEIXIN_RELEASE') && !value.startsWith('https://')) {
+        bad.push(`${key}=${value}（微信发布环境必须为 HTTPS）`)
+      }
+    }
+    if (bad.length > 0) {
+      throw new Error(
+        '【构建中止】生产环境仍配置了本机/非 HTTPS 地址，请先在 env/.env.production 填入正式域名：\n  ' +
+          bad.join('\n  '),
+      )
+    }
+  }
+  //update-end---author:cursor ---date:2026-08-13 for：【P0 上线守卫】生产构建禁止携带本机地址-----------
   const {
     VITE_APP_PORT,
     VITE_SERVER_BASEURL,

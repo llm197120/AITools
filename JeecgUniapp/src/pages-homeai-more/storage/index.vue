@@ -1,4 +1,4 @@
-﻿<route lang="json5">
+<route lang="json5">
 {
   style: {
     navigationBarTitleText: '资料存储',

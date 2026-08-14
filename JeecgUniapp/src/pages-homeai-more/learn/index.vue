@@ -243,12 +243,19 @@ function editGoal() {
   })
 }
 
+// 统计/目标短 TTL 缓存：避免频繁返回本页重复拉取（列表与进行中会话保持实时）
+const LEARN_STATS_TTL = 30 * 1000
+let lastStatsAt = 0
+
 async function loadData() {
   pageNo.value = 1
   hasMore.value = true
   await fetchMaterials(true)
-  stats.value = (await learnApi.statistics()) || {}
-  await loadGoal()
+  if (Date.now() - lastStatsAt >= LEARN_STATS_TTL) {
+    stats.value = (await learnApi.statistics()) || {}
+    await loadGoal()
+    lastStatsAt = Date.now()
+  }
   await loadActiveSession()
 }
 
