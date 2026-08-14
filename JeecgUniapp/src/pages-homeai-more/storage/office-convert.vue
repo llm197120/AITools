@@ -46,8 +46,9 @@ async function startConvert(rule: any) {
     uni.hideLoading()
     uni.showToast({ title: '转换任务已提交', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 1000)
-  } catch (e) {
+  } catch (e: any) {
     uni.hideLoading()
+    uni.showToast({ title: e?.message || '提交失败，请重试', icon: 'none' })
   }
 }
 </script>

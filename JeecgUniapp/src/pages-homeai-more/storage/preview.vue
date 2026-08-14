@@ -96,7 +96,14 @@ async function loadTextContent(url: string) {
           return
         }
         tempFilePath.value = res.tempFilePath
-        uni.getFileSystemManager().readFile({
+        // H5 无文件系统 API，优雅降级提示（文本预览为小程序能力）
+        const fsm: any = uni.getFileSystemManager?.()
+        if (!fsm) {
+          textContent.value = '当前平台不支持文本预览'
+          resolve()
+          return
+        }
+        fsm.readFile({
           filePath: res.tempFilePath,
           encoding: 'utf-8',
           success: (r: any) => {

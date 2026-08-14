@@ -109,7 +109,11 @@ onShow(() => {
 })
 
 async function loadMessages() {
-  messages.value = await getApi(`/ai/conversations/${conversationId.value}/messages`)
+  try {
+    messages.value = await getApi(`/ai/conversations/${conversationId.value}/messages`)
+  } catch {
+    messages.value = []
+  }
   scrollToBottom()
 }
 
@@ -446,7 +450,12 @@ async function sendMessage() {
           if (stored) imageUrls.push(stored)
         }
       } catch (e) {
-        console.error('图片上传失败', e)
+        // 图片上传失败：明确提示并中止发送，避免消息"少图"静默发出
+        uni.showToast({ title: '图片上传失败，请重试', icon: 'none' })
+        inputText.value = content
+        messages.value.splice(messages.value.length - 2, 2)
+        isStreaming.value = false
+        return
       }
     }
 
@@ -492,13 +501,17 @@ async function stopGeneration() {
 }
 
 function resendLastMessage() {
-  const lastUserMsg = [...messages.value].reverse().find(m => m.role === 'user')
-  if (lastUserMsg) {
-    inputText.value = lastUserMsg.content
-    // 移除最后两条（用户 + AI占位）
-    messages.value = messages.value.slice(0, -2)
-    sendMessage()
+  const lastMsg = messages.value[messages.value.length - 1]
+  const isLastStreaming = !!lastMsg?.isStreaming
+  const lastUserMsg = [...messages.value].reverse().find((m) => m.role === 'user')
+  if (!lastUserMsg) return
+  inputText.value = lastUserMsg.content
+  if (isLastStreaming) {
+    // 仅当最后一条是未完成的 AI 占位时，移除其与对应的用户消息后重发，避免误删已完成回复
+    const userIdx = messages.value.lastIndexOf(lastUserMsg)
+    messages.value = messages.value.slice(0, userIdx)
   }
+  sendMessage()
 }
 
 // 附件选择（R25：统一 useHomeaiFilePick）
@@ -516,12 +529,11 @@ function showAttachmentPicker() {
               header: { 'X-Access-Token': token },
             })
             const data = JSON.parse(uploadRes.data)
-            if (data && data.result) {
-              selectedFiles.value.push({
-                name: file.name,
-                url: data.result.storedUrl || data.result.url,
-                size: file.size,
-              })
+            const url = data && data.result ? data.result.storedUrl || data.result.url : ''
+            if (url) {
+              selectedFiles.value.push({ name: file.name, url, size: file.size })
+            } else {
+              uni.showToast({ title: '文件上传失败', icon: 'none' })
             }
           } catch (e) {
             console.error('文件上传失败', e)

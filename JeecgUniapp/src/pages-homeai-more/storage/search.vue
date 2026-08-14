@@ -41,7 +41,11 @@ const searched = ref(false)
 
 async function doSearch() {
   searched.value = true
-  results.value = normalizeStorageFiles(await storageApi.search(keyword.value))
+  try {
+    results.value = normalizeStorageFiles(await storageApi.search(keyword.value))
+  } catch {
+    results.value = []
+  }
 }
 
 function openPreview(file: any) {

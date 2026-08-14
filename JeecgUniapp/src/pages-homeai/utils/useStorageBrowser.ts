@@ -523,6 +523,9 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
 
 
 
+  // 批量上传计数：最后一个文件完成后统一 refresh，避免逐文件刷新闪烁
+  let pendingUploads = 0
+
   async function uploadFiles() {
 
     const fid = getFolderId()
@@ -537,6 +540,7 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
     }
 
     showStorageUploadMenu(async (filePath, fileName) => {
+      pendingUploads++
       uni.showLoading({ title: '上传中...' })
       try {
         await uploadStorageFile(filePath, {
@@ -546,17 +550,19 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
           fileName,
         })
 
-        uni.hideLoading()
-
         uni.showToast({ title: `上传成功：${fileName || '文件'}`, icon: 'success' })
-
-        await refresh()
 
       } catch (e: any) {
 
-        uni.hideLoading()
-
         uni.showToast({ title: e.message || '上传失败', icon: 'none' })
+
+      } finally {
+
+        pendingUploads--
+        if (pendingUploads === 0) {
+          uni.hideLoading()
+          await refresh()
+        }
 
       }
 

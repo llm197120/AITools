@@ -42,7 +42,7 @@
         </view>
         <view class="member-list">
           <view class="member-item" v-for="member in members" :key="member.memberId">
-            <image class="member-avatar" :src="member.avatarUrl || '/static/default-avatar.png'" mode="aspectFill" />
+            <image class="member-avatar" :src="member.avatarUrl || '/static/default-avatar.png'" mode="aspectFill" lazy-load />
             <view class="member-info">
               <text class="member-name">{{ member.nickname }}</text>
               <text class="member-role">{{ roleLabel(member.role) }}</text>
@@ -128,7 +128,11 @@ function roleLabel(role: string) {
 }
 
 async function fetchMembers() {
-  members.value = await getApi('/family/members')
+  try {
+    members.value = await getApi('/family/members')
+  } catch (e) {
+    members.value = []
+  }
 }
 
 // 创建家庭
