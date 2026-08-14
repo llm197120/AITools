@@ -35,6 +35,14 @@ export interface HomeaiPageParams {
   [key: string]: unknown;
 }
 
+/** 通用分页返回（MyBatis-Plus IPage 结构；部分接口直接返回数组） */
+export interface HomeaiPageResult<T> {
+  records?: T[];
+  total?: number;
+  current?: number;
+  size?: number;
+}
+
 /** 微信用户 */
 export interface HomeaiUser {
   id?: string;
@@ -156,6 +164,25 @@ export interface HomeaiRecipe {
   [key: string]: unknown;
 }
 
+/** 菜谱步骤 */
+export interface HomeaiRecipeStep {
+  id?: string;
+  recipeId?: string;
+  description?: string;
+  imageUrl?: string;
+  stepNum?: number;
+  sortOrder?: number;
+  [key: string]: unknown;
+}
+
+/** 菜谱详情（含子表；对应 GET /recipe/{id} 返回） */
+export interface HomeaiRecipeDetail {
+  recipe?: HomeaiRecipe;
+  ingredients?: HomeaiRecipeIngredient[];
+  steps?: HomeaiRecipeStep[];
+  [key: string]: unknown;
+}
+
 /** 学习资料 */
 export interface HomeaiLearnMaterial {
   id?: string;
@@ -207,19 +234,125 @@ export interface HomeaiStorageFolder {
   [key: string]: unknown;
 }
 
-/** 文件白名单项 */
-export interface HomeaiFileWhitelistItem {
-  id?: string;
-  extension?: string;
-  mimeType?: string;
-  maxSize?: number;
-  enabled?: number | string | boolean;
+/** 家庭配额看板行（/config/storage/families） */
+export interface HomeaiFamilyQuotaItem {
+  familyId?: string;
+  familyName?: string;
+  memberCount?: number;
+  fileCount?: number;
+  usedBytes?: number;
+  limitBytes?: number;
+  /** 是否家庭级覆盖配额 */
+  custom?: boolean;
+  warn?: boolean;
   [key: string]: unknown;
 }
 
-/** 计划配置 */
+/** 文件白名单项（对齐后端 homeai_file_whitelist） */
+export interface HomeaiFileWhitelistItem {
+  id?: string;
+  /** 扩展名，如 pdf/docx */
+  extension?: string;
+  /** 分类（doc/image/video/other） */
+  category?: string;
+  /** 排序 */
+  sortOrder?: number;
+  /** 是否启用（0/1，后端为 Integer） */
+  isEnabled?: number;
+  [key: string]: unknown;
+}
+
+/** 计划配置（Redis 配置 DTO） */
 export interface HomeaiPlanConfig {
-  rollForwardDays?: number;
+  repeatHorizonDays?: number;
+  instanceCleanupDays?: number;
+  remindEnabled?: boolean;
+  aiDocPolishEnabled?: boolean;
+  [key: string]: unknown;
+}
+
+/** 存储转换规则（homeai_convert_rule） */
+export interface HomeaiConvertRule {
+  id?: string;
+  sourceFormat?: string;
+  targetFormat?: string;
+  /** 0/1 字符串 */
+  isEnabled?: string;
+  createTime?: string;
+  [key: string]: unknown;
+}
+
+/** Office 文档模板（homeai_office_template） */
+export interface HomeaiOfficeTemplate {
+  id?: string;
+  name?: string;
+  type?: string;
+  fileUrl?: string;
+  previewUrl?: string;
+  /** 是否默认（0/1 字符串） */
+  isDefault?: string;
+  remark?: string;
+  createTime?: string;
+  [key: string]: unknown;
+}
+
+/** 存储转换任务（homeai_storage_convert_task） */
+export interface HomeaiConvertTask {
+  id?: string;
+  fileId?: string;
+  userId?: string;
+  convertType?: string;
+  sourceFormat?: string;
+  targetFormat?: string;
+  instruction?: string;
+  /** PENDING/PROCESSING/COMPLETED/FAILED */
+  status?: string;
+  resultFileUrl?: string;
+  resultFileSize?: number;
+  errorMessage?: string;
+  taskDuration?: number;
+  createTime?: string;
+  [key: string]: unknown;
+}
+
+/** 操作审计日志（homeai_audit_log） */
+export interface HomeaiAuditLog {
+  id?: string;
+  userId?: string;
+  actionType?: string;
+  module?: string;
+  targetId?: string;
+  targetSummary?: string;
+  detail?: string;
+  result?: string;
+  ipAddress?: string;
+  createBy?: string;
+  createTime?: string;
+  [key: string]: unknown;
+}
+
+/** AI 对话（管理端列表） */
+export interface HomeaiConversation {
+  id?: string;
+  userId?: string;
+  title?: string;
+  messageCount?: number;
+  createTime?: string;
+  updateTime?: string;
+  [key: string]: unknown;
+}
+
+/** AI 用户额度记录（管理端配额页） */
+export interface HomeaiQuotaRecord {
+  id?: string;
+  userId?: string;
+  nickname?: string;
+  dailyLimit?: number;
+  monthlyLimit?: number;
+  dailyUsage?: number;
+  monthlyUsage?: number;
+  lastActiveTime?: string;
+  effectiveEnd?: string;
   [key: string]: unknown;
 }
 

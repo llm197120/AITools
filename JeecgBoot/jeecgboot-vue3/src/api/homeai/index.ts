@@ -1,16 +1,24 @@
 import { defHttp } from '/@/utils/http/axios';
 import type {
+  HomeaiAuditLog,
   HomeaiBill,
   HomeaiCategory,
+  HomeaiConvertRule,
+  HomeaiConvertTask,
   HomeaiFamily,
   HomeaiFamilyMember,
+  HomeaiFamilyQuotaItem,
   HomeaiFileWhitelistItem,
   HomeaiLearnMaterial,
+  HomeaiOfficeTemplate,
   HomeaiPageParams,
+  HomeaiPageResult,
   HomeaiPayload,
   HomeaiPlan,
   HomeaiPlanConfig,
   HomeaiRecipe,
+  HomeaiRecipeDetail,
+  HomeaiStorageFile,
   HomeaiStorageFolder,
   HomeaiUser,
 } from './types';
@@ -23,9 +31,8 @@ const BASE = '/homeai';
 /** 微信用户管理 API */
 export const userApi = {
   /** 用户列表 */
-  list: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/user/list`, params }),
-  /** 用户详情 */
-  getById: (id: string) => defHttp.get({ url: `${BASE}/user/${id}` }),
+  list: (params?: HomeaiPageParams): Promise<HomeaiPageResult<HomeaiUser> | HomeaiUser[]> =>
+    defHttp.get({ url: `${BASE}/user/list`, params }),
   /** 新增用户 */
   add: (data: Partial<HomeaiUser> | HomeaiPayload) => defHttp.post({ url: `${BASE}/user`, data }),
   /** 编辑用户 */
@@ -58,7 +65,7 @@ export const userApi = {
 /** 家庭管理 API */
 export const familyApi = {
   /** 家庭列表 */
-  list: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/family/list`, params }),
+  list: (params?: HomeaiPageParams): Promise<HomeaiPageResult<HomeaiFamily> | HomeaiFamily[]> => defHttp.get({ url: `${BASE}/family/list`, params }),
   /** 家庭详情（当前用户所属家庭；id 预留与列表行联动） */
   getById: (_id?: string) => defHttp.get({ url: `${BASE}/family/info` }),
   /** 新增家庭（管理端） */
@@ -101,7 +108,7 @@ export const familyApi = {
 
 /** 账单管理 API */
 export const billApi = {
-  list: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/bill/list`, params }),
+  list: (params?: HomeaiPageParams): Promise<HomeaiPageResult<HomeaiBill> | HomeaiBill[]> => defHttp.get({ url: `${BASE}/bill/list`, params }),
   add: (data: Partial<HomeaiBill> | HomeaiPayload) => defHttp.post({ url: `${BASE}/bill/add`, data }),
   edit: (id: string, data: Partial<HomeaiBill> | HomeaiPayload) =>
     defHttp.put({ url: `${BASE}/bill/${id}`, data }),
@@ -111,17 +118,26 @@ export const billApi = {
   moveToRecycleBin: (ids: string[]) => defHttp.put({ url: `${BASE}/bill/moveToRecycleBin`, data: ids }),
   restore: (ids: string[]) => defHttp.put({ url: `${BASE}/bill/restore`, data: ids }),
   deletePermanently: (ids: string[]) => defHttp.delete({ url: `${BASE}/bill/deletePermanently`, data: ids }),
-  categoryList: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/bill/category-list`, params }),
+  categoryList: (params?: HomeaiPageParams): Promise<HomeaiPageResult<HomeaiCategory> | HomeaiCategory[]> => defHttp.get({ url: `${BASE}/bill/category-list`, params }),
   addCategory: (data: Partial<HomeaiCategory> | HomeaiPayload) =>
     defHttp.post({ url: `${BASE}/bill/category`, data }),
   editCategory: (data: Partial<HomeaiCategory> | HomeaiPayload) =>
     defHttp.put({ url: `${BASE}/bill/category`, data }),
   deleteCategory: (id: string) => defHttp.delete({ url: `${BASE}/bill/category/${id}` }),
+  /** 管理端统计（按分类/用户/月份） */
+  adminStats: (params?: { yearMonth?: string; dimension?: string }): Promise<{
+    totalExpense?: number;
+    totalIncome?: number;
+    balance?: number;
+    count?: number;
+    rows?: { name?: string; expense?: number; income?: number }[];
+  }> =>
+    defHttp.get({ url: `${BASE}/bill/admin/stats`, params }),
 };
 
 /** 计划管理 API */
 export const planApi = {
-  list: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/plan/list`, params }),
+  list: (params?: HomeaiPageParams): Promise<HomeaiPageResult<HomeaiPlan> | HomeaiPlan[]> => defHttp.get({ url: `${BASE}/plan/list`, params }),
   add: (data: Partial<HomeaiPlan> | HomeaiPayload) => defHttp.post({ url: `${BASE}/plan/add`, data }),
   edit: (id: string, data: Partial<HomeaiPlan> | HomeaiPayload) =>
     defHttp.put({ url: `${BASE}/plan/${id}`, data }),
@@ -157,15 +173,15 @@ export const planApi = {
 
 /** 审计日志 API */
 export const auditApi = {
-  logs: (params?: { module?: string; actionType?: string; pageNo?: number; pageSize?: number }) =>
+  logs: (params?: { module?: string; actionType?: string; pageNo?: number; pageSize?: number }): Promise<HomeaiPageResult<HomeaiAuditLog> | HomeaiAuditLog[]> =>
     defHttp.get({ url: `${BASE}/audit/logs`, params }),
 };
 
 /** 菜谱管理 API */
 export const recipeApi = {
-  list: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/recipe/list`, params }),
+  list: (params?: HomeaiPageParams): Promise<HomeaiPageResult<HomeaiRecipe> | HomeaiRecipe[]> => defHttp.get({ url: `${BASE}/recipe/list`, params }),
   /** 菜谱详情（含食材/步骤） */
-  getById: (id: string) => defHttp.get({ url: `${BASE}/recipe/${id}` }),
+  getById: (id: string): Promise<HomeaiRecipeDetail> => defHttp.get({ url: `${BASE}/recipe/${id}` }),
   add: (data: Partial<HomeaiRecipe> | HomeaiPayload) => defHttp.post({ url: `${BASE}/recipe/add`, data }),
   edit: (id: string, data: Partial<HomeaiRecipe> | HomeaiPayload) =>
     defHttp.put({ url: `${BASE}/recipe/${id}`, data }),
@@ -176,10 +192,6 @@ export const recipeApi = {
   moveToRecycleBin: (ids: string[]) => defHttp.put({ url: `${BASE}/recipe/moveToRecycleBin`, data: ids }),
   restore: (ids: string[]) => defHttp.put({ url: `${BASE}/recipe/restore`, data: ids }),
   deletePermanently: (ids: string[]) => defHttp.delete({ url: `${BASE}/recipe/deletePermanently`, data: ids }),
-  /** 上传菜谱视频 */
-  uploadVideo: (id: string) => `${BASE}/recipe/${id}/video`,
-  /** 删除菜谱视频 */
-  deleteVideo: (id: string) => defHttp.delete({ url: `${BASE}/recipe/${id}/video` }),
   /** 启用的菜谱分类（下拉） */
   categories: () => defHttp.get({ url: `${BASE}/recipe/category/all` }),
   categoryList: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/recipe/category/list`, params }),
@@ -188,15 +200,6 @@ export const recipeApi = {
   editCategory: (data: Partial<HomeaiCategory> | HomeaiPayload) =>
     defHttp.put({ url: `${BASE}/recipe/category`, data }),
   deleteCategory: (id: string) => defHttp.delete({ url: `${BASE}/recipe/category/${id}` }),
-  toggleFavorite: (id: string) => defHttp.post({ url: `${BASE}/recipe/${id}/favorite` }),
-  favorites: () => defHttp.get({ url: `${BASE}/recipe/favorites` }),
-  /** 热门排行 */
-  hot: (limit = 20) => defHttp.get({ url: `${BASE}/recipe/hot`, params: { limit } }),
-  /** 为你推荐 */
-  recommend: (limit = 8, season = 'auto') =>
-    defHttp.get({ url: `${BASE}/recipe/recommend`, params: { limit, season } }),
-  newest: (limit = 8, days = 30) =>
-    defHttp.get({ url: `${BASE}/recipe/new`, params: { limit, days } }),
 };
 
 /** 综合统计 API */
@@ -207,7 +210,7 @@ export const dashboardApi = {
 
 /** 学习资料 API */
 export const learnApi = {
-  list: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/learn/materials`, params }),
+  list: (params?: HomeaiPageParams): Promise<HomeaiPageResult<HomeaiLearnMaterial> | HomeaiLearnMaterial[]> => defHttp.get({ url: `${BASE}/learn/materials`, params }),
   add: (data: Partial<HomeaiLearnMaterial> | HomeaiPayload) =>
     defHttp.post({ url: `${BASE}/learn/addMaterial`, data }),
   edit: (id: string, data: Partial<HomeaiLearnMaterial> | HomeaiPayload) =>
@@ -245,22 +248,33 @@ export const learnApi = {
 
 /** 系统配置 API */
 export const configApi = {
-  getFileWhitelist: () => defHttp.get({ url: `${BASE}/config/file-whitelist` }),
+  getFileWhitelist: (): Promise<{ items?: HomeaiFileWhitelistItem[] }> => defHttp.get({ url: `${BASE}/config/file-whitelist` }),
   updateFileWhitelist: (items: HomeaiFileWhitelistItem[]) =>
     defHttp.put({ url: `${BASE}/config/file-whitelist`, data: items }),
-  getPlanConfig: () => defHttp.get({ url: `${BASE}/config/plan` }),
+  getPlanConfig: (): Promise<HomeaiPlanConfig> => defHttp.get({ url: `${BASE}/config/plan` }),
   updatePlanConfig: (data: Partial<HomeaiPlanConfig> | HomeaiPayload) =>
     defHttp.put({ url: `${BASE}/config/plan`, data }),
-  getWechatPublic: () => defHttp.get({ url: `${BASE}/config/wechat-public` }),
 };
 
 /** 资料存储管理 API */
 export const storageApi = {
-  fileList: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/storage/file-list`, params }),
-  folderList: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/storage/folder-list`, params }),
-  folderTree: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/storage/folders`, params }),
-  createFolder: (data: Partial<HomeaiStorageFolder> | HomeaiPayload) =>
-    defHttp.post({ url: `${BASE}/storage/folders`, params: data }, { joinParamsToUrl: true }),
+  fileList: (params?: HomeaiPageParams): Promise<HomeaiPageResult<HomeaiStorageFile> | HomeaiStorageFile[]> => defHttp.get({ url: `${BASE}/storage/file-list`, params }),
+  folderList: (params?: HomeaiPageParams): Promise<HomeaiPageResult<HomeaiStorageFolder> | HomeaiStorageFolder[]> => defHttp.get({ url: `${BASE}/storage/folder-list`, params }),
+  /** 文件夹树（管理端） */
+  folderTree: (): Promise<HomeaiStorageFolder[]> => defHttp.get({ url: `${BASE}/storage/folders` }),
+  /** 文件夹内文件列表 */
+  folderFiles: (folderId: string, params?: HomeaiPageParams) =>
+    defHttp.get({ url: `${BASE}/storage/folders/${folderId}/files`, params }),
+  /** 新建文件夹 */
+  createFolder: (params: Recordable) =>
+    defHttp.post({ url: `${BASE}/storage/folders`, params }, { joinParamsToUrl: true }),
+  /** 编辑文件夹 */
+  updateFolder: (id: string, data: HomeaiPayload) =>
+    defHttp.put({ url: `${BASE}/storage/folders/${id}`, data }),
+  /** 删除文件夹 */
+  deleteFolder: (id: string) => defHttp.delete({ url: `${BASE}/storage/folders/${id}` }),
+  /** 空间用量统计 */
+  stats: () => defHttp.get({ url: `${BASE}/storage/stats` }),
   /** 修改文件夹可见性（后端为 PATCH；经 request 发起，避免 VAxios 无 patch 快捷方法） */
   updateFolderVisibility: (id: string, visibility: string) =>
     defHttp.request(
@@ -268,7 +282,6 @@ export const storageApi = {
       { joinParamsToUrl: true },
     ),
   deleteFile: (id: string) => defHttp.delete({ url: `${BASE}/storage/files/${id}` }),
-  deleteFolder: (id: string) => defHttp.delete({ url: `${BASE}/storage/folders/${id}` }),
   recycleBin: (params?: HomeaiPageParams & { keyword?: string; type?: 'file' | 'folder' }) =>
     defHttp.get({ url: `${BASE}/storage/recycleBin`, params }),
   /** 恢复：传 fileIds / folderIds（兼容旧版纯数组） */
@@ -295,17 +308,50 @@ export const storageApi = {
     defHttp.put({ url: `${BASE}/config/storage/family/${familyId}`, data: { limitBytes } }),
   clearFamilyStorageLimit: (familyId: string) =>
     defHttp.delete({ url: `${BASE}/config/storage/family/${familyId}` }),
-  familyQuotaBoard: (params?: { keyword?: string; onlyWarn?: boolean; onlyCustom?: boolean }) =>
+  familyQuotaBoard: (params?: { keyword?: string; onlyWarn?: boolean; onlyCustom?: boolean }): Promise<{
+    items?: HomeaiFamilyQuotaItem[];
+    summary?: { families?: number; warnCount?: number; customCount?: number };
+    defaultFamilyLimitBytes?: number;
+    warnPercent?: number;
+  }> =>
     defHttp.get({ url: `${BASE}/config/storage/families`, params }),
   batchFamilyStorageLimit: (data: {
     items?: { familyId: string; limitBytes: number | null }[];
     resetIds?: string[];
   }) => defHttp.put({ url: `${BASE}/config/storage/families/batch`, data }),
-  checkGenerateQuota: (instruction?: string) =>
-    defHttp.get({
-      url: `${BASE}/storage/office/generate/quota-check`,
-      params: instruction ? { instruction } : {},
-    }),
+};
+
+/** 资料存储 Office 处理 API（格式转换/处理记录） */
+export const storageOfficeApi = {
+  list: (params?: HomeaiPageParams): Promise<HomeaiPageResult<HomeaiConvertTask> | HomeaiConvertTask[]> => defHttp.get({ url: `${BASE}/storage/office/list`, params }),
+  deleteTask: (id: string) => defHttp.delete({ url: `${BASE}/storage/office/${id}` }),
+  /** 提交格式转换任务（后端为 @RequestParam，POST 参数走 URL） */
+  convert: (params: Recordable) =>
+    defHttp.post({ url: `${BASE}/storage/office/convert`, params }, { joinParamsToUrl: true }),
+};
+
+/** 资料存储 Office 模板 API */
+export const storageTemplateApi = {
+  list: (params?: HomeaiPageParams): Promise<HomeaiPageResult<HomeaiOfficeTemplate> | HomeaiOfficeTemplate[]> => defHttp.get({ url: `${BASE}/storage/template/list`, params }),
+  create: (data: HomeaiPayload) => defHttp.post({ url: `${BASE}/storage/template`, data }),
+  update: (data: HomeaiPayload) => defHttp.put({ url: `${BASE}/storage/template`, data }),
+  delete: (id: string) => defHttp.delete({ url: `${BASE}/storage/template/${id}` }),
+  setDefault: (id: string) => defHttp.put({ url: `${BASE}/storage/template/${id}/default` }),
+};
+
+/** 资料存储转换规则 API */
+export const storageRuleApi = {
+  list: (params?: HomeaiPageParams): Promise<HomeaiPageResult<HomeaiConvertRule> | HomeaiConvertRule[]> => defHttp.get({ url: `${BASE}/storage/rule/list`, params }),
+  targets: (sourceFormat?: string) =>
+    defHttp.get({ url: `${BASE}/storage/rule/targets`, params: sourceFormat ? { sourceFormat } : {} }),
+  create: (data: HomeaiPayload) => defHttp.post({ url: `${BASE}/storage/rule`, data }),
+  update: (data: HomeaiPayload) => defHttp.put({ url: `${BASE}/storage/rule`, data }),
+  delete: (id: string) => defHttp.delete({ url: `${BASE}/storage/rule/${id}` }),
+  toggleStatus: (id: string, isEnabled: string) =>
+    defHttp.put(
+      { url: `${BASE}/storage/rule/${id}/status`, params: { isEnabled } },
+      { joinParamsToUrl: true },
+    ),
 };
 
 //update-begin---author:admin ---date:2026-07-31  for：AI管理API集中定义-----------
@@ -313,26 +359,10 @@ export const storageApi = {
 export const conversationApi = {
   /** 管理端对话列表（分页） */
   list: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/ai/conversations/list`, params }),
-  /** 对话详情 */
-  getById: (id: string) => defHttp.get({ url: `${BASE}/ai/conversations/${id}` }),
   /** 获取对话消息列表 */
   getMessages: (id: string) => defHttp.get({ url: `${BASE}/ai/conversations/${id}/messages` }),
-  /** 重命名对话 */
-  rename: (id: string, title: string) =>
-    defHttp.put({ url: `${BASE}/ai/conversations/${id}/rename`, params: { title } }, { joinParamsToUrl: true }),
   /** 删除对话 */
   delete: (id: string) => defHttp.delete({ url: `${BASE}/ai/conversations/${id}` }),
-};
-
-/** AI 对话（SSE流式）API */
-export const chatApi = {
-  /** Token配额检查 */
-  checkQuota: (params?: HomeaiPageParams | HomeaiPayload) =>
-    defHttp.get({ url: `${BASE}/ai/chat/quota`, params }),
-  /** 停止生成 */
-  stop: () => defHttp.post({ url: `${BASE}/ai/chat/stop` }),
-  /** 上传对话附件文件 */
-  uploadFile: `${BASE}/ai/chat/upload`,
 };
 
 /** AI 密钥配置 API */
@@ -353,8 +383,6 @@ export const keyConfigApi = {
 export const quotaApi = {
   /** 获取默认配额配置 */
   getDefaultQuota: () => defHttp.get({ url: `${BASE}/ai/key-config/quota/default` }),
-  /** 获取用户Token消耗统计（管理端分页） */
-  logList: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/ai/key-config/quota/list`, params }),
   /** 用户额度配置列表（含每日/每月限额） */
   getUserQuotaPage: (params?: HomeaiPageParams) =>
     defHttp.get({ url: `${BASE}/ai/key-config/quota/user/list`, params }),
