@@ -14,12 +14,6 @@ export type VisibilityPickResult = {
 
 const VIS_LABELS = ['仅自己可见（私有）', '家庭可见', '公开（所有人可见）']
 
-export function visibilityLabel(v?: string): string {
-  if (v === 'public') return '公开'
-  if (v === 'family') return '家庭'
-  return '私有'
-}
-
 export async function loadAssignableFamilies(): Promise<AssignableFamily[]> {
   try {
     return (await storageApi.assignableFamilies()) || []
@@ -75,9 +69,4 @@ export function pickStorageVisibilityChange(
   current?: StorageVisibility,
 ): Promise<VisibilityPickResult | null> {
   return pickStorageVisibility(current || 'private')
-}
-
-export function familyIdsParam(familyIds?: string[]): string | undefined {
-  if (!familyIds?.length) return undefined
-  return familyIds.join(',')
 }

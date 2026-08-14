@@ -5,6 +5,7 @@ export const billApi = {
   categories: (type?: string) =>
     get<any[]>('/bill/categories', type ? { type } : undefined),
   entries: (yearMonth: string) => get<any[]>('/bill/entries', { yearMonth }),
+  entryById: (id: string) => get<any>(`/bill/entry/${id}`),
   summary: (yearMonth: string) => get<any>('/bill/summary', { yearMonth }),
   categoryStats: (yearMonth: string) => get<any[]>('/bill/stats', { yearMonth }),
   create: (data: any) => post('/bill/entry', { data }),
