@@ -16,6 +16,7 @@ import org.jeecg.common.system.util.JwtUtil;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.RedisUtil;
 import org.jeecg.common.util.TokenUtils;
+import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.ai.constant.HomeaiAiQuotaScene;
 import org.jeecg.modules.homeai.ai.service.IHomeaiAiQuotaPrecheckService;
 import org.jeecg.modules.homeai.config.service.IHomeaiPlanConfigService;
@@ -152,10 +153,22 @@ public class StorageOfficeController {
      * 查询任务状态（轮询用）
      */
     @GetMapping("/tasks/{id}")
-    public Result<?> getTaskStatus(@PathVariable String id) {
+    public Result<?> getTaskStatus(@PathVariable String id, HttpServletRequest request) {
+        //update-begin---author:cursor ---date:2026-08-13 for：【IDOR修复】任务状态查询补登录与归属校验，防止遍历他人任务-----------
+        String userId = getUserId(request);
+        if (userId == null) {
+            return Result.error("未登录");
+        }
         StorageConvertTask task = taskService.getTaskStatus(id);
+        if (task == null) {
+            return Result.error("任务不存在");
+        }
+        if (oConvertUtils.isNotEmpty(task.getUserId()) && !userId.equals(task.getUserId())) {
+            return Result.error("无权查看该任务");
+        }
         resolveResultUrl(task);
         return Result.OK(task);
+        //update-end---author:cursor ---date:2026-08-13 for：【IDOR修复】任务状态查询补登录与归属校验-----------
     }
 
     /**

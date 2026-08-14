@@ -298,6 +298,13 @@ public class HomeaiFileStorageServiceImpl implements IHomeaiFileStorageService {
         if (key.startsWith("upload/")) {
             key = key.substring("upload/".length());
         }
+        //update-begin---author:cursor ---date:2026-08-13 for：【上传优化】路径穿越纵深防护，禁止 objectKey 含 .. 段-----------
+        for (String seg : key.split("/")) {
+            if ("..".equals(seg)) {
+                throw new IllegalArgumentException("非法的文件路径");
+            }
+        }
+        //update-end---author:cursor ---date:2026-08-13 for：【上传优化】路径穿越纵深防护-----------
         return key;
     }
 }

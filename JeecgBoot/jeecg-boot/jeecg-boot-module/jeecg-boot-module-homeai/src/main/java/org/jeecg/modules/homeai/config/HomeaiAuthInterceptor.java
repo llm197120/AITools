@@ -98,6 +98,9 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
             "/homeai/recipe/exportXls",
             "/homeai/recipe/exportTemplate",
             "/homeai/recipe/importExcel",
+            //update-begin---author:cursor ---date:2026-08-13 for：【菜谱导入】批量导入封面（管理端）-----------
+            "/homeai/recipe/import-covers",
+            //update-end---author:cursor ---date:2026-08-13 for：【菜谱导入】批量导入封面（管理端）-----------
             "/homeai/recipe/recycleBin",
             "/homeai/recipe/moveToRecycleBin",
             "/homeai/recipe/restore",
@@ -110,7 +113,7 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
             "/homeai/learn/moveToRecycleBin",
             "/homeai/learn/restore",
             "/homeai/learn/deletePermanently",
-            "/homeai/learn/upload",
+            //update-begin---author:cursor ---date:2026-08-13 for：【上传优化】学习资料预上传（新增前）小程序/管理端均可用，移出管理端白名单，避免小程序 401-----------
             "/homeai/learn/category/list",
             //update-begin---author:copilot ---date:2026-08-12 for：【第15轮】学习按分类统计-----------
             "/homeai/learn/admin",

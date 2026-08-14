@@ -577,9 +577,16 @@ public class LearnController {
      * 学习资料文件上传
      */
     @PostMapping("/materials/{id}/upload")
-    public Result<?> uploadMaterialFile(@PathVariable String id, @RequestParam MultipartFile file) {
+    public Result<?> uploadMaterialFile(@PathVariable String id, @RequestParam MultipartFile file, HttpServletRequest r) {
         LearnMaterial material = learnService.getById(id);
         if (material == null) return Result.error("学习资料不存在");
+        //update-begin---author:cursor ---date:2026-08-13 for：【IDOR修复】学习资料文件上传补归属校验，防止覆盖他人资料-----------
+        if (!securityUtil.isConsoleAuthenticated(r)) {
+            String uid = getUserId(r);
+            if (uid == null) return Result.error("未登录");
+            if (!uid.equals(material.getUserId())) return Result.error("无权修改该资料");
+        }
+        //update-end---author:cursor ---date:2026-08-13 for：【IDOR修复】学习资料文件上传补归属校验-----------
         try {
             String fileUrl = learnService.uploadMaterialFile(id, file);
             material.setFileUrl(fileUrl);
