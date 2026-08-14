@@ -96,13 +96,14 @@
   import { planApi } from '/@/api/homeai';
   import { useUserLabel } from '../hooks/useUserLabel';
   import { planPriorityColor } from '../hooks/homeaiStatusColors';
+  import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
+  import { downloadCsvTemplate } from '../utils/csvTemplate';
   import PlanDrawer from './PlanDrawer.vue';
   import PlanCalendarTab from './PlanCalendarTab.vue';
 
-  const { createMessage, createConfirm } = useMessage();
+  const { createMessage } = useMessage();
   const { handleExportXls, handleImportXls } = useMethods();
   const [registerDrawer, { openDrawer }] = useDrawer();
-  const selectedRowKeys = ref<string[]>([]);
   const activeTab = ref('list');
   const completion = ref<Array<{ userId?: string; total?: number; completed?: number; rate?: number }>>([]);
   const categoryOptions = ref<{ label: string; value: string }[]>([]);
@@ -142,13 +143,6 @@
     return total === 0 ? 0 : Math.round((done / total) * 100);
   });
 
-  const rowSelection = computed(() => ({
-    selectedRowKeys: selectedRowKeys.value,
-    onChange: (keys: string[]) => {
-      selectedRowKeys.value = keys;
-    },
-  }));
-
   const columns = [
     { title: '标题', dataIndex: 'title', width: 200 },
     { title: '日期', dataIndex: 'planDate', width: 110 },
@@ -184,9 +178,21 @@
     },
   });
 
+  const { rowSelection, selectedRowKeys, clearSelection, handleMoveToRecycleBin, handleBatchMoveToRecycleBin, handleRestore, handleBatchRestore, handleDeletePermanently, handleBatchDeletePermanently } = useHomeaiRecycleBin({
+    api: {
+      moveToRecycleBin: (ids: string[]) => planApi.moveToRecycleBin(ids),
+      restore: (ids: string[]) => planApi.restore(ids),
+      deletePermanently: (ids: string[]) => planApi.deletePermanently(ids),
+    },
+    reload,
+    entityName: '计划',
+    permanentWarn: '此操作不可恢复！',
+    confirmWithName: false,
+  });
+
   function onTabChange(key: string) {
     activeTab.value = key;
-    selectedRowKeys.value = [];
+    clearSelection();
     if (key !== 'calendar') {
       reload();
     }
@@ -243,90 +249,11 @@
     openDrawer(true, { isUpdate: false, record: {} });
   }
 
-  async function handleMoveToRecycleBin(record: { id?: string }) {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认移入回收站',
-      content: `确定将该计划移入回收站吗？`,
-      onOk: async () => {
-        await planApi.moveToRecycleBin([String(record.id)]);
-        createMessage.success('已移入回收站');
-        reload();
-      },
-    });
-  }
-
-  async function handleBatchMoveToRecycleBin() {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认移入回收站',
-      content: `确定将选中的 ${selectedRowKeys.value.length} 条计划移入回收站吗？`,
-      onOk: async () => {
-        await planApi.moveToRecycleBin(selectedRowKeys.value);
-        createMessage.success('已移入回收站');
-        selectedRowKeys.value = [];
-        reload();
-      },
-    });
-  }
-
-  async function handleRestore(record: { id?: string }) {
-    await planApi.restore([String(record.id)]);
-    createMessage.success('恢复成功');
-    reload();
-  }
-
-  async function handleBatchRestore() {
-    await planApi.restore(selectedRowKeys.value);
-    createMessage.success('恢复成功');
-    selectedRowKeys.value = [];
-    reload();
-  }
-
-  async function handleDeletePermanently(record: { id?: string }) {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认彻底删除',
-      content: '确定彻底删除该计划吗？此操作不可恢复！',
-      onOk: async () => {
-        await planApi.deletePermanently([String(record.id)]);
-        createMessage.success('已彻底删除');
-        reload();
-      },
-    });
-  }
-
-  async function handleBatchDeletePermanently() {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认彻底删除',
-      content: `确定彻底删除选中的 ${selectedRowKeys.value.length} 条计划吗？此操作不可恢复！`,
-      onOk: async () => {
-        await planApi.deletePermanently(selectedRowKeys.value);
-        createMessage.success('已彻底删除');
-        selectedRowKeys.value = [];
-        reload();
-      },
-    });
-  }
-
   function handleDownloadTemplate() {
-    const headers = [
-      '计划标题',
-      '计划内容',
-      '分类',
-      '优先级(normal/important/urgent)',
-      '是否全天(0/1)',
-      '开始时间(HH:MM)',
-      '结束时间(HH:MM)',
-      '提前提醒分钟数',
-    ];
-    const blob = new Blob(['\uFEFF' + headers.join(',') + '\n'], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = '计划导入模板.csv';
-    link.click();
-    URL.revokeObjectURL(link.href);
+    downloadCsvTemplate(
+      ['计划标题', '计划内容', '分类', '优先级(normal/important/urgent)', '是否全天(0/1)', '开始时间(HH:MM)', '结束时间(HH:MM)', '提前提醒分钟数'],
+      '计划导入模板.csv',
+    );
   }
 
   function handleSuccess() {

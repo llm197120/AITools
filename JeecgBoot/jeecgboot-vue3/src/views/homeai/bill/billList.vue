@@ -45,28 +45,35 @@
 
 <script lang="ts" name="homeai-bill-list" setup>
   import { PageWrapper } from '/@/components/Page';
-  import { computed, ref, onMounted } from 'vue';
+  import { ref, onMounted } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
-  import { useMessage } from '/@/hooks/web/useMessage';
   import { useMethods } from '/@/hooks/system/useMethods';
   import { billApi } from '/@/api/homeai';
+  import type { HomeaiBill, HomeaiCategory, HomeaiPageParams } from '/@/api/homeai';
   import { useUserLabel } from '../hooks/useUserLabel';
+  import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
+  import { downloadCsvTemplate } from '../utils/csvTemplate';
   import BillDrawer from './BillDrawer.vue';
 
-  const { createMessage, createConfirm } = useMessage();
   const { handleExportXls, handleImportXls } = useMethods();
-  const { loadUserOptions, resolveUserLabel } = useUserLabel();
+  const { userOptions, loadUserOptions, resolveUserLabel } = useUserLabel();
   const [registerDrawer, { openDrawer }] = useDrawer();
-  const selectedRowKeys = ref<string[]>([]);
   const activeTab = ref('list');
+  const categoryOptions = ref<{ label: string; value: string }[]>([]);
 
-  const rowSelection = computed(() => ({
-    selectedRowKeys: selectedRowKeys.value,
-    onChange: (keys: string[]) => {
-      selectedRowKeys.value = keys;
-    },
-  }));
+  async function loadCategoryOptions() {
+    try {
+      const res = await billApi.categoryList({ pageNo: 1, pageSize: 500 });
+      const records = Array.isArray(res) ? res : res?.records || [];
+      categoryOptions.value = records.map((c: HomeaiCategory) => ({
+        label: c.name || c.id || '',
+        value: c.id || '',
+      }));
+    } catch {
+      categoryOptions.value = [];
+    }
+  }
 
   const columns = [
     { title: '日期', dataIndex: 'billDate', width: 120 },
@@ -81,7 +88,7 @@
 
   const [registerTable, { reload }] = useTable({
     title: '账单管理',
-    api: (params: any) => activeTab.value === 'list' ? billApi.list(params) : billApi.recycleBin(params),
+    api: (params: HomeaiPageParams) => activeTab.value === 'list' ? billApi.list(params) : billApi.recycleBin(params),
     columns: columns,
     useSearchForm: true,
     showTableSetting: true,
@@ -92,23 +99,36 @@
       schemas: [
         { field: 'billDate', label: '日期', component: 'DatePicker', colProps: { span: 8 } },
         { field: 'type', label: '类型', component: 'Select', colProps: { span: 8 }, componentProps: { options: [{label:'收入',value:'income'},{label:'支出',value:'expense'}] } },
-        { field: 'categoryId', label: '分类', component: 'Input', colProps: { span: 8 } },
-        { field: 'userId', label: '用户ID', component: 'Input', colProps: { span: 8 } },
+        { field: 'categoryId', label: '分类', component: 'Select', colProps: { span: 8 }, componentProps: { options: categoryOptions, allowClear: true, placeholder: '请选择分类' } },
+        { field: 'userId', label: '用户', component: 'Select', colProps: { span: 8 }, componentProps: { options: userOptions, allowClear: true, showSearch: true, optionFilterProp: 'label', placeholder: '请选择用户' } },
       ],
     },
   });
 
+  const { rowSelection, selectedRowKeys, clearSelection, handleMoveToRecycleBin, handleBatchMoveToRecycleBin, handleRestore, handleBatchRestore, handleDeletePermanently, handleBatchDeletePermanently } = useHomeaiRecycleBin({
+    api: {
+      moveToRecycleBin: (ids: string[]) => billApi.moveToRecycleBin(ids),
+      restore: (ids: string[]) => billApi.restore(ids),
+      deletePermanently: (ids: string[]) => billApi.deletePermanently(ids),
+    },
+    reload,
+    entityName: '账单',
+    permanentWarn: '此操作不可恢复！',
+    confirmWithName: false,
+  });
+
   function onTabChange(key: string) {
     activeTab.value = key;
-    selectedRowKeys.value = [];
+    clearSelection();
     reload();
   }
 
   onMounted(() => {
     loadUserOptions();
+    loadCategoryOptions();
   });
 
-  function getTableAction(record: any) {
+  function getTableAction(record: HomeaiBill) {
     if (activeTab.value === 'recycle') {
       return [
         { icon: 'ant-design:undo-outlined', onClick: () => handleRestore(record), title: '恢复' },
@@ -126,83 +146,10 @@
   }
 
   function handleDownloadTemplate() {
-    const headers = ['日期', '用户', '类型(income/expense)', '分类ID', '金额', '支付方式', '备注', '来源'];
-    const blob = new Blob(['\uFEFF' + headers.join(',') + '\n'], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = '账单导入模板.csv';
-    link.click();
-    URL.revokeObjectURL(link.href);
+    downloadCsvTemplate(['日期', '用户', '类型(income/expense)', '分类ID', '金额', '支付方式', '备注', '来源'], '账单导入模板.csv');
   }
 
   function handleSuccess() {
     reload();
-  }
-
-  async function handleMoveToRecycleBin(record: any) {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认移入回收站',
-      content: '确定将该账单移入回收站吗？',
-      onOk: async () => {
-        await billApi.moveToRecycleBin([record.id]);
-        createMessage.success('已移入回收站');
-        reload();
-      },
-    });
-  }
-
-  async function handleBatchMoveToRecycleBin() {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认移入回收站',
-      content: `确定将选中的 ${selectedRowKeys.value.length} 条账单移入回收站吗？`,
-      onOk: async () => {
-        await billApi.moveToRecycleBin(selectedRowKeys.value);
-        createMessage.success('已移入回收站');
-        selectedRowKeys.value = [];
-        reload();
-      },
-    });
-  }
-
-  async function handleRestore(record: any) {
-    await billApi.restore([record.id]);
-    createMessage.success('恢复成功');
-    reload();
-  }
-
-  async function handleBatchRestore() {
-    await billApi.restore(selectedRowKeys.value);
-    createMessage.success('恢复成功');
-    selectedRowKeys.value = [];
-    reload();
-  }
-
-  async function handleDeletePermanently(record: any) {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认彻底删除',
-      content: '确定彻底删除该账单吗？此操作不可恢复！',
-      onOk: async () => {
-        await billApi.deletePermanently([record.id]);
-        createMessage.success('已彻底删除');
-        reload();
-      },
-    });
-  }
-
-  async function handleBatchDeletePermanently() {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认彻底删除',
-      content: `确定彻底删除选中的 ${selectedRowKeys.value.length} 条账单吗？此操作不可恢复！`,
-      onOk: async () => {
-        await billApi.deletePermanently(selectedRowKeys.value);
-        createMessage.success('已彻底删除');
-        selectedRowKeys.value = [];
-        reload();
-      },
-    });
   }
 </script>

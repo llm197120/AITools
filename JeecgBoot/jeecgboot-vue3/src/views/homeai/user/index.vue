@@ -42,19 +42,20 @@
 
 <script lang="ts" name="homeai-user" setup>
   import { PageWrapper } from '/@/components/Page';
-  import { computed, onMounted, ref, watch } from 'vue';
+  import { onMounted, ref } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { useMethods } from '/@/hooks/system/useMethods';
   import { useUserStore } from '/@/store/modules/user';
   import { userApi, familyApi } from '/@/api/homeai';
+  import type { HomeaiPageParams, HomeaiUser } from '/@/api/homeai';
+  import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
   import UserDrawer from './UserDrawer.vue';
 
   const { createMessage, createConfirm } = useMessage();
   const { handleExportXls, handleImportXls } = useMethods();
   const [registerDrawer, { openDrawer }] = useDrawer();
-  const selectedRowKeys = ref<string[]>([]);
   const activeTab = ref('list');
   const familyOptions = ref<any[]>([]);
 
@@ -72,13 +73,6 @@
     loadFamilyOptions();
   });
 
-  const rowSelection = computed(() => ({
-    selectedRowKeys: selectedRowKeys.value,
-    onChange: (keys: string[]) => {
-      selectedRowKeys.value = keys;
-    },
-  }));
-
   const columns = [
     { title: '微信昵称', dataIndex: 'nickname', width: 150 },
       { title: 'openid', dataIndex: 'openid', width: 200, customRender: ({ text }: any) => (text ? text.substring(0, 3) + '****' + text.substring(text.length - 4) : '-') },
@@ -92,7 +86,7 @@
 
   const [registerTable, { reload }] = useTable({
     title: '微信用户列表',
-    api: (params: any) => activeTab.value === 'list' ? userApi.list(params) : userApi.recycleBin(params),
+    api: (params: HomeaiPageParams) => activeTab.value === 'list' ? userApi.list(params) : userApi.recycleBin(params),
     columns: columns,
     useSearchForm: true,
     formConfig: {
@@ -117,13 +111,25 @@
     },
   });
 
+  const { rowSelection, selectedRowKeys, clearSelection, handleMoveToRecycleBin, handleBatchMoveToRecycleBin, handleRestore, handleBatchRestore, handleDeletePermanently, handleBatchDeletePermanently } = useHomeaiRecycleBin({
+    api: {
+      moveToRecycleBin: (ids: string[]) => userApi.moveToRecycleBin(ids),
+      restore: (ids: string[]) => userApi.restore(ids),
+      deletePermanently: (ids: string[]) => userApi.deletePermanently(ids),
+    },
+    reload,
+    entityName: '用户',
+    nameField: 'nickname',
+    permanentWarn: '此操作不可恢复！',
+  });
+
   function onTabChange(key: string) {
     activeTab.value = key;
-    selectedRowKeys.value = [];
+    clearSelection();
     reload();
   }
 
-  function getTableAction(record: any) {
+  function getTableAction(record: HomeaiUser) {
     if (activeTab.value === 'recycle') {
       return [
         {
@@ -173,7 +179,7 @@
     window.open(`/jeecg-boot/homeai/user/exportTemplate?token=${encodeURIComponent(token)}`, '_blank');
   }
 
-  async function handleToggleStatus(record: any) {
+  async function handleToggleStatus(record: HomeaiUser) {
     const newStatus = record.status === '1' ? '0' : '1';
     const label = newStatus === '1' ? '启用' : '禁用';
     createConfirm({
@@ -186,76 +192,5 @@
         reload();
       },
     });
-  }
-
-  async function handleMoveToRecycleBin(record: any) {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认移入回收站',
-      content: `确定将用户「${record.nickname}」移入回收站吗？`,
-      onOk: async () => {
-        await userApi.moveToRecycleBin([record.id]);
-        createMessage.success('已移入回收站');
-        reload();
-      },
-    });
-  }
-
-  async function handleBatchMoveToRecycleBin() {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认移入回收站',
-      content: `确定将选中的 ${selectedRowKeys.value.length} 个用户移入回收站吗？`,
-      onOk: async () => {
-        await userApi.moveToRecycleBin(selectedRowKeys.value);
-        createMessage.success('已移入回收站');
-        selectedRowKeys.value = [];
-        reload();
-      },
-    });
-  }
-
-  async function handleRestore(record: any) {
-    await userApi.restore([record.id]);
-    createMessage.success('恢复成功');
-    reload();
-  }
-
-  async function handleBatchRestore() {
-    await userApi.restore(selectedRowKeys.value);
-    createMessage.success('恢复成功');
-    selectedRowKeys.value = [];
-    reload();
-  }
-
-  async function handleDeletePermanently(record: any) {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认彻底删除',
-      content: `确定彻底删除用户「${record.nickname}」吗？此操作不可恢复！`,
-      onOk: async () => {
-        await userApi.deletePermanently([record.id]);
-        createMessage.success('已彻底删除');
-        reload();
-      },
-    });
-  }
-
-  async function handleBatchDeletePermanently() {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认彻底删除',
-      content: `确定彻底删除选中的 ${selectedRowKeys.value.length} 个用户吗？此操作不可恢复！`,
-      onOk: async () => {
-        await userApi.deletePermanently(selectedRowKeys.value);
-        createMessage.success('已彻底删除');
-        selectedRowKeys.value = [];
-        reload();
-      },
-    });
-  }
-
-  function handleSuccess() {
-    reload();
   }
 </script>

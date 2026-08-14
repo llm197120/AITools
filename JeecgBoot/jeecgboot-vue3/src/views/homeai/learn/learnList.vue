@@ -37,26 +37,26 @@
 
 <script lang="ts" name="homeai-learn-list" setup>
   import { PageWrapper } from '/@/components/Page';
-  import { computed, ref, onMounted } from 'vue';
+  import { ref, onMounted } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
-  import { useMessage } from '/@/hooks/web/useMessage';
   import { useMethods } from '/@/hooks/system/useMethods';
   import { learnApi } from '/@/api/homeai';
+  import type { HomeaiCategory, HomeaiLearnMaterial, HomeaiPageParams } from '/@/api/homeai';
   import LearnDrawer from './LearnDrawer.vue';
   import { useUserLabel } from '../hooks/useUserLabel';
+  import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
+  import { downloadCsvTemplate } from '../utils/csvTemplate';
 
-  const { createMessage, createConfirm } = useMessage();
   const { handleExportXls, handleImportXls } = useMethods();
   const [registerDrawer, { openDrawer }] = useDrawer();
   const { userOptions, loadUserOptions, resolveUserLabel } = useUserLabel();
-  const selectedRowKeys = ref<string[]>([]);
   const activeTab = ref('list');
   const categoryOptions = ref<{ label: string; value: string }[]>([]);
 
   async function loadCategoryOptions() {
     try {
-      const list: any[] = (await learnApi.categories()) || [];
+      const list: HomeaiCategory[] = (await learnApi.categories()) || [];
       categoryOptions.value = list.map((c) => ({ label: c.name, value: c.id }));
     } catch {
       categoryOptions.value = [];
@@ -66,13 +66,6 @@
   onMounted(async () => {
     await Promise.all([loadCategoryOptions(), loadUserOptions()]);
   });
-
-  const rowSelection = computed(() => ({
-    selectedRowKeys: selectedRowKeys.value,
-    onChange: (keys: string[]) => {
-      selectedRowKeys.value = keys;
-    },
-  }));
 
   const columns = [
     { title: '标题', dataIndex: 'title', width: 200 },
@@ -85,7 +78,7 @@
 
   const [registerTable, { reload }] = useTable({
     title: '学习资料管理',
-    api: (params: any) => activeTab.value === 'list' ? learnApi.list(params) : learnApi.recycleBin(params),
+    api: (params: HomeaiPageParams) => activeTab.value === 'list' ? learnApi.list(params) : learnApi.recycleBin(params),
     columns: columns,
     useSearchForm: true,
     showTableSetting: true,
@@ -101,13 +94,25 @@
     },
   });
 
+  const { rowSelection, selectedRowKeys, clearSelection, handleMoveToRecycleBin, handleBatchMoveToRecycleBin, handleRestore, handleBatchRestore, handleDeletePermanently, handleBatchDeletePermanently } = useHomeaiRecycleBin({
+    api: {
+      moveToRecycleBin: (ids: string[]) => learnApi.moveToRecycleBin(ids),
+      restore: (ids: string[]) => learnApi.restore(ids),
+      deletePermanently: (ids: string[]) => learnApi.deletePermanently(ids),
+    },
+    reload,
+    entityName: '资料',
+    nameField: 'title',
+    permanentWarn: '此操作不可恢复！',
+  });
+
   function onTabChange(key: string) {
     activeTab.value = key;
-    selectedRowKeys.value = [];
+    clearSelection();
     reload();
   }
 
-  function getTableAction(record: any) {
+  function getTableAction(record: HomeaiLearnMaterial) {
     if (activeTab.value === 'recycle') {
       return [
         { icon: 'ant-design:undo-outlined', onClick: () => handleRestore(record), title: '恢复' },
@@ -125,83 +130,10 @@
   }
 
   function handleDownloadTemplate() {
-    const headers = ['标题', '类型(video/image/pdf/doc/xls/ppt/link/note)', '分类', '标签', '文件URL'];
-    const blob = new Blob(['\uFEFF' + headers.join(',') + '\n'], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = '学习资料导入模板.csv';
-    link.click();
-    URL.revokeObjectURL(link.href);
+    downloadCsvTemplate(['标题', '类型(video/image/pdf/doc/xls/ppt/link/note)', '分类', '标签', '文件URL'], '学习资料导入模板.csv');
   }
 
   function handleSuccess() {
     reload();
-  }
-
-  async function handleMoveToRecycleBin(record: any) {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认移入回收站',
-      content: `确定将「${record.title}」移入回收站吗？`,
-      onOk: async () => {
-        await learnApi.moveToRecycleBin([record.id]);
-        createMessage.success('已移入回收站');
-        reload();
-      },
-    });
-  }
-
-  async function handleBatchMoveToRecycleBin() {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认移入回收站',
-      content: `确定将选中的 ${selectedRowKeys.value.length} 条资料移入回收站吗？`,
-      onOk: async () => {
-        await learnApi.moveToRecycleBin(selectedRowKeys.value);
-        createMessage.success('已移入回收站');
-        selectedRowKeys.value = [];
-        reload();
-      },
-    });
-  }
-
-  async function handleRestore(record: any) {
-    await learnApi.restore([record.id]);
-    createMessage.success('恢复成功');
-    reload();
-  }
-
-  async function handleBatchRestore() {
-    await learnApi.restore(selectedRowKeys.value);
-    createMessage.success('恢复成功');
-    selectedRowKeys.value = [];
-    reload();
-  }
-
-  async function handleDeletePermanently(record: any) {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认彻底删除',
-      content: `确定彻底删除「${record.title}」吗？此操作不可恢复！`,
-      onOk: async () => {
-        await learnApi.deletePermanently([record.id]);
-        createMessage.success('已彻底删除');
-        reload();
-      },
-    });
-  }
-
-  async function handleBatchDeletePermanently() {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认彻底删除',
-      content: `确定彻底删除选中的 ${selectedRowKeys.value.length} 条资料吗？此操作不可恢复！`,
-      onOk: async () => {
-        await learnApi.deletePermanently(selectedRowKeys.value);
-        createMessage.success('已彻底删除');
-        selectedRowKeys.value = [];
-        reload();
-      },
-    });
   }
 </script>

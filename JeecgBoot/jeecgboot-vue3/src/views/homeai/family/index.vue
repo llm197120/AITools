@@ -66,36 +66,30 @@
 
 <script lang="ts" name="homeai-family" setup>
   import { PageWrapper } from '/@/components/Page';
-  import { computed, ref } from 'vue';
+  import { ref } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { useMethods } from '/@/hooks/system/useMethods';
   import { useUserStore } from '/@/store/modules/user';
   import { familyApi, storageApi } from '/@/api/homeai';
+  import type { HomeaiFamily, HomeaiPageParams } from '/@/api/homeai';
   import FamilyDrawer from './FamilyDrawer.vue';
   import FamilyMembersDrawer from './FamilyMembersDrawer.vue';
   import { useUserLabel } from '../hooks/useUserLabel';
+import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
 
-  const { createMessage, createConfirm } = useMessage();
+  const { createMessage } = useMessage();
   const { handleExportXls, handleImportXls } = useMethods();
   const [registerDrawer, { openDrawer }] = useDrawer();
   const [registerMembersDrawer, { openDrawer: openMembersDrawer }] = useDrawer();
   const { loadUserOptions, resolveUserLabel } = useUserLabel();
   loadUserOptions();
-  const selectedRowKeys = ref<string[]>([]);
   const activeTab = ref('list');
   const quotaVisible = ref(false);
   const quotaSaving = ref(false);
   const quotaForm = ref({ familyId: '', familyName: '', limitGb: 5, custom: false });
   const GB = 1024 * 1024 * 1024;
-
-  const rowSelection = computed(() => ({
-    selectedRowKeys: selectedRowKeys.value,
-    onChange: (keys: string[]) => {
-      selectedRowKeys.value = keys;
-    },
-  }));
 
   const columns = [
     { title: '家庭名称', dataIndex: 'name', width: 150 },
@@ -107,7 +101,7 @@
 
   const [registerTable, { reload }] = useTable({
     title: '家庭列表',
-    api: (params: any) => activeTab.value === 'list' ? familyApi.list(params) : familyApi.recycleBin(params),
+    api: (params: HomeaiPageParams) => activeTab.value === 'list' ? familyApi.list(params) : familyApi.recycleBin(params),
     columns: columns,
     useSearchForm: true,
     formConfig: {
@@ -137,13 +131,25 @@
     },
   });
 
+  const { rowSelection, selectedRowKeys, clearSelection, handleMoveToRecycleBin, handleBatchMoveToRecycleBin, handleRestore, handleBatchRestore, handleDeletePermanently, handleBatchDeletePermanently } = useHomeaiRecycleBin({
+    api: {
+      moveToRecycleBin: (ids: string[]) => familyApi.moveToRecycleBin(ids),
+      restore: (ids: string[]) => familyApi.restore(ids),
+      deletePermanently: (ids: string[]) => familyApi.deletePermanently(ids),
+    },
+    reload,
+    entityName: '家庭',
+    nameField: 'name',
+    permanentWarn: '此操作不可恢复！',
+  });
+
   function onTabChange(key: string) {
     activeTab.value = key;
-    selectedRowKeys.value = [];
+    clearSelection();
     reload();
   }
 
-  function getTableAction(record: any) {
+  function getTableAction(record: HomeaiFamily) {
     if (activeTab.value === 'recycle') {
       return [
         {
@@ -184,7 +190,7 @@
     ];
   }
 
-  async function handleFamilyQuota(record: any) {
+  async function handleFamilyQuota(record: HomeaiFamily) {
     try {
       const cfg: any = await storageApi.getFamilyStorageLimit(record.id);
       quotaForm.value = {
@@ -243,72 +249,5 @@
 
   function handleSuccess() {
     reload();
-  }
-
-  async function handleMoveToRecycleBin(record: any) {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认移入回收站',
-      content: `确定将家庭「${record.name}」移入回收站吗？`,
-      onOk: async () => {
-        await familyApi.moveToRecycleBin([record.id]);
-        createMessage.success('已移入回收站');
-        reload();
-      },
-    });
-  }
-
-  async function handleBatchMoveToRecycleBin() {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认移入回收站',
-      content: `确定将选中的 ${selectedRowKeys.value.length} 个家庭移入回收站吗？`,
-      onOk: async () => {
-        await familyApi.moveToRecycleBin(selectedRowKeys.value);
-        createMessage.success('已移入回收站');
-        selectedRowKeys.value = [];
-        reload();
-      },
-    });
-  }
-
-  async function handleRestore(record: any) {
-    await familyApi.restore([record.id]);
-    createMessage.success('恢复成功');
-    reload();
-  }
-
-  async function handleBatchRestore() {
-    await familyApi.restore(selectedRowKeys.value);
-    createMessage.success('恢复成功');
-    selectedRowKeys.value = [];
-    reload();
-  }
-
-  async function handleDeletePermanently(record: any) {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认彻底删除',
-      content: `确定彻底删除家庭「${record.name}」吗？此操作不可恢复！`,
-      onOk: async () => {
-        await familyApi.deletePermanently([record.id]);
-        createMessage.success('已彻底删除');
-        reload();
-      },
-    });
-  }
-
-  async function handleBatchDeletePermanently() {
-    createConfirm({
-      iconType: 'warning',
-      title: '确认彻底删除',
-      content: `确定彻底删除选中的 ${selectedRowKeys.value.length} 个家庭吗？此操作不可恢复！`,
-      onOk: async () => {
-        await familyApi.deletePermanently(selectedRowKeys.value);
-        createMessage.success('已彻底删除');
-        selectedRowKeys.value = [];
-        reload();
-      },
-    });
   }
 </script>
