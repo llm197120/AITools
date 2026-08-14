@@ -151,21 +151,29 @@ export class VAxios {
         },
       })
       .then((res: any) => {
-        //--@updateBy-begin----author:liusq---date:20210914------for:上传判断是否包含回调方法------
+        //--@updateBy-begin----author:cursor---date:2026-08-13------for:【上传优化】修复 uploadFile 返回值/失败回调问题：仅成功后回调、无回调时返回响应体供读取 result-----------
+        const data = res?.data;
+        const isOk = !!data && data.success === true && data.code === 200;
         if (callback?.success && isFunction(callback?.success)) {
-          callback?.success(res?.data);
-          //--@updateBy-end----author:liusq---date:20210914------for:上传判断是否包含回调方法------
-        } else if (callback?.isReturnResponse) {
-          //--@updateBy-begin----author:liusq---date:20211117------for:上传判断是否返回res信息------
-          return Promise.resolve(res?.data);
-          //--@updateBy-end----author:liusq---date:20211117------for:上传判断是否返回res信息------
-        } else {
-          if (res.data.success == true && res.data.code == 200) {
-            createMessage.success(res.data.message);
+          // 代码逻辑说明: 仅成功后回调，失败不触发，避免"上传失败仍报成功"
+          if (isOk) {
+            callback?.success(data);
           } else {
-            createMessage.error(res.data.message);
+            createMessage.error(data?.message || '上传失败');
           }
+          return Promise.resolve(data);
+        } else if (callback?.isReturnResponse) {
+          return Promise.resolve(res?.data);
+        } else {
+          // 代码逻辑说明: 无回调时返回完整响应体，便于调用方读取 result；失败也返回以便调用方判断
+          if (isOk) {
+            createMessage.success(data.message);
+          } else {
+            createMessage.error(data?.message || '上传失败');
+          }
+          return Promise.resolve(data);
         }
+        //--@updateBy-end----author:cursor---date:2026-08-13------for:【上传优化】修复 uploadFile 返回值/失败回调问题-----------
       });
   }
 
@@ -247,7 +255,6 @@ export class VAxios {
     });
   }
 
-
   /**
    * 【用于评论功能】自定义文件上传-请求
    * @param url
@@ -255,16 +262,15 @@ export class VAxios {
    */
   uploadMyFile<T = any>(url, formData) {
     const glob = useGlobSetting();
-    return this.axiosInstance
-      .request<T>({
-        url: url,
-        baseURL: glob.uploadUrl,
-        method: 'POST',
-        data: formData,
-        headers: {
-          'Content-type': ContentTypeEnum.FORM_DATA,
-          ignoreCancelToken: true,
-        },
-      });
+    return this.axiosInstance.request<T>({
+      url: url,
+      baseURL: glob.uploadUrl,
+      method: 'POST',
+      data: formData,
+      headers: {
+        'Content-type': ContentTypeEnum.FORM_DATA,
+        ignoreCancelToken: true,
+      },
+    });
   }
 }

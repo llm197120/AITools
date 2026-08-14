@@ -40,13 +40,14 @@
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { BasicModal, useModal } from '/@/components/Modal';
   import { BasicForm, useForm } from '/@/components/Form';
-  import { defHttp } from '/@/utils/http/axios';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import { storageTemplateApi } from '/@/api/homeai';
+  import type { HomeaiOfficeTemplate, HomeaiPageParams, HomeaiPayload } from '/@/api/homeai';
 
   const { createMessage, createConfirm } = useMessage();
   const [registerTable, { reload }] = useTable({
     title: '文档模板管理',
-    api: (params: any) => defHttp.get({ url: '/homeai/storage/template/list', params }),
+    api: (params: HomeaiPageParams) => storageTemplateApi.list(params),
     columns: [
       { title: '模板名称', dataIndex: 'name', width: 200 },
       { title: '类型', dataIndex: 'type', width: 80 },
@@ -100,14 +101,14 @@
     openModal(true);
   }
 
-  function getTableAction(record: any) {
+  function getTableAction(record: HomeaiOfficeTemplate) {
     return [
       { icon: 'ant-design:edit-outlined', onClick: () => handleEdit(record), title: '编辑' },
       { icon: 'ant-design:delete-outlined', onClick: () => handleDelete(record), title: '删除', color: 'error' },
     ];
   }
 
-  function handleEdit(record: any) {
+  function handleEdit(record: HomeaiOfficeTemplate) {
     isUpdate.value = true;
     recordId.value = record.id;
     resetFileState();
@@ -128,28 +129,33 @@
 
   async function uploadSelectedFile(id: string) {
     if (!selectedFile.value) return uploadedFileUrl.value;
-    const url: any = await defHttp.uploadFile(
+    const res: any = await defHttp.uploadFile(
       { url: `/homeai/storage/template/${id}/upload` },
       { file: selectedFile.value, name: 'file' },
+      { isReturnResponse: true }
     );
+    if (!res || res.success !== true || res.code !== 200) {
+      throw new Error(res?.message || '模板文件上传失败');
+    }
+    const url = res.result || '';
     uploadedFileUrl.value = url;
     setFieldsValue({ fileUrl: url });
     return url;
   }
 
-  async function handleDelete(record: any) {
+  async function handleDelete(record: HomeaiOfficeTemplate) {
     createConfirm({
       title: '确认删除',
       content: `确定删除模板「${record.name}」吗？`,
       onOk: async () => {
-        await defHttp.delete({ url: `/homeai/storage/template/${record.id}` });
+        await storageTemplateApi.delete(record.id);
         createMessage.success('删除成功');
         reload();
       },
     });
   }
 
-  async function handleSubmit(values: any) {
+  async function handleSubmit(values: HomeaiPayload) {
     saving.value = true;
     try {
       if (!isUpdate.value && !selectedFile.value && !values.fileUrl) {
@@ -157,19 +163,23 @@
         return false;
       }
       if (isUpdate.value) {
-        await defHttp.put({ url: '/homeai/storage/template', data: { id: recordId.value, ...values } });
+        await storageTemplateApi.update({ id: recordId.value, ...values });
         if (selectedFile.value) {
           await uploadSelectedFile(recordId.value);
         }
         createMessage.success('编辑成功');
       } else if (selectedFile.value) {
-        await defHttp.uploadFile(
+        const res: any = await defHttp.uploadFile(
           { url: '/homeai/storage/template/create-with-file' },
           { file: selectedFile.value, name: 'file', data: { name: values.name, type: values.type || '', remark: values.remark || '' } },
+          { isReturnResponse: true }
         );
+        if (!res || res.success !== true || res.code !== 200) {
+          throw new Error(res?.message || '模板创建失败');
+        }
         createMessage.success('新增成功');
       } else {
-        const res: any = await defHttp.post({ url: '/homeai/storage/template', data: values });
+        const res = await storageTemplateApi.create(values);
         const newId = res?.id;
         if (newId && selectedFile.value) {
           await uploadSelectedFile(newId);
@@ -188,7 +198,7 @@
   }
 
   async function setDefault(record: any) {
-    await defHttp.put({ url: `/homeai/storage/template/${record.id}/default` });
+    await storageTemplateApi.setDefault(record.id);
     reload();
   }
 </script>

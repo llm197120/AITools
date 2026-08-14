@@ -6,25 +6,16 @@
           <a-radio-button value="wechat_csv">微信支付CSV</a-radio-button>
           <a-radio-button value="excel">Excel账单</a-radio-button>
         </a-radio-group>
-        <a-upload
-          :show-upload-list="false"
-          :before-upload="handleFile"
-          accept=".csv,.xlsx,.xls"
-        >
+        <a-upload :show-upload-list="false" :before-upload="handleFile" accept=".csv,.xlsx,.xls">
           <a-button type="primary">选择文件并解析</a-button>
         </a-upload>
-        <a-button v-if="rows.length > 0" type="primary" danger :loading="importing" @click="confirmImport">确认导入选中({{ checkedRows.length }})</a-button>
+        <a-button v-if="rows.length > 0" type="primary" danger :loading="importing" @click="confirmImport"
+          >确认导入选中({{ checkedRows.length }})</a-button
+        >
       </a-space>
     </a-card>
 
-    <a-alert
-      v-if="message"
-      :message="message"
-      type="info"
-      show-icon
-      closable
-      style="margin-bottom: 16px"
-    />
+    <a-alert v-if="message" :message="message" type="info" show-icon closable style="margin-bottom: 16px" />
 
     <a-empty v-if="rows.length === 0" description="请选择文件并解析账单" style="margin-top: 24px" />
 
@@ -42,9 +33,7 @@
           <a-tag :color="record.duplicate ? 'orange' : 'green'">{{ record.duplicate ? '重复' : '新增' }}</a-tag>
         </template>
         <template v-else-if="column.dataIndex === 'type'">
-          <span :class="record.type === 'income' ? 'hai-text-success' : 'hai-text-danger'">{{
-            record.type === 'income' ? '收入' : '支出'
-          }}</span>
+          <span :class="record.type === 'income' ? 'hai-text-success' : 'hai-text-danger'">{{ record.type === 'income' ? '收入' : '支出' }}</span>
         </template>
         <template v-else-if="column.dataIndex === 'amount'">
           <span :class="record.type === 'income' ? 'hai-amount-income' : 'hai-amount-expense'">{{ record.amount }}</span>
@@ -63,7 +52,24 @@
 
   const { createMessage, createConfirm } = useMessage();
   const fileType = ref('wechat_csv');
-  const rows = ref<any[]>([]);
+
+  /** 导入预览行（后端解析结果） */
+  interface BillImportRow {
+    index?: number;
+    billDate?: string;
+    type?: string;
+    categoryId?: string;
+    categoryName?: string;
+    amount?: number | string;
+    paymentMethod?: string;
+    remark?: string;
+    /** 是否重复（默认不勾选） */
+    duplicate?: boolean;
+    status?: string;
+    [key: string]: unknown;
+  }
+
+  const rows = ref<BillImportRow[]>([]);
   const checkedKeys = ref<string[]>([]);
   const importing = ref(false);
   const message = ref('');
@@ -85,20 +91,21 @@
     },
   ];
 
-  function onCheckedChange(keys: any[]) {
+  function onCheckedChange(keys: string[]) {
     checkedKeys.value = keys;
   }
 
   async function handleFile(file: File) {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('type', fileType.value);
     try {
       const res: any = await defHttp.uploadFile(
-        { url: '/homeai/bill/import/preview', data: formData },
-        { isTransformResponse: true },
+        { url: '/homeai/bill/import/preview' },
+        { file, name: 'file', data: { type: fileType.value } },
+        { isReturnResponse: true }
       );
-      rows.value = (res as any[]) || [];
+      if (!res || res.success !== true || res.code !== 200) {
+        throw new Error(res?.message || '解析失败');
+      }
+      rows.value = (res?.result as BillImportRow[] | undefined) || [];
       checkedKeys.value = rows.value.filter((r) => !r.duplicate).map((r) => String(r.index));
       message.value = `解析到 ${rows.value.length} 条记录，其中重复 ${rows.value.filter((r) => r.duplicate).length} 条（默认不勾选）。`;
     } catch (e: any) {

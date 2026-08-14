@@ -85,7 +85,7 @@
           default-expand-all
           @select="onFolderSelect"
         >
-          <template #title="{ id, name, fileCount, visibility, userId, familyIds }">
+          <template #title="{ id, name, fileCount, visibility, familyIds }">
             <div style="display:flex;align-items:center;gap:8px;width:100%">
               <Icon icon="ant-design:folder-outlined" :style="{color:'#faad14'}" />
               <span style="flex:1">{{ name }}</span>
@@ -135,7 +135,7 @@
               <span>{{ record.isFavorite === '1' ? '⭐' : '-' }}</span>
             </template>
             <template v-else-if="column.key === 'fileSize'">
-              {{ formatFileSize(record.fileSize) }}
+              {{ formatSize(record.fileSize) }}
             </template>
             <template v-else-if="column.key === 'action'">
               <a-button type="link" size="small" @click="handleDownload(record)">下载</a-button>
@@ -188,7 +188,7 @@
             <span v-else>{{ record.extension || '-' }}</span>
           </template>
           <template v-else-if="column.key === 'fileSize'">
-            {{ formatFileSize(record.fileSize) }}
+            {{ formatSize(record.fileSize) }}
           </template>
           <template v-else-if="column.key === 'visibility'">
             <a-tag :color="record.visibility === 'family' ? 'green' : record.visibility === 'public' ? 'blue' : 'default'">
@@ -309,7 +309,8 @@ import { ref, computed, onMounted } from 'vue';
   import { defHttp } from '/@/utils/http/axios';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { Icon } from '/@/components/Icon';
-  import { familyApi, storageApi } from '/@/api/homeai';
+  import { familyApi, storageApi, storageOfficeApi, storageRuleApi } from '/@/api/homeai';
+  import type { HomeaiStorageFile, HomeaiStorageFolder } from '/@/api/homeai';
   import { useUserLabel } from '../hooks/useUserLabel';
   import { useGo } from '/@/hooks/web/usePage';
 
@@ -442,7 +443,7 @@ import { ref, computed, onMounted } from 'vue';
 
   async function loadSpaceStats() {
     try {
-      spaceStats.value = (await defHttp.get({ url: '/homeai/storage/stats' })) as any;
+      spaceStats.value = (await storageApi.stats()) as any;
     } catch {
       // 忽略
     }
@@ -560,7 +561,7 @@ import { ref, computed, onMounted } from 'vue';
 
   async function loadFolderTree() {
     try {
-      const res = await defHttp.get({ url: '/homeai/storage/folders' });
+      const res = await storageApi.folderTree();
       folderTreeData.value = (res as any)?.result || (res as any[]) || [];
     } catch {
       folderTreeData.value = [];
@@ -571,7 +572,7 @@ import { ref, computed, onMounted } from 'vue';
     if (selectedKeys.length > 0) {
       selectedFolderId.value = selectedKeys[0];
       try {
-        const res = await defHttp.get({ url: `/homeai/storage/folders/${selectedFolderId.value}/files` });
+        const res = await storageApi.folderFiles(selectedFolderId.value);
         folderFiles.value = (res as any)?.result || (res as any[]) || [];
       } catch {
         folderFiles.value = [];
@@ -579,42 +580,28 @@ import { ref, computed, onMounted } from 'vue';
     }
   }
 
-  function formatFileSize(bytes: number): string {
-    if (!bytes) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    let i = 0;
-    let size = bytes;
-    while (size >= 1024 && i < units.length - 1) {
-      size /= 1024;
-      i++;
-    }
-    return size.toFixed(1) + ' ' + units[i];
-  }
 
-  function getFileExtension(record: any): string {
+  function getFileExtension(record: HomeaiStorageFile): string {
     if (record.extension) return String(record.extension).toLowerCase().replace(/^\./, '');
     const name = record.originalName || '';
     const idx = name.lastIndexOf('.');
     return idx >= 0 ? name.substring(idx + 1).toLowerCase() : '';
   }
 
-  function canConvertToPdf(record: any): boolean {
+  function canConvertToPdf(record: HomeaiStorageFile): boolean {
     const ext = getFileExtension(record);
     return ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext);
   }
 
   async function loadConvertTargets(sourceFormat: string) {
     try {
-      convertTargets.value = ((await defHttp.get({
-        url: '/homeai/storage/rule/targets',
-        params: { sourceFormat },
-      })) as any[]) || [];
+      convertTargets.value = ((await storageRuleApi.targets(sourceFormat)) as any[]) || [];
     } catch {
       convertTargets.value = [];
     }
   }
 
-  async function openConvertModal(record: any) {
+  async function openConvertModal(record: HomeaiStorageFile) {
     const sourceFormat = getFileExtension(record);
     if (!sourceFormat) {
       createMessage.warning('无法识别文件格式');
@@ -639,19 +626,16 @@ import { ref, computed, onMounted } from 'vue';
       createMessage.warning('请选择目标格式');
       return;
     }
-    await defHttp.post({
-      url: '/homeai/storage/office/convert',
-      params: {
-        fileId: convertForm.value.fileId,
-        sourceFormat: convertForm.value.sourceFormat,
-        targetFormat: convertForm.value.targetFormat,
-      },
-    }, { joinParamsToUrl: true });
+    await storageOfficeApi.convert({
+      fileId: convertForm.value.fileId,
+      sourceFormat: convertForm.value.sourceFormat,
+      targetFormat: convertForm.value.targetFormat,
+    });
     createMessage.success('转换任务已提交，请在「处理记录」中查看进度');
     closeConvertModal();
   }
 
-  async function handleConvertToPdf(record: any) {
+  async function handleConvertToPdf(record: HomeaiStorageFile) {
     const sourceFormat = getFileExtension(record);
     await loadConvertTargets(sourceFormat);
     const pdfRule = convertTargets.value.find((r) => r.targetFormat === 'pdf');
@@ -659,14 +643,7 @@ import { ref, computed, onMounted } from 'vue';
       createMessage.warning('暂无转 PDF 规则，请先在「转换规则」中配置');
       return;
     }
-    await defHttp.post({
-      url: '/homeai/storage/office/convert',
-      params: {
-        fileId: record.id,
-        sourceFormat,
-        targetFormat: 'pdf',
-      },
-    }, { joinParamsToUrl: true });
+    await storageOfficeApi.convert({ fileId: record.id, sourceFormat, targetFormat: 'pdf' });
     createMessage.success('PDF 转换任务已提交，请在「处理记录」中查看进度');
   }
 
@@ -691,13 +668,10 @@ import { ref, computed, onMounted } from 'vue';
       params.familyIds = folderForm.value.familyIds.join(',');
     }
     if (folderEditId.value) {
-      await defHttp.put({
-        url: `/homeai/storage/folders/${folderEditId.value}`,
-        data: { ...params, familyIds: folderForm.value.familyIds },
-      });
+      await storageApi.updateFolder(folderEditId.value, { ...params, familyIds: folderForm.value.familyIds });
       createMessage.success('文件夹修改成功');
     } else {
-      await defHttp.post({ url: '/homeai/storage/folders', params }, { joinParamsToUrl: true });
+      await storageApi.createFolder(params);
       createMessage.success('文件夹创建成功');
     }
     closeFolderModal();
@@ -713,7 +687,7 @@ import { ref, computed, onMounted } from 'vue';
     return [];
   }
 
-  function openEditFolderModal(record: any) {
+  function openEditFolderModal(record: HomeaiStorageFolder) {
     folderEditId.value = record.id;
     folderForm.value = {
       name: record.name,
@@ -728,7 +702,7 @@ import { ref, computed, onMounted } from 'vue';
 
   async function handleDeleteFolder(id: string) {
     try {
-      await defHttp.delete({ url: `/homeai/storage/folders/${id}` });
+      await storageApi.deleteFolder(id);
       createMessage.success('文件夹已删除');
       if (selectedFolderId.value === id) {
         selectedFolderId.value = null;
@@ -774,38 +748,42 @@ import { ref, computed, onMounted } from 'vue';
     if (uploadForm.value.visibility === 'family' && uploadForm.value.familyIds.length) {
       extra.familyIds = uploadForm.value.familyIds.join(',');
     }
-    await defHttp.uploadFile(
-      { url: '/homeai/storage/files/upload' },
-      { file: selectedFile.value, name: 'file', data: extra },
-      {
-        success: () => {
-          createMessage.success('上传成功');
-          closeUploadModal();
-          selectedFile.value = null;
-          if (fileInputRef.value) fileInputRef.value.value = '';
-          loadFolderTree();
-          loadSpaceStats();
-          if (selectedFolderId.value) {
-            onFolderSelect([selectedFolderId.value]);
-          }
-        },
-      }
-    );
+    try {
+      await defHttp.uploadFile(
+        { url: '/homeai/storage/files/upload' },
+        { file: selectedFile.value, name: 'file', data: extra },
+        {
+          success: () => {
+            createMessage.success('上传成功');
+            closeUploadModal();
+            selectedFile.value = null;
+            if (fileInputRef.value) fileInputRef.value.value = '';
+            loadFolderTree();
+            loadSpaceStats();
+            if (selectedFolderId.value) {
+              onFolderSelect([selectedFolderId.value]);
+            }
+          },
+        }
+      );
+    } catch (e: any) {
+      createMessage.error(e?.message || '上传失败');
+    }
   }
 
-  function handleDownload(record: any) {
+  function handleDownload(record: HomeaiStorageFile) {
     if (record.fileUrl) {
       window.open(record.fileUrl, '_blank');
     }
   }
 
-  async function handleDeleteFile(record: any) {
+  async function handleDeleteFile(record: HomeaiStorageFile) {
     createConfirm({
       iconType: 'warning',
       title: '确认删除',
       content: `确定删除文件「${record.originalName}」吗？`,
       onOk: async () => {
-        await defHttp.delete({ url: `/homeai/storage/files/${record.id}` });
+        await storageApi.deleteFile(record.id);
         createMessage.success('删除成功');
         if (selectedFolderId.value) {
           onFolderSelect([selectedFolderId.value]);
