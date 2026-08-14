@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
+import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.family.entity.FamilyMember;
 import org.jeecg.modules.homeai.family.service.IFamilyMemberService;
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.*;
@@ -401,6 +403,22 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
                 && familyId.equals(recipe.getFamilyId());
     }
 
+    //update-begin---author:cursor ---date:2026-08-13 for：【P0 双通道一致性】家庭成员可维护家庭菜谱-----------
+    @Override
+    public boolean canModifyRecipe(Recipe recipe, String userId, String familyId) {
+        if (recipe == null || oConvertUtils.isEmpty(userId)) {
+            return false;
+        }
+        if (userId.equals(recipe.getUserId())) {
+            return true;
+        }
+        // 家庭共享菜谱：家庭成员可编辑/删除（console 建的菜谱 userId 为空，需靠家庭归属授权）
+        return RecipeVisibility.FAMILY.equals(recipe.getVisibility())
+                && oConvertUtils.isNotEmpty(familyId)
+                && familyId.equals(recipe.getFamilyId());
+    }
+    //update-end---author:cursor ---date:2026-08-13 for：【P0 双通道一致性】家庭成员可维护家庭菜谱-----------
+
     @Override
     public void assertRecipeVisible(Recipe recipe, String userId, String familyId) {
         if (!canViewRecipe(recipe, userId, familyId)) {
@@ -444,6 +462,7 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
     //update-end---author:cursor ---date:2026-08-12 for：【菜谱可见性】管理端保存校验-----------
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean toggleFavorite(String userId, String recipeId, String familyId) {
         Recipe recipe = getById(recipeId);
         assertRecipeVisible(recipe, userId, familyId);
@@ -452,9 +471,12 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
         RecipeFavorite existing = favoriteMapper.selectOne(q);
         if (existing != null) {
             favoriteMapper.deleteById(existing.getId());
-            int count = recipe.getFavoriteCount() != null ? recipe.getFavoriteCount() : 0;
-            recipe.setFavoriteCount(Math.max(0, count - 1));
-            updateById(recipe);
+            //update-begin---author:cursor ---date:2026-08-13 for：【并发修复】收藏计数改为原子递减，避免并发 read-modify-write 错乱-----------
+            update(null, new LambdaUpdateWrapper<Recipe>()
+                    .eq(Recipe::getId, recipeId)
+                    .gt(Recipe::getFavoriteCount, 0)
+                    .setSql("favorite_count = favorite_count - 1"));
+            //update-end---author:cursor ---date:2026-08-13 for：【并发修复】收藏计数改为原子递减-----------
             return false;
         }
         RecipeFavorite fav = new RecipeFavorite();
@@ -462,9 +484,11 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
         fav.setRecipeId(recipeId);
         fav.setCreateTime(new Date());
         favoriteMapper.insert(fav);
-        int count = recipe.getFavoriteCount() != null ? recipe.getFavoriteCount() : 0;
-        recipe.setFavoriteCount(count + 1);
-        updateById(recipe);
+        //update-begin---author:cursor ---date:2026-08-13 for：【并发修复】收藏计数改为原子递增-----------
+        update(null, new LambdaUpdateWrapper<Recipe>()
+                .eq(Recipe::getId, recipeId)
+                .setSql("favorite_count = favorite_count + 1"));
+        //update-end---author:cursor ---date:2026-08-13 for：【并发修复】收藏计数改为原子递增-----------
         return true;
     }
 
@@ -718,20 +742,18 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
 
     @Override
     public String uploadVideo(String recipeId, MultipartFile file) {
-        try {
-            String ext = getExtension(file.getOriginalFilename());
-            String fileName = "video_" + System.currentTimeMillis() + (ext != null ? "." + ext : ".mp4");
-            String videoUrl = fileStorageService.storeMultipart(file, "homeai/recipe/" + recipeId + "/" + fileName);
-            Recipe recipe = getById(recipeId);
-            if (recipe != null) {
-                recipe.setVideoUrl(videoUrl);
-                updateById(recipe);
-            }
-            return videoUrl;
-        } catch (Exception e) {
-            log.error("菜谱视频上传失败", e);
-            throw new RuntimeException("视频上传失败", e);
+        //update-begin---author:cursor ---date:2026-08-13 for：【上传优化】先校验菜谱存在，避免孤儿文件；补充扩展名/大小/魔数校验-----------
+        Recipe recipe = getById(recipeId);
+        if (recipe == null) {
+            throw new JeecgBootException("菜谱不存在");
         }
+        validateUploadFile(file, VIDEO_EXTENSIONS, MAX_VIDEO_SIZE, "视频");
+        String fileName = "video_" + System.currentTimeMillis() + "." + sanitizeExtension(file);
+        String videoUrl = fileStorageService.storeMultipart(file, "homeai/recipe/" + recipeId + "/" + fileName);
+        recipe.setVideoUrl(videoUrl);
+        updateById(recipe);
+        return videoUrl;
+        //update-end---author:cursor ---date:2026-08-13 for：【上传优化】先校验菜谱存在，避免孤儿文件；补充扩展名/大小/魔数校验-----------
     }
 
     @Override
@@ -746,61 +768,88 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
 
     @Override
     public String uploadCover(String recipeId, MultipartFile file) {
-        try {
-            String ext = getExtension(file.getOriginalFilename());
-            String fileName = "cover_" + System.currentTimeMillis() + (ext != null ? "." + ext : ".jpg");
-            String coverUrl = fileStorageService.storeMultipart(file, "homeai/recipe/" + recipeId + "/" + fileName);
-            Recipe recipe = getById(recipeId);
-            if (recipe != null) {
-                recipe.setCoverUrl(coverUrl);
-                updateById(recipe);
-            }
-            return coverUrl;
-        } catch (Exception e) {
-            log.error("菜谱封面上传失败", e);
-            throw new RuntimeException("封面上传失败", e);
+        //update-begin---author:cursor ---date:2026-08-13 for：【上传优化】先校验菜谱存在，避免孤儿文件；补充扩展名/大小/魔数校验-----------
+        Recipe recipe = getById(recipeId);
+        if (recipe == null) {
+            throw new JeecgBootException("菜谱不存在");
         }
+        validateUploadFile(file, IMAGE_EXTENSIONS, MAX_IMAGE_SIZE, "封面图片");
+        String fileName = "cover_" + System.currentTimeMillis() + "." + sanitizeExtension(file);
+        String coverUrl = fileStorageService.storeMultipart(file, "homeai/recipe/" + recipeId + "/" + fileName);
+        recipe.setCoverUrl(coverUrl);
+        updateById(recipe);
+        return coverUrl;
+        //update-end---author:cursor ---date:2026-08-13 for：【上传优化】先校验菜谱存在，避免孤儿文件；补充扩展名/大小/魔数校验-----------
     }
 
     @Override
     public String uploadStepImage(MultipartFile file) {
-        try {
-            String ext = getExtension(file.getOriginalFilename());
-            String fileName = System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8)
-                    + (ext != null ? "." + ext : ".jpg");
-            return fileStorageService.storeMultipart(file, "homeai/recipe/steps/" + fileName);
-        } catch (Exception e) {
-            log.error("步骤图片上传失败", e);
-            throw new RuntimeException("步骤图片上传失败", e);
-        }
+        //update-begin---author:cursor ---date:2026-08-13 for：【上传优化】步骤图补充扩展名/大小/魔数校验-----------
+        validateUploadFile(file, IMAGE_EXTENSIONS, MAX_IMAGE_SIZE, "步骤图片");
+        String fileName = System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8)
+                + "." + sanitizeExtension(file);
+        return fileStorageService.storeMultipart(file, "homeai/recipe/steps/" + fileName);
+        //update-end---author:cursor ---date:2026-08-13 for：【上传优化】步骤图补充扩展名/大小/魔数校验-----------
     }
 
     @Override
     public String uploadCoverFile(MultipartFile file) {
-        return saveGeneric(file, "/homeai/recipe/covers/");
+        return saveGeneric(file, "/homeai/recipe/covers/", IMAGE_EXTENSIONS, MAX_IMAGE_SIZE, "封面图片");
     }
 
     @Override
     public String uploadVideoFile(MultipartFile file) {
-        return saveGeneric(file, "/homeai/recipe/videos/");
+        return saveGeneric(file, "/homeai/recipe/videos/", VIDEO_EXTENSIONS, MAX_VIDEO_SIZE, "视频");
     }
 
-    private String saveGeneric(MultipartFile file, String relativeDir) {
-        try {
-            String ext = getExtension(file.getOriginalFilename());
-            String fileName = System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8)
-                    + (ext != null ? "." + ext : "");
-            String objectKey = relativeDir.replaceFirst("^/+", "") + fileName;
-            return fileStorageService.storeMultipart(file, objectKey);
-        } catch (Exception e) {
-            log.error("文件上传失败: {}", relativeDir, e);
-            throw new RuntimeException("文件上传失败", e);
+    private String saveGeneric(MultipartFile file, String relativeDir,
+                               Set<String> allowedExts, long maxSize, String label) {
+        //update-begin---author:cursor ---date:2026-08-13 for：【上传优化】通用保存补充扩展名/大小/魔数校验-----------
+        validateUploadFile(file, allowedExts, maxSize, label);
+        String fileName = System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8)
+                + "." + sanitizeExtension(file);
+        String objectKey = relativeDir.replaceFirst("^/+", "") + fileName;
+        return fileStorageService.storeMultipart(file, objectKey);
+        //update-end---author:cursor ---date:2026-08-13 for：【上传优化】通用保存补充扩展名/大小/魔数校验-----------
+    }
+
+    /** 菜谱上传允许的图片扩展名 */
+    private static final Set<String> IMAGE_EXTENSIONS = new HashSet<>(Arrays.asList(
+            "jpg", "jpeg", "png", "gif", "webp", "bmp"
+    ));
+    /** 菜谱上传允许的视频扩展名 */
+    private static final Set<String> VIDEO_EXTENSIONS = new HashSet<>(Arrays.asList(
+            "mp4", "mov", "m4v", "webm", "avi", "mkv"
+    ));
+    /** 图片大小上限（10MB） */
+    private static final long MAX_IMAGE_SIZE = 10L * 1024 * 1024;
+    /** 视频大小上限（200MB） */
+    private static final long MAX_VIDEO_SIZE = 200L * 1024 * 1024;
+
+    /** 从原始文件名中提取安全扩展名（仅保留字母数字，防路径穿越/任意字符） */
+    private String sanitizeExtension(MultipartFile file) {
+        String original = file.getOriginalFilename();
+        String ext = original == null ? "" : original.substring(original.lastIndexOf('.') + 1);
+        ext = ext.replaceAll("[^a-zA-Z0-9]", "").toLowerCase();
+        return ext.length() > 8 ? ext.substring(0, 8) : ext;
+    }
+
+    /** 上传前统一校验：非空 + 大小 + 扩展名白名单 + 魔数 */
+    private void validateUploadFile(MultipartFile file, Set<String> allowedExts, long maxSize, String label) {
+        if (file == null || file.isEmpty()) {
+            throw new JeecgBootException("请选择要上传的文件");
         }
-    }
-
-    private String getExtension(String filename) {
-        if (filename == null) return null;
-        int idx = filename.lastIndexOf('.');
-        return idx >= 0 ? filename.substring(idx + 1) : null;
+        if (file.getSize() > maxSize) {
+            throw new JeecgBootException(label + "大小不能超过 " + (maxSize / 1024 / 1024) + "MB");
+        }
+        String ext = sanitizeExtension(file);
+        if (oConvertUtils.isEmpty(ext) || !allowedExts.contains(ext)) {
+            throw new JeecgBootException("不支持的" + label + "格式，仅支持: " + String.join("/", allowedExts));
+        }
+        try {
+            HomeaiFileMagicUtil.validate(file, ext);
+        } catch (IOException e) {
+            throw new JeecgBootException(e.getMessage());
+        }
     }
 }

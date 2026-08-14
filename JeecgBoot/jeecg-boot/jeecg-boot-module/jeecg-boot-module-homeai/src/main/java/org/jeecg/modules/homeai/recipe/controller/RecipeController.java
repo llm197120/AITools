@@ -1,5 +1,6 @@
 package org.jeecg.modules.homeai.recipe.controller;
 import com.alibaba.fastjson.JSON;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -82,6 +83,107 @@ public class RecipeController {
         var u = wxUserService.getByOpenid(o);
         return u != null ? u.getId() : null;
     }
+
+    /**
+     * 校验当前用户是否有权修改菜谱媒体（管理端可改任意；小程序端仅创建者可改）
+     */
+    //update-begin---author:cursor ---date:2026-08-13 for：【菜谱导入】按文件名批量导入封面图-----------
+    /**
+     * 批量导入菜谱封面（按文件名去扩展名匹配菜谱名称）
+     * 返回：{ matched: [{fileName, recipeName, count, coverUrl}], unmatched: [文件名...] }
+     */
+    @PostMapping("/import-covers")
+    @AutoLog(value="菜谱-批量导入封面")
+    @Operation(summary="菜谱-批量导入封面(按文件名匹配)")
+    @RequiresPermissions("homeai:recipe:importExcel")
+    public Result<?> importCovers(HttpServletRequest request) {
+        try {
+            if (!(request instanceof MultipartHttpServletRequest)) {
+                return Result.error("请求格式不正确，请使用multipart/form-data格式上传文件");
+            }
+            MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) request;
+            Map<String, MultipartFile> fileMap = multipartRequest.getFileMap();
+            if (fileMap.isEmpty()) {
+                return Result.error("未检测到上传文件");
+            }
+            // 文件名（去扩展名、去空白）→ 文件
+            Map<String, MultipartFile> byName = new LinkedHashMap<>();
+            for (MultipartFile f : fileMap.values()) {
+                if (f == null || f.isEmpty()) {
+                    continue;
+                }
+                String original = f.getOriginalFilename();
+                String base = original == null ? "" : original.substring(0, original.lastIndexOf('.') < 0 ? original.length() : original.lastIndexOf('.')).trim();
+                if (oConvertUtils.isEmpty(base)) {
+                    continue;
+                }
+                byName.putIfAbsent(base, f);
+            }
+            if (byName.isEmpty()) {
+                return Result.error("未识别到有效图片文件");
+            }
+            // 按名称批量匹配菜谱（同名称的菜谱都会更新为该封面）
+            List<Recipe> recipes = recipeService.list(new LambdaQueryWrapper<Recipe>()
+                    .in(Recipe::getName, byName.keySet())
+                    .eq(Recipe::getDelFlag, 0));
+            Map<String, List<Recipe>> byRecipeName = recipes.stream()
+                    .collect(Collectors.groupingBy(Recipe::getName));
+            List<Map<String, Object>> matched = new ArrayList<>();
+            List<String> unmatched = new ArrayList<>();
+            for (Map.Entry<String, MultipartFile> e : byName.entrySet()) {
+                List<Recipe> hit = byRecipeName.get(e.getKey());
+                if (hit == null || hit.isEmpty()) {
+                    unmatched.add(e.getValue().getOriginalFilename());
+                    continue;
+                }
+                try {
+                    String coverUrl = fileStorageService.resolveAccessUrl(recipeService.uploadCoverFile(e.getValue()));
+                    for (Recipe r : hit) {
+                        r.setCoverUrl(coverUrl);
+                        recipeService.updateById(r);
+                    }
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("fileName", e.getValue().getOriginalFilename());
+                    row.put("recipeName", e.getKey());
+                    row.put("count", hit.size());
+                    row.put("coverUrl", coverUrl);
+                    matched.add(row);
+                } catch (Exception ex) {
+                    log.warn("封面导入失败: {}", e.getValue().getOriginalFilename(), ex);
+                    unmatched.add(e.getValue().getOriginalFilename() + "（上传失败）");
+                }
+            }
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("matched", matched);
+            result.put("unmatched", unmatched);
+            return Result.OK(result);
+        } catch (Exception e) {
+            log.error("封面批量导入异常", e);
+            return Result.error("封面导入失败: " + e.getMessage());
+        }
+    }
+    //update-end---author:cursor ---date:2026-08-13 for：【菜谱导入】按文件名批量导入封面图-----------
+
+    //update-begin---author:cursor ---date:2026-08-13 for：【IDOR修复】菜谱媒体归属校验-----------
+    private Result<?> checkRecipeOwner(String recipeId, HttpServletRequest req) {
+        Recipe existing = recipeService.getById(recipeId);
+        if (existing == null) {
+            return Result.error("菜谱不存在");
+        }
+        if (securityUtil.isConsoleAuthenticated(req)) {
+            return null;
+        }
+        String uid = getUserId(req);
+        if (uid == null) {
+            return Result.error("未登录");
+        }
+        WxUser user = wxUserService.getById(uid);
+        if (!recipeService.canModifyRecipe(existing, uid, user != null ? user.getFamilyId() : null)) {
+            return Result.error("无权修改该菜谱");
+        }
+        return null;
+    }
+    //update-end---author:cursor ---date:2026-08-13 for：【IDOR修复】菜谱媒体归属校验-----------
 
     @GetMapping("/list")
     @Operation(summary="菜谱-分页列表查询")
@@ -302,12 +404,14 @@ public class RecipeController {
         if (categoryError != null) return categoryError;
         Recipe existing = recipeService.getById(r.getId());
         if (existing == null) return Result.error("菜谱不存在");
-        // 管理端控制台可编辑任意菜谱；小程序端只能编辑自己的菜谱
+        // 管理端控制台可编辑任意菜谱；小程序端只能编辑自己的或家庭共享菜谱
         if (!securityUtil.isConsoleAuthenticated(req)) {
             String uid = getUserId(req);
             if (uid == null) return Result.error("未登录");
-            if (!uid.equals(existing.getUserId())) return Result.error("无权编辑该菜谱");
             WxUser user = wxUserService.getById(uid);
+            if (!recipeService.canModifyRecipe(existing, uid, user != null ? user.getFamilyId() : null)) {
+                return Result.error("无权编辑该菜谱");
+            }
             try {
                 recipeService.applyFamilyOnSave(r, uid, user != null ? user.getFamilyId() : null);
             } catch (JeecgBootException e) {
@@ -327,7 +431,10 @@ public class RecipeController {
         if (!securityUtil.isConsoleAuthenticated(req)) {
             String uid = getUserId(req);
             if (uid == null) return Result.error("未登录");
-            if (!uid.equals(existing.getUserId())) return Result.error("无权删除该菜谱");
+            WxUser user = wxUserService.getById(uid);
+            if (!recipeService.canModifyRecipe(existing, uid, user != null ? user.getFamilyId() : null)) {
+                return Result.error("无权删除该菜谱");
+            }
         }
         recipeService.removeById(id);
         return Result.OK("OK");
@@ -358,7 +465,7 @@ public class RecipeController {
         List<RecipeStep> steps = JSON.parseArray(
                 JSON.toJSONString(body.get("steps")), RecipeStep.class);
         recipeService.saveWithRelations(recipe, ingredients, steps);
-        return Result.OK("新增成功");
+        return Result.OK(recipe);
     }
 
     /**
@@ -444,6 +551,11 @@ public class RecipeController {
                             if (oConvertUtils.isEmpty(item.getVisibility())) {
                                 item.setVisibility("private");
                             }
+                            //update-begin---author:cursor ---date:2026-08-13 for：【菜谱导入】封面图片地址格式校验-----------
+                            if (oConvertUtils.isNotEmpty(item.getCoverUrl()) && !isValidImageUrl(item.getCoverUrl().trim())) {
+                                throw new JeecgBootException("封面图片地址格式不正确（仅支持 http/https 或 /upload 相对地址）: " + item.getCoverUrl());
+                            }
+                            //update-end---author:cursor ---date:2026-08-13 for：【菜谱导入】封面图片地址格式校验-----------
                             item.setDelFlag(0);
                             item.setId(null);
                             List<RecipeIngredient> ingredients = recipeService.parseIngredientsFromExcel(item.getIngredients());
@@ -564,7 +676,7 @@ public class RecipeController {
         List<RecipeStep> steps = JSON.parseArray(
                 JSON.toJSONString(body.get("steps")), RecipeStep.class);
         recipeService.updateWithRelations(recipe, ingredients, steps);
-        return Result.OK("编辑成功");
+        return Result.OK(recipe);
     }
     //update-end---author:admin ---date:2026-07-30  for：菜谱管理-新增/导入/导出/回收站功能-----------
 
@@ -573,7 +685,11 @@ public class RecipeController {
      * 上传菜谱视频
      */
     @PostMapping("/{id}/video")
-    public Result<?> uploadVideo(@PathVariable String id, @RequestParam MultipartFile file) {
+    public Result<?> uploadVideo(@PathVariable String id, @RequestParam MultipartFile file, HttpServletRequest req) {
+        //update-begin---author:cursor ---date:2026-08-13 for：【IDOR修复】上传/删除菜谱视频、封面补归属校验-----------
+        Result<?> permError = checkRecipeOwner(id, req);
+        if (permError != null) return permError;
+        //update-end---author:cursor ---date:2026-08-13 for：【IDOR修复】上传/删除菜谱视频、封面补归属校验-----------
         try {
             String videoUrl = fileStorageService.resolveAccessUrl(recipeService.uploadVideo(id, file));
             return Result.OK("视频上传成功", videoUrl);
@@ -587,7 +703,11 @@ public class RecipeController {
      * 删除菜谱视频
      */
     @DeleteMapping("/{id}/video")
-    public Result<?> deleteVideo(@PathVariable String id) {
+    public Result<?> deleteVideo(@PathVariable String id, HttpServletRequest req) {
+        //update-begin---author:cursor ---date:2026-08-13 for：【IDOR修复】上传/删除菜谱视频、封面补归属校验-----------
+        Result<?> permError = checkRecipeOwner(id, req);
+        if (permError != null) return permError;
+        //update-end---author:cursor ---date:2026-08-13 for：【IDOR修复】上传/删除菜谱视频、封面补归属校验-----------
         recipeService.deleteVideo(id);
         return Result.OK("视频删除成功");
     }
@@ -597,7 +717,11 @@ public class RecipeController {
      * 上传菜谱封面图
      */
     @PostMapping("/{id}/cover")
-    public Result<?> uploadCover(@PathVariable String id, @RequestParam MultipartFile file) {
+    public Result<?> uploadCover(@PathVariable String id, @RequestParam MultipartFile file, HttpServletRequest req) {
+        //update-begin---author:cursor ---date:2026-08-13 for：【IDOR修复】上传/删除菜谱视频、封面补归属校验-----------
+        Result<?> permError = checkRecipeOwner(id, req);
+        if (permError != null) return permError;
+        //update-end---author:cursor ---date:2026-08-13 for：【IDOR修复】上传/删除菜谱视频、封面补归属校验-----------
         try {
             String url = fileStorageService.resolveAccessUrl(recipeService.uploadCover(id, file));
             return Result.OK(url);
@@ -763,6 +887,15 @@ public class RecipeController {
             return null;
         }
     }
+
+    //update-begin---author:cursor ---date:2026-08-13 for：【菜谱导入】封面图片地址格式校验-----------
+    /** 校验封面图片地址：http/https、/upload 相对地址或 data:image */
+    private boolean isValidImageUrl(String url) {
+        String v = url.trim();
+        return v.startsWith("http://") || v.startsWith("https://")
+                || v.startsWith("/upload/") || v.startsWith("data:image/");
+    }
+    //update-end---author:cursor ---date:2026-08-13 for：【菜谱导入】封面图片地址格式校验-----------
 
     private Integer parseInteger(String value) {
         try {

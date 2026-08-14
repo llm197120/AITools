@@ -24,6 +24,9 @@ public class Recipe implements Serializable {
     @Excel(name = "分类ID", width = 20)
     @TableField("category")
     private String categoryId;
+    //update-begin---author:cursor ---date:2026-08-13 for：【菜谱导入】封面图片地址列，支持 http/https 或本地上传相对地址-----------
+    @Excel(name = "封面图片地址", width = 30)
+    //update-end---author:cursor ---date:2026-08-13 for：【菜谱导入】封面图片地址列-----------
     @TableField("cover_image")
     private String coverUrl;
     private String videoUrl;

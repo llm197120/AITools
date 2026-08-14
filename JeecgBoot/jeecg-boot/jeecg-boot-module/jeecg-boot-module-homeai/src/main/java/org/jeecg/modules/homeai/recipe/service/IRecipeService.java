@@ -98,4 +98,9 @@ public interface IRecipeService extends IService<Recipe> {
     String uploadCoverFile(MultipartFile file);
     /** 通用上传做菜视频，返回视频地址（不绑定菜谱） */
     String uploadVideoFile(MultipartFile file);
+
+    //update-begin---author:cursor ---date:2026-08-13 for：【P0 双通道一致性】家庭成员可维护家庭菜谱（console 建的菜谱 userId 为空，家庭成员可编辑/删除）-----------
+    /** 是否有权修改菜谱：创建者本人，或家庭共享菜谱的家庭成员 */
+    boolean canModifyRecipe(Recipe recipe, String userId, String familyId);
+    //update-end---author:cursor ---date:2026-08-13 for：【P0 双通道一致性】家庭成员可维护家庭菜谱-----------
 }
