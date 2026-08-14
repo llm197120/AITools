@@ -1,4 +1,6 @@
-<route lang="json5">{ style: { navigationBarTitleText: '添加学习资料', navigationBarBackgroundColor: '#F3F2EE' } }</route>
+<route lang="json5">
+{ style: { navigationBarTitleText: '添加学习资料', navigationBarBackgroundColor: '#F3F2EE' } }
+</route>
 <template>
   <HomeFormCard>
     <input class="home-form-input" v-model="form.title" placeholder="资料标题" />
@@ -14,21 +16,28 @@
         <text class="home-form-value">{{ selectedCategoryName || '请选择' }}</text>
       </picker>
     </view>
-    <view class="home-form-row" @click="chooseFile">
+    <view class="home-form-row">
       <text>资料文件</text>
-      <text class="home-form-value">{{ fileName || '点击选择文件（可选）' }}</text>
+      <text class="home-form-value">
+        {{ form.fileUrl ? '已上传文件' : '点击选择文件（可选）' }}
+      </text>
     </view>
+    <HomeMediaUpload
+      v-model="form.fileUrl"
+      mode="file"
+      url="/homeai/learn/upload"
+      :form-data="{ type: form.type }"
+      placeholder="点击选择文件上传"
+      tip="格式需与资料类型匹配"
+    />
     <wd-button size="large" type="primary" block :loading="saving" @click="save">保存</wd-button>
   </HomeFormCard>
 </template>
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue'
 import { learnApi } from '../../pages-homeai/api/index'
-import { getServerBaseUrl } from '../../pages-homeai/api/request'
-import { useHomeaiFilePick } from '../../pages-homeai/utils/useHomeaiFilePick'
 import HomeFormCard from '../../components/HomeFormCard.vue'
-
-const { pickFiles } = useHomeaiFilePick()
+import HomeMediaUpload from '../../pages-homeai/components/HomeMediaUpload.vue'
 
 const typeLabels = ['视频', '图片', 'PDF', '文档', '笔记']
 const typeValues = ['video', 'image', 'pdf', 'doc', 'note']
@@ -36,14 +45,13 @@ const typeIndex = ref(4)
 const categoryNames = ref<string[]>([])
 const categoryIds = ref<string[]>([])
 const selectedCategoryName = ref('')
-const filePath = ref('')
-const fileName = ref('')
 const saving = ref(false)
 
 const form = ref({
   title: '',
   type: 'note',
   categoryId: '',
+  fileUrl: '',
   visibility: 'private',
 })
 
@@ -68,14 +76,6 @@ function onCategoryChange(e: any) {
   selectedCategoryName.value = categoryNames.value[idx] || ''
 }
 
-async function chooseFile() {
-  const files = await pickFiles({ count: 1, type: 'all' })
-  if (files[0]) {
-    filePath.value = files[0].path
-    fileName.value = files[0].name
-  }
-}
-
 async function save() {
   if (!form.value.title) {
     uni.showToast({ title: '请输入标题', icon: 'none' })
@@ -83,18 +83,7 @@ async function save() {
   }
   saving.value = true
   try {
-    const material: any = await learnApi.create(form.value)
-    if (filePath.value && material?.id) {
-      const token = uni.getStorageSync('homeai_token')
-      const up: any = await uni.uploadFile({
-        url: getServerBaseUrl() + `/homeai/learn/materials/${material.id}/upload`,
-        filePath: filePath.value,
-        name: 'file',
-        header: { 'X-Access-Token': token },
-      })
-      const data = typeof up.data === 'string' ? JSON.parse(up.data) : up.data
-      if (!data.success) throw new Error(data.message || '文件上传失败')
-    }
+    await learnApi.create({ ...form.value })
     uni.showToast({ title: '创建成功', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 800)
   } catch (e: any) {

@@ -10,13 +10,14 @@
 <template>
   <HomeFormCard>
     <!-- 封面 -->
-    <view class="cover-block" @click="chooseCover">
-      <image v-if="form.coverUrl" class="cover-img" :src="form.coverUrl" mode="aspectFill" />
-      <view v-else class="cover-empty">
-        <text class="cover-icon">🖼️</text>
-        <text class="cover-tip">点击上传封面</text>
-      </view>
-    </view>
+    <HomeMediaUpload
+      v-model="form.coverUrl"
+      mode="image"
+      url="/homeai/recipe/cover"
+      placeholder="点击上传封面"
+      tip="支持 jpg/png/webp，建议比例 16:9"
+      :height="320"
+    />
 
     <!-- 基本信息 -->
     <view class="form-card">
@@ -33,8 +34,10 @@
       <view class="form-group">
         <text class="label">难度</text>
         <view class="radio-group">
-          <view :class="'radio '+(form.difficulty==='1'?'active':'')" @click="form.difficulty='1'">简单</view>
+          <view :class="'radio '+(form.difficulty==='1'?'active':'')" @click="form.difficulty='1'">入门</view>
+          <view :class="'radio '+(form.difficulty==='2'?'active':'')" @click="form.difficulty='2'">简单</view>
           <view :class="'radio '+(form.difficulty==='3'?'active':'')" @click="form.difficulty='3'">中等</view>
+          <view :class="'radio '+(form.difficulty==='4'?'active':'')" @click="form.difficulty='4'">较难</view>
           <view :class="'radio '+(form.difficulty==='5'?'active':'')" @click="form.difficulty='5'">困难</view>
         </view>
       </view>
@@ -81,10 +84,13 @@
             <text class="op-btn danger" @click="steps.splice(i, 1)">✕</text>
           </view>
         </view>
-        <view class="step-img-block" @click="chooseStepImage(i)">
-          <image v-if="s.imageUrl" class="step-img" :src="s.imageUrl" mode="aspectFill" />
-          <view v-else class="step-img-empty">📷 添加步骤图</view>
-        </view>
+        <HomeMediaUpload
+          v-model="s.imageUrl"
+          mode="image"
+          url="/homeai/recipe/step-image"
+          placeholder="📷 添加步骤图"
+          :height="140"
+        />
         <textarea class="step-input" v-model="s.description" placeholder="步骤说明..." :maxlength="300" />
       </view>
       <text class="add-btn" @click="addStep">+ 添加步骤</text>
@@ -93,11 +99,15 @@
     <!-- 做菜视频 -->
     <view class="form-card">
       <view class="card-title">做菜视频（可选）</view>
-      <view v-if="form.videoUrl" class="video-block">
-        <video class="video-preview" :src="form.videoUrl" controls></video>
-        <text class="del-btn center" @click="form.videoUrl = ''">删除视频</text>
-      </view>
-      <view v-else class="video-upload" @click="chooseVideo">🎬 选择视频上传</view>
+      <HomeMediaUpload
+        v-model="form.videoUrl"
+        mode="video"
+        url="/homeai/recipe/video"
+        placeholder="选择视频上传"
+        tip="支持 mp4/webm/mov 等常见视频格式"
+        :max-size="200"
+        :max-video-duration="30"
+      />
     </view>
 
     <!-- 小贴士 -->
@@ -114,12 +124,10 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { get as getApi, post as postApi, put as putApi, getServerBaseUrl } from '../../pages-homeai/api/request'
+import { get as getApi, post as postApi, put as putApi } from '../../pages-homeai/api/request'
 import { formatQuantityUnit, parseAmountToQuantityUnit } from '../../pages-homeai/utils/recipeIngredient'
-import { useHomeaiFilePick } from '../../pages-homeai/utils/useHomeaiFilePick'
 import HomeFormCard from '../../components/HomeFormCard.vue'
-
-const { pickImages } = useHomeaiFilePick()
+import HomeMediaUpload from '../../pages-homeai/components/HomeMediaUpload.vue'
 
 const editId = ref('')
 const saving = ref(false)
@@ -204,74 +212,6 @@ function moveStep(i: number, dir: number) {
   steps.value[j] = tmp
 }
 
-function uploadFile(filePath: string, url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const token = uni.getStorageSync('homeai_token')
-    uni.uploadFile({
-      url: getServerBaseUrl() + url,
-      filePath,
-      name: 'file',
-      header: { 'X-Access-Token': token },
-      success: (res) => {
-        try {
-          const data = JSON.parse(res.data)
-          if (data.success && data.result) resolve(data.result)
-          else reject(new Error(data.message || '上传失败'))
-        } catch (e) {
-          reject(e)
-        }
-      },
-      fail: reject,
-    })
-  })
-}
-
-function chooseCover() {
-  pickImages({ count: 1 }).then(async (files) => {
-    if (!files[0]) return
-    uni.showLoading({ title: '上传中...' })
-    try {
-      form.value.coverUrl = await uploadFile(files[0].path, '/homeai/recipe/cover')
-      uni.hideLoading()
-    } catch (e: any) {
-      uni.hideLoading()
-      uni.showToast({ title: e.message || '封面上传失败', icon: 'none' })
-    }
-  })
-}
-
-function chooseVideo() {
-  uni.chooseVideo({
-    sourceType: ['album', 'camera'],
-    maxDuration: 30,
-    success: async (r) => {
-      if (!r.tempFilePath) return
-      uni.showLoading({ title: '上传中...' })
-      try {
-        form.value.videoUrl = await uploadFile(r.tempFilePath, '/homeai/recipe/video')
-        uni.hideLoading()
-      } catch (e: any) {
-        uni.hideLoading()
-        uni.showToast({ title: e.message || '视频上传失败', icon: 'none' })
-      }
-    },
-  })
-}
-
-function chooseStepImage(i: number) {
-  pickImages({ count: 1 }).then(async (files) => {
-    if (!files[0]) return
-    uni.showLoading({ title: '上传中...' })
-    try {
-      steps.value[i].imageUrl = await uploadFile(files[0].path, '/homeai/recipe/step-image')
-      uni.hideLoading()
-    } catch (e: any) {
-      uni.hideLoading()
-      uni.showToast({ title: e.message || '图片上传失败', icon: 'none' })
-    }
-  })
-}
-
 async function submit() {
   if (!form.value.name.trim()) {
     uni.showToast({ title: '请输入菜名', icon: 'none' })
@@ -316,33 +256,6 @@ async function submit() {
 </script>
 
 <style scoped>
-.cover-block {
-  height: 320rpx;
-  border-radius: var(--hai-radius);
-  overflow: hidden;
-  margin-bottom: 20rpx;
-  background: var(--hai-card);
-  box-shadow: var(--hai-shadow);
-}
-.cover-img {
-  width: 100%;
-  height: 100%;
-}
-.cover-empty {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-.cover-icon {
-  font-size: 64rpx;
-}
-.cover-tip {
-  font-size: 24rpx;
-  color: var(--hai-text-muted);
-  margin-top: 12rpx;
-}
 .form-card {
   background: var(--hai-card);
   border-radius: var(--hai-radius);
@@ -424,11 +337,6 @@ async function submit() {
   font-size: 28rpx;
   padding: 8rpx;
 }
-.del-btn.center {
-  display: block;
-  text-align: center;
-  margin-top: 12rpx;
-}
 .add-btn {
   color: var(--hai-primary);
   font-size: 26rpx;
@@ -468,24 +376,6 @@ async function submit() {
 .op-btn.danger {
   color: var(--hai-danger);
 }
-.step-img-block {
-  margin-bottom: 12rpx;
-}
-.step-img {
-  width: 100%;
-  height: 220rpx;
-  border-radius: 12rpx;
-}
-.step-img-empty {
-  height: 120rpx;
-  background: var(--hai-bg);
-  border-radius: 12rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--hai-text-muted);
-  font-size: 26rpx;
-}
 .step-input {
   width: 100%;
   min-height: 100rpx;
@@ -495,21 +385,6 @@ async function submit() {
   border-radius: 12rpx;
   box-sizing: border-box;
   color: var(--hai-text);
-}
-.video-upload {
-  height: 140rpx;
-  background: var(--hai-bg);
-  border-radius: var(--hai-radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--hai-primary);
-  font-size: 28rpx;
-}
-.video-preview {
-  width: 100%;
-  height: 360rpx;
-  border-radius: var(--hai-radius-md);
 }
 .tips-input {
   width: 100%;
