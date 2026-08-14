@@ -86,6 +86,18 @@ public class BillController {
         return Result.OK("删除成功");
     }
 
+    //update-begin---author:cursor ---date:2026-08-13 for：【体验优化】账单单条查询，供编辑页按 id 加载（避免整条数据塞 URL）-----------
+    @GetMapping("/entry/{id}")
+    public Result<?> getEntry(@PathVariable String id, HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        BillEntry entry = billService.getById(id);
+        if (entry == null) return Result.error("账单不存在");
+        if (!uid.equals(entry.getUserId())) return Result.error("无权查看他人账单");
+        return Result.OK(entry);
+    }
+    //update-end---author:cursor ---date:2026-08-13 for：【体验优化】账单单条查询-----------
+
     @GetMapping("/summary")
     public Result<?> summary(@RequestParam(required = false) String yearMonth, HttpServletRequest r) {
         String uid = getUserId(r);
@@ -182,7 +194,7 @@ public class BillController {
     public Result<?> addEntry(@RequestBody BillEntry entry) {
         entry.setDelFlag(0);
         billService.save(entry);
-        return Result.OK("新增成功");
+        return Result.OK(entry);
     }
 
     /**
@@ -329,7 +341,7 @@ public class BillController {
     public Result<?> edit(@PathVariable String id, @RequestBody BillEntry entry) {
         entry.setId(id);
         billService.updateById(entry);
-        return Result.OK("编辑成功");
+        return Result.OK(entry);
     }
 
     /**
