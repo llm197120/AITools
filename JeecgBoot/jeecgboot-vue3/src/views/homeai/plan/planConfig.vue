@@ -47,12 +47,16 @@
   });
 
   async function loadData() {
-    const res: any = await configApi.getPlanConfig();
-    if (res) {
-      form.repeatHorizonDays = res.repeatHorizonDays ?? 90;
-      form.instanceCleanupDays = res.instanceCleanupDays ?? 30;
-      form.remindEnabled = res.remindEnabled !== false;
-      form.aiDocPolishEnabled = res.aiDocPolishEnabled !== false;
+    try {
+      const res = await configApi.getPlanConfig();
+      if (res) {
+        form.repeatHorizonDays = res.repeatHorizonDays ?? 90;
+        form.instanceCleanupDays = res.instanceCleanupDays ?? 30;
+        form.remindEnabled = res.remindEnabled !== false;
+        form.aiDocPolishEnabled = res.aiDocPolishEnabled !== false;
+      }
+    } catch (e: any) {
+      createMessage.error(e?.message || '计划配置加载失败');
     }
   }
 

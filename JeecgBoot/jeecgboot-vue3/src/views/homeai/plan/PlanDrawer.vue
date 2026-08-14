@@ -13,6 +13,7 @@
   import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
   import { BasicForm, useForm } from '/@/components/Form';
   import { planApi, recipeApi } from '/@/api/homeai';
+  import type { HomeaiCategory, HomeaiPayload, HomeaiRecipe } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';
 
   const emit = defineEmits(['success']);
@@ -31,7 +32,7 @@
 
   async function loadCategories() {
     try {
-      const list: any[] = (await planApi.categories()) || [];
+      const list: HomeaiCategory[] = (await planApi.categories()) || [];
       categoryOptions.value = list.map((c) => ({ label: c.name, value: c.name }));
     } catch {
       categoryOptions.value = [];
@@ -40,9 +41,9 @@
 
   async function loadRecipes() {
     try {
-      const res: any = await recipeApi.list({ pageNo: 1, pageSize: 200 });
-      const records = res?.records || res || [];
-      recipeOptions.value = (Array.isArray(records) ? records : []).map((r: any) => ({
+      const res = await recipeApi.list({ pageNo: 1, pageSize: 200 });
+      const records = Array.isArray(res) ? res : res?.records || [];
+      recipeOptions.value = records.map((r: HomeaiRecipe) => ({
         label: r.name,
         value: r.id,
       }));
@@ -182,7 +183,7 @@
     showResetButton: false,
   });
 
-  async function handleSubmit(values: any) {
+  async function handleSubmit(values: HomeaiPayload) {
     try {
       if (isUpdate.value) {
         await planApi.edit(recordId.value, values);

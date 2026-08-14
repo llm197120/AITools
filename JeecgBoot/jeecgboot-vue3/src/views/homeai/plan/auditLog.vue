@@ -17,6 +17,7 @@
   import { PageWrapper } from '/@/components/Page';
   import { BasicTable, useTable } from '/@/components/Table';
   import { auditApi } from '/@/api/homeai';
+  import type { HomeaiPageParams } from '/@/api/homeai';
 
   const moduleOptions = [
     { label: '计划', value: 'plan' },
@@ -38,7 +39,7 @@
 
   const [registerTable, { reload }] = useTable({
     title: '操作审计日志',
-    api: (params: any) => auditApi.logs(params),
+    api: (params: HomeaiPageParams) => auditApi.logs(params),
     columns: [
       { title: '时间', dataIndex: 'createTime', width: 170 },
       { title: '模块', dataIndex: 'module', width: 90 },

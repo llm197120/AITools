@@ -9,10 +9,11 @@
           <a-select-option value="month">按月份</a-select-option>
         </a-select>
         <a-date-picker v-model:value="yearMonth" picker="month" :allow-clear="false" @change="load" />
-        <a-button type="primary" @click="load">查询</a-button>
+        <a-button type="primary" :loading="loading" @click="load">查询</a-button>
       </a-space>
     </a-card>
 
+    <a-spin :spinning="loading">
     <a-row :gutter="16" style="margin-bottom: 16px">
       <a-col :span="6">
         <a-card :bordered="false"><a-statistic title="总支出" :value="data.totalExpense || 0" :precision="2" prefix="¥" value-style="color:var(--hai-admin-danger)" /></a-card>
@@ -29,18 +30,22 @@
     </a-row>
 
     <BasicTable :dataSource="data.rows || []" :columns="columns" :pagination="false" row-key="name" />
+    </a-spin>
   </PageWrapper>
 </template>
 
 <script lang="ts" name="homeai-bill-statistics" setup>
   import { PageWrapper } from '/@/components/Page';
-  import { ref, reactive, h } from 'vue';
+  import { ref, reactive, h, onMounted } from 'vue';
   import dayjs from 'dayjs';
   import { BasicTable } from '/@/components/Table';
-  import { defHttp } from '/@/utils/http/axios';
+  import { useMessage } from '/@/hooks/web/useMessage';
+  import { billApi } from '/@/api/homeai';
 
+  const { createMessage } = useMessage();
   const dimension = ref('category');
   const yearMonth = ref(dayjs().format('YYYY-MM'));
+  const loading = ref(false);
   const data = reactive<any>({ totalExpense: 0, totalIncome: 0, balance: 0, count: 0, rows: [] });
 
   const columns = [
@@ -50,20 +55,24 @@
   ];
 
   async function load() {
+    loading.value = true;
     try {
-      const res: any = await defHttp.get({
-        url: '/homeai/bill/admin/stats',
-        params: { yearMonth: yearMonth.value, dimension: dimension.value },
+      const res = await billApi.adminStats({
+        yearMonth: yearMonth.value,
+        dimension: dimension.value,
       });
       data.totalExpense = res.totalExpense;
       data.totalIncome = res.totalIncome;
       data.balance = res.balance;
       data.count = res.count;
       data.rows = res.rows || [];
-    } catch {
+    } catch (e: any) {
       data.rows = [];
+      createMessage.error(e?.message || '统计加载失败');
+    } finally {
+      loading.value = false;
     }
   }
 
-  load();
+  onMounted(load);
 </script>

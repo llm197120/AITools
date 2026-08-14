@@ -13,6 +13,7 @@
   import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
   import { BasicForm, useForm } from '/@/components/Form';
   import { billApi } from '/@/api/homeai';
+import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';
 
   const emit = defineEmits(['success']);
@@ -23,11 +24,11 @@
 
   async function loadCategories() {
     try {
-      const res: any = await billApi.categoryList({ pageNo: 1, pageSize: 200 });
-      const records = res?.records || res || [];
-      categoryOptions.value = (records as any[]).map((c) => ({
-        label: c.name || c.categoryName || c.id,
-        value: c.id,
+      const res = await billApi.categoryList({ pageNo: 1, pageSize: 200 });
+      const records = Array.isArray(res) ? res : res?.records || [];
+      categoryOptions.value = records.map((c: HomeaiCategory) => ({
+        label: c.name || c.id || '',
+        value: c.id || '',
       }));
     } catch {
       categoryOptions.value = [];
@@ -97,7 +98,7 @@
     showResetButton: false,
   });
 
-  async function handleSubmit(values: any) {
+  async function handleSubmit(values: HomeaiPayload) {
     try {
       if (isUpdate.value) {
         await billApi.edit(recordId.value, values);
