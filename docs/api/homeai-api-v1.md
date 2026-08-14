@@ -240,3 +240,28 @@ description: 家庭AI小工具系统完整API接口定义，基于 JeecgBoot RES
 | 学习资料     | `homeai:learn:material:list`, `homeai:learn:material:add`, `homeai:learn:material:edit`, `homeai:learn:material:delete`                    | 资料CRUD    |
 | 用户管理     | `homeai:user:list`, `homeai:user:view`, `homeai:user:edit`                           | 微信用户管理    |
 
+---
+
+## 实现补充（2026-08-13 · 第 33～38 轮落地）
+
+> 本文档为 2026-07-29 设计基线（其中 `/v1` 前缀建议未采纳，实际路径均为 `/homeai/...`）。
+> 以下为本轮优化会话中新增/变更的接口，权威变更记录见 `docs/plan/homeai-optimization-roadmap.md`。
+
+### 新增接口
+
+| 方法 | 路径 | 说明 | 权限 |
+| ---- | ---- | ---- | ---- |
+| POST | `/homeai/recipe/import-covers` | 批量导入菜谱封面：多文件上传，按文件名（去扩展名）匹配菜谱名称写入封面，返回 `{ matched, unmatched }` 报表 | 管理端 `homeai:recipe:importExcel`，已登记 `ADMIN_PREFIXES` |
+| GET | `/homeai/bill/entry/{id}` | 账单单条查询（编辑页按 id 加载，替代整条 JSON 塞 URL），含归属校验 | 小程序登录用户（本人） |
+| POST | `/homeai/ai/quota/precheck` | 配额预检 POST 变体：`scene`/`text` 走 JSON 请求体（长文本不再进 URL）；原 GET 保留兼容 | 登录用户 |
+
+### 行为变更
+
+| 变更 | 说明 |
+| ---- | ---- |
+| `/homeai/learn/upload` 移出管理端白名单 | 学习资料「新增前预上传」小程序/管理端均可用，修复小程序 401 |
+| 管理端新增/编辑返回实体 | `POST /recipe/add`、`PUT /recipe/{id}`、`POST /bill/add`、`PUT /bill/{id}` 由返回字符串改为返回保存后的对象（与小程序端 `POST /recipe`、`PUT /recipe`、`/bill/entry` 一致） |
+| 菜谱 Excel 导入支持封面 | `coverUrl` 增加 `@Excel("封面图片地址")` 列，导入/导出模板同步（详见 `docs/guide/recipe-excel-import.md`） |
+| 上传安全 | 菜谱封面/视频/步骤图上传增加扩展名白名单、大小限制（图 10MB/视频 200MB）、魔数校验；上传前校验菜谱存在 |
+| IDOR 修复 | office `GET /storage/office/tasks/{id}`、菜谱 `{id}/video`/`{id}/cover`、学习 `materials/{id}/upload` 补登录 + 归属校验（家庭成员可维护家庭菜谱） |
+

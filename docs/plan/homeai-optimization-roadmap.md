@@ -1,13 +1,13 @@
 ---
 name: 家庭AI小工具 - 迭代优化路线图
-version: v3
-status: 进行中（第 13～32 轮已落地）
+version: v4
+status: 进行中（第 13～38 轮已落地）
 updated: 2026-08-13
 ---
 
 # 家庭AI小工具 - 迭代优化路线图
 
-> 本文档汇总第 **1～12 轮**业务迭代，以及 **第 13～32 轮**工程化/业务/视觉优化落地内容。  
+> 本文档汇总第 **1～12 轮**业务迭代，以及 **第 13～38 轮**工程化/业务/视觉/安全优化落地内容。  
 > 业务模块后续建议见第三节。
 
 相关路径索引：
@@ -596,6 +596,129 @@ homeai:
 
 ---
 
+### 第 33 轮：双端上传体验统一（2026-08-13）
+
+> 新增/编辑弹窗的图片/视频/文件上传统一为「选择/拖拽 + 进度 + 大预览 + 更换/删除」。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 管理端 | 通用上传组件 | image/video/file 三模式；a-upload 拖拽 + 进度条 + 大预览 + 更换/删除；`isReturnResponse` 正确读取 `result` | `views/homeai/components/HomeaiMediaUpload.vue` |
+| 管理端 | 菜谱弹窗 | 封面/做菜视频/步骤图接入组件，移除旧隐藏 file input | `RecipeDrawer.vue` |
+| 管理端 | 学习资料弹窗 | 文件上传接入组件；`link` 类型直接填写 URL | `LearnDrawer.vue` |
+| 小程序 | 通用上传组件 | tap 选择 + `onProgressUpdate` 进度 + 预览 + 更换/删除；复用文件白名单 | `pages-homeai/components/HomeMediaUpload.vue` |
+| 小程序 | 菜谱新增/编辑 | 封面/步骤图/视频接入组件 | `recipe/add.vue` |
+| 小程序 | 学习资料新增 | 文件改走 `/homeai/learn/upload` 预上传，保存时以 `fileUrl` 落库 | `learn/add.vue` |
+
+**无新增 SQL。**
+
+### 第 34 轮：全项目巡检 + P0 安全/正确性修复（2026-08-13）
+
+> Agent 三端巡检（后端 / 管理端 / 小程序）输出问题清单，落地全部 P0 项。
+
+**鉴权与上传安全**
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 后端 | 学习预上传 401 回归 | `/homeai/learn/upload` 移出 `ADMIN_PREFIXES`（小程序 + 管理端均可用） | `HomeaiAuthInterceptor` |
+| 后端 | 菜谱上传加固 | 扩展名白名单 + 大小限制（图 10MB / 视频 200MB）+ 魔数校验；objectKey 拒绝 `..` 段（纵深防路径穿越） | `RecipeServiceImpl`、`HomeaiFileStorageServiceImpl` |
+| 后端 | 孤儿文件 | `uploadVideo/uploadCover` 先校验菜谱存在，避免上传成功但 DB 未落 | `RecipeServiceImpl` |
+| 后端 | IDOR 越权 | office `tasks/{id}`、recipe `{id}/video` / `{id}/cover`、learn `materials/{id}/upload` 补登录 + 归属校验 | `StorageOfficeController`、`RecipeController`、`LearnController` |
+
+**管理端上传返回 BUG（根因修复）**
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 管理端 | `Axios.uploadFile` 根因 | 失败不再误报成功；无回调时返回完整响应体（`isReturnResponse` 读 `result`） | `Axios.ts` |
+| 管理端 | 账单导入预览 | `billImport` 修复：文件真正上传 + 读 `result`（原「解析预览」功能整体不可用） | `billImport.vue` |
+| 管理端 | 模板上传 | `officeTemplate` 修复：模板 URL 落库；失败不再提示"新增成功" | `officeTemplate.vue` |
+| 管理端 | 文件上传 | `fileList` 失败不再 unhandled rejection | `fileList.vue` |
+
+**无新增 SQL。**
+
+### 第 35 轮：时区 / 登录态 / 事务 / 性能 / 安全加固（2026-08-13）
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 小程序 | UTC 时区 | 新增 `utils/date.ts`（`localDateStr`/`localMonthStr`），替换 8 处 `toISOString().substring`（修复账单统计「下月」按钮失效等） | `bill/statistics|add|edit`、`plan/index|add|detail`、`profile` |
+| 小程序 | 401 登录态残留 | `request.ts` 401 改 `useUserStore().logout()`，同步清 storage + Pinia store | `request.ts` |
+| 后端 | 收藏并发计数 | `toggleFavorite` 计数改 SQL 原子递增/递减 + `@Transactional` | `RecipeServiceImpl` |
+| 后端 | 多表写入事务 | storage 建文件夹/删除/上传/改可见性、文件夹级联删除、family 成员/新增/彻底删、user 设置家庭 补 `@Transactional` | `StorageController`、`StorageFolderServiceImpl`、`FamilyController`、`WxUserController` |
+| 后端 | 配额性能 | `sumUsedBytesByUser/Family` 改 SQL `COALESCE(SUM(file_size),0)` 聚合 | `StorageFileServiceImpl` |
+| 后端 | 文件夹树 | 文件数 N+1 → 单条 `GROUP BY` 批量统计 | `StorageFolderServiceImpl` |
+| 后端 | 安全加固 | JWT 默认密钥启动告警；非 dev/test 环境未配微信配置拒绝 mock 登录 | `HomeaiJwtUtil`、`WxUserServiceImpl` |
+
+**无新增 SQL。**
+
+### 第 36 轮：体验与死代码清理（2026-08-13）
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 后端 | 审计日志 | detail JSON 超 8000 字符截断为合法 JSON | `HomeaiAuditLogServiceImpl` |
+| 后端 | XFF 伪造 | `clientIp` 改取最右侧代理追加 IP + 格式校验 | `StorageController` |
+| 后端 | AI 配额预检 | 新增 `POST /homeai/ai/quota/precheck`（text 走请求体） | `HomeaiAiQuotaController` |
+| 后端 | 账单 | 新增 `GET /homeai/bill/entry/{id}` | `BillController` |
+| 小程序 | chat 预检 | 改 POST，长文本不再进 URL | `chat.vue` |
+| 小程序 | bill 编辑 | 改按 id 传参，不再整条 JSON 塞 URL | `bill/index|edit.vue`、`bill.ts` |
+| 小程序 | 图片懒加载 | recipe/storage/family/chat 列表 `<image lazy-load>` | 多页 |
+| 小程序 | storage 双请求 | 子组件 `onMounted` 重复 refresh 移除 | `StorageBrowser.vue` |
+| 双端 | 死代码清理 | 删除 `useHomeUpload.ts`、`api/ai.ts`、`HomeNetworkBar.vue`、`useFileFolderTree.ts`；`storageVisibility` 死导出；`StorageBrowser` 误注册页面移除 | — |
+
+**无新增 SQL。**
+
+### 第 37 轮：菜谱导入支持封面图片（2026-08-13）
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 后端 | 模板/导入封面列 | `coverUrl` 增加 `@Excel("封面图片地址")`，导出模板与导入自动识别该列（支持 http/https、/upload、data:image） | `Recipe.java`、`RecipeController` |
+| 后端 | 批量导入封面入口 | `POST /recipe/import-covers`：多文件上传，按文件名（去扩展名）匹配菜谱名称批量写入封面，返回成功/未匹配报表；登记管理端白名单 | `RecipeController`、`HomeaiAuthInterceptor` |
+| 管理端 | 批量导入 UI | 菜谱页「批量导入封面」按钮 + 弹窗（多选图片、缩略预览、开始导入、结果报表） | `recipeList.vue` |
+| 文档 | 导入说明 | 补充封面地址列与批量封面导入用法 | `docs/guide/recipe-excel-import.md` |
+
+**无新增 SQL。**
+
+### 第 38 轮：P0 加固 + P1 体验收尾 + 工程化收敛（2026-08-13）
+
+> 五视角审查后的集中落地：P0 安全/正确性 + P1 体验/健壮性 + 工程化（API 收敛/CRUD 去重/类型化）。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 后端 | 双通道 userId 不一致 | 新增 `canModifyRecipe`：创建者本人 **或家庭共享菜谱的家庭成员** 可编辑/删除/上传媒体，解决 console 建的家庭菜谱（userId 为空）小程序端不可维护 | `IRecipeService`、`RecipeServiceImpl`、`RecipeController`（mini edit/delete、checkRecipeOwner） |
+| 后端 | 回归测试 | 新增 `RecipeVisibilityTest`（6 用例：可见性/可修改性授权，覆盖 console 建菜谱场景） | `src/test/java/.../RecipeVisibilityTest.java` |
+| 小程序 | 生产构建守卫 | `vite.config.ts` 生产构建检测 `VITE_SERVER_BASEURL` / `WEIXIN_RELEASE` 仍为本机地址或非 HTTPS 直接中止构建 | `vite.config.ts` |
+| 小程序 | AI 图片失败静默丢图 | chat 图片上传失败：toast 提示 + 回滚临时消息与输入 + 中止发送，不再"少图"静默发出 | `chat.vue` |
+| 管理端 | 无效导出按钮 | keyConfig「导出」移除（无后端接口；导出 API 密钥有安全风险） | `keyConfig.vue` |
+| 管理端 | 难度档位统一 | RecipeDrawer 难度改为 1-5 档（与列表一致），修复编辑难度 2/4 时无匹配项 | `RecipeDrawer.vue` |
+| 小程序 | 重发误删消息 | `resendLastMessage` 仅当最后一条为流式占位时才回滚消息，避免误删已完成 AI 回复 | `chat.vue` |
+| 小程序 | H5 文本预览兼容 | `preview.vue` 的 `getFileSystemManager` 不存在时优雅降级提示 | `preview.vue` |
+| 管理端 | loadData 兜底 | `planConfig` / `fileWhitelist` 加载补 try/catch，消除 unhandled rejection | `planConfig.vue`、`fileWhitelist.vue` |
+| 管理端 | 账单统计体验 | `billStatistics` 补 loading 状态 + 错误提示 + 移入 `onMounted` | `billStatistics.vue` |
+| 管理端 | 批量删除兜底 | `conversationList` 批量删除失败计数，部分失败给出明确提示 | `conversationList.vue` |
+| 管理端 | API 层死代码收敛 | 移除 `api/homeai` 17 个无引用导出（`chatApi`、`storageApi.folderTree/createFolder/deleteFolder/checkGenerateQuota`、`conversationApi.getById/rename`、`quotaApi.logList`、`configApi.getWechatPublic`、`userApi.getById`、`recipeApi.uploadVideo/deleteVideo/favorites/toggleFavorite/hot/recommend/newest`），逐一核验无调用方 | `api/homeai/index.ts` |
+| 小程序 | 附件上传空 URL | chat 附件上传响应缺 URL 时不再 push 脏数据，给出失败提示 | `chat.vue` |
+| 小程序 | 批量上传闪烁 | `useStorageBrowser` 多文件上传改为批量计数，最后一个完成后统一 refresh | `useStorageBrowser.ts` |
+| 小程序 | 首页统计缓存 | profile 三统计接口抽 `loadStats()` + 30s TTL，避免频繁切 Tab 重复拉取 | `profile.vue` |
+| 管理端 | API 层收敛 | 补齐 `storageOfficeApi`/`storageTemplateApi`/`storageRuleApi` 封装 + `storageApi` 补全（folderTree/folderFiles/createFolder/updateFolder/deleteFolder/stats）+ `billApi.adminStats`；`fileList`/`officeTemplate`/`officeHistory`/`convertRule`/`ConvertRuleDrawer`/`KeyConfigDrawer`/`billStatistics` 7 页裸调 defHttp 全部收敛到 api 层（保留 multipart uploadFile 调用） | `api/homeai/index.ts`、7 个页面 |
+| 管理端 | 回收站 CRUD 去重 | 新增 `useHomeaiRecycleBin` hook（移入/恢复/彻底删除单条+批量 + rowSelection，可配 entityName/nameField/permanentWarn/confirmWithName）；6 个主列表页（user/family/bill/plan/recipe/learn）复用，每页净减约 60 行 | `hooks/useHomeaiRecycleBin.ts`、6 个列表页 |
+| 小程序 | 首页 onShow 缓存 | learn 统计/目标 30s TTL（列表/进行中会话保持实时）；recipe 推荐/新菜 60s TTL（主列表实时），减少频繁返回首页重复请求 | `learn/index.vue`、`recipe/index.vue` |
+| 管理端 | 账单搜索表单 | billList 分类/用户筛选由纯 Input 改为 Select（与 recipe/learn/plan 一致），分类选项经 `billApi.categoryList` 加载 | `billList.vue` |
+| 管理端 | CSV 模板去重 | 新增 `utils/csvTemplate.ts`（BOM+Blob 下载），billList/planList/learnList 三处模板下载复用 | `utils/csvTemplate.ts`、3 个列表页 |
+| 管理端 | 文件大小格式化去重 | fileList 删除重复的 `formatFileSize`（与 `formatSize` 仅 units 差异），统一用 `formatSize` | `fileList.vue` |
+| 管理端 | 类型化·契约层 | `types.ts` 修正错位：`HomeaiFileWhitelistItem` 对齐后端（extension/category/sortOrder/isEnabled）、`HomeaiPlanConfig` 对齐 Redis DTO（repeatHorizonDays/instanceCleanupDays/remindEnabled/aiDocPolishEnabled）；新增 `HomeaiPageResult<T>`、`HomeaiConvertRule`、`HomeaiOfficeTemplate`、`HomeaiConvertTask`、`HomeaiAuditLog` | `api/homeai/types.ts` |
+| 管理端 | 类型化·API 层 | `api/homeai/index.ts` 16 处返回类型补全（各模块 list → `HomeaiPageResult<T> \| T[]`、`recipeApi.getById`、`getFileWhitelist`→`{items}`、`getPlanConfig`→`HomeaiPlanConfig`、`auditApi.logs` 等） | `api/homeai/index.ts` |
+| 管理端 | 类型化·视图层（recipe 模块） | 新增 `HomeaiRecipeStep`/`HomeaiRecipeDetail` 类型并修正 `getById` 返回（详情映射而非单实体）；`recipeList` 的 `api` 参数/`getTableAction`/分类列表/封面导入结果类型化；`RecipeDrawer` 的 `useDrawerInner` 参数与详情加载类型化 | `types.ts`、`index.ts`、`recipeList.vue`、`RecipeDrawer.vue` |
+| 管理端 | 类型化·视图层（bill 模块） | `billList`/`BillDrawer` 分类加载与 `api` 参数/`getTableAction` 类型化；`billImport` 新增 `BillImportRow` 行类型（含 duplicate 标记）；`billApi.adminStats` 补返回类型并同步 `billStatistics` | `billList.vue`、`BillDrawer.vue`、`billImport.vue`、`billStatistics.vue`、`index.ts` |
+| 管理端 | 类型化·视图层（learn/storage/plan/ai/family/user） | learn：`learnList`/`LearnDrawer`/`learnRecord`（新增 LearnCategoryStat/LearnUserStat 行类型）；storage：`fileList`（HomeaiStorageFile/Folder）、`fileWhitelist`（HomeaiFileWhitelistItem）、`convertRule`/`ConvertRuleDrawer`、`officeHistory`（HomeaiConvertTask）、`officeTemplate`（HomeaiOfficeTemplate）、`familyQuota`（新增 `HomeaiFamilyQuotaItem` + API 返回类型）；plan：`PlanDrawer`/`auditLog`/`planConfig`；ai：`conversationList`（新增 `HomeaiConversation`）、`quota`（新增 `HomeaiQuotaRecord`，清理未用 resetFields）；family/user：`api` 参数与 `getTableAction` 类型化 | 13 个视图文件、`types.ts`、`index.ts` |
+| 清理 | 调试残留与 BOM | 移除 learnRecord `showLearnRemindMeta` 调试代码（console.info + 无 api 封装请求）；去除 storage/index.vue、files.vue 的 UTF-8 BOM（消除 eslint unicode-bom） | `learnRecord.vue`、`storage/index.vue`、`storage/files.vue` |
+| 小程序 | 健壮性收尾 | family 成员加载 / storage 搜索 / chat 消息加载补 try-catch（消除 unhandled rejection）；office-convert 提交失败由静默吞错改为 toast 提示 | `family.vue`、`search.vue`、`chat.vue`、`office-convert.vue` |
+| 双端 | 难度语义统一 | 小程序菜谱新增改为 5 档（入门/简单/中等/较难/困难），detail/index 的 diffLabel 统一为规范映射 {1:入门,2:简单,3:中等,4:较难,5:困难}，与后端/管理端完全一致 | `recipe/add.vue`、`recipe/detail.vue`、`recipe/index.vue` |
+| 后端 | 双套接口返回统一 | 管理端新增/编辑统一返回实体：`POST /recipe/add`、`PUT /recipe/{id}`、`POST /bill/add`、`PUT /bill/{id}` 由返回字符串改为返回保存后的对象（与小程序端 `POST /recipe`、`PUT /recipe`、`/bill/entry` 一致）；已验证消费方（RecipeDrawer/BillDrawer）仅 await 不使用返回值 | `RecipeController`、`BillController` |
+
+**无新增 SQL。**
+
+> 说明：`/homeai/**` 在 Shiro 链为 anon（双 token 架构所限，改 authc 会破坏小程序登录），PUBLIC_PATHS 仅 3 个白名单路径、MVC 拦截器覆盖全部 /homeai 请求，风险评估为**可接受**；如需纵深建议在 Nginx 层做路径级 ACL（见第 40 轮建议）。小程序端暂未引入 jest/vitest 测试基建，时区工具单测待后续补充。
+
+---
+
 ## 二、数据库迁移清单（已有库按序执行）
 
 新库直接使用 `init_homeai_tables.sql` + `init_homeai_menus.sql` 即可。
@@ -757,15 +880,19 @@ alter_homeai_menus_iteration8.sql
 
 ## 四、建议下一轮执行顺序
 
-### 第 33 轮（推荐）
+### 第 39 轮（推荐）
 
 1. 学习提醒真机订阅联调验收  
 2. AI 场景配额运营报表  
+3. 家庭配额 modal 去重（family/index 与 fileList 各一份，抽公共 hook）  
+4. 后端纯逻辑单测扩展（沿 `RecipeVisibilityTest` 模式；注意父 pom `skipTests` 需临时翻转）  
 
-### 第 34 轮（可选）
+### 第 40 轮（可选）
 
-1. （可选）微信正式上架：`VITE_*_RELEASE` 填真实域名；隐私协议弹窗  
+1. ~~（可选）微信正式上架：`VITE_*_RELEASE` 填真实域名；隐私协议弹窗（`__usePrivacyCheck__`）与微信后台合法域名~~ **【已暂缓，按产品决定不上架】**；生产构建守卫（第 38 轮）已就位，后续如需上架按此清单执行即可  
 2. 菜谱推荐多样性（近期做过降权，避免总推同一道）  
+3. （评估）`/homeai/**` 在 Shiro 链为 `anon`，纵深依赖 MVC 拦截器 + `@RequiresPermissions`，如需更强隔离可在 Nginx 层做路径级 ACL  
+4. 小程序双重 toast 收敛（request 层与页面 catch 去重，微信 toast 替换式显示、影响小）
 
 ---
 
@@ -800,12 +927,14 @@ homeai.ai.key-encryption-key: xxx
 - 构建：`pnpm run build:docker:prod`（`VITE_GLOB_DOMAIN_URL=/jeecgboot`）
 - 部署后务必核对 `dist/_app.config.js`
 
-**小程序生产（上架 checklist）：**
+**小程序生产（上架 checklist）——【已暂缓：按产品决定暂不上架】**：
 
 1. `JeecgUniapp/env/.env.production`：把 `VITE_SERVER_BASEURL__WEIXIN_RELEASE` / `VITE_UPLOAD_BASEURL__WEIXIN_RELEASE` 改为正式 HTTPS  
 2. `manifest.config.ts` → `mp-weixin.setting.urlCheck: true`（已开启；本地连 `127.0.0.1` 时请在微信开发者工具勾选「不校验合法域名」）  
 3. 取消注释 `__usePrivacyCheck__: true`，并完善隐私协议弹窗  
 4. 微信公众平台配置 request / uploadFile 合法域名
+
+> 注：生产构建守卫（第 38 轮）已就位——`mode=production` 时若域名仍为本机/非 HTTPS 会直接中止构建；后续如需上架，按上述 4 步执行即可。
 
 ---
 
@@ -859,4 +988,4 @@ SOURCE /path/to/init_homeai_menus.sql;
 
 ---
 
-*最后更新：2026-08-13 · 第 1～32 轮已归档 · 第 24 轮补强（拦截器/模板/计划菜谱/小程序补洞）已落地*
+*最后更新：2026-08-13 · 第 1～38 轮已归档 · 第 33～36 轮（双端上传统一、P0 安全/正确性、时区/事务/性能、体验与死代码清理）、第 37 轮（菜谱导入封面图）、第 38 轮（P0 加固 + P1 体验收尾 + 工程化收敛）已落地*
