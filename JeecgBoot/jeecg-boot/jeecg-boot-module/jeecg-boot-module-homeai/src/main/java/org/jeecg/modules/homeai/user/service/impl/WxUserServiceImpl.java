@@ -50,6 +50,10 @@ public class WxUserServiceImpl extends ServiceImpl<WxUserMapper, WxUser> impleme
     @Value("${homeai.jwt.secret:homeai-default-secret}")
     private String jwtSecret;
 
+    /** 当前激活的 Spring Profile（用于区分开发/生产环境） */
+    @Value("${spring.profiles.active:dev}")
+    private String activeProfile;
+
     /** Token 在 Redis 中的缓存前缀 */
     private static final String PREFIX_USER_TOKEN = "homeai_token:";
     private static final String PREFIX_REFRESH_TOKEN = "homeai_refresh:";
@@ -137,7 +141,15 @@ public class WxUserServiceImpl extends ServiceImpl<WxUserMapper, WxUser> impleme
      */
     private String wechatCode2Session(String code) {
         if (appid.isEmpty() || secret.isEmpty()) {
-            log.warn("微信配置未设置，使用 mock openid: mock_{}", code);
+            //update-begin---author:cursor ---date:2026-08-13 for：【安全加固】生产环境拒绝 mock 登录，避免任意 code 注册-----------
+            String profile = activeProfile == null ? "" : activeProfile.toLowerCase();
+            boolean devLike = profile.contains("dev") || profile.contains("test");
+            if (!devLike) {
+                log.error("当前环境 [{}] 未配置 homeai.wechat.appid/secret，已拒绝 mock 登录", activeProfile);
+                throw new RuntimeException("服务端微信配置缺失，请联系管理员");
+            }
+            log.warn("微信配置未设置（dev 环境），使用 mock openid: mock_{}", code);
+            //update-end---author:cursor ---date:2026-08-13 for：【安全加固】生产环境拒绝 mock 登录-----------
             return "mock_" + code;
         }
         // 调用微信官方 code2Session 接口

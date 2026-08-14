@@ -6,6 +6,7 @@ import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.jeecg.common.util.oConvertUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -37,7 +38,13 @@ public class HomeaiJwtUtil {
     @PostConstruct
     public void init() {
         JWT_SECRET = jwtSecretConfig;
-        log.info("HomeaiJwtUtil 已初始化，JWT 签名验证已启用");
+        //update-begin---author:cursor ---date:2026-08-13 for：【安全加固】默认密钥告警，避免上线误用公开默认密钥-----------
+        if ("homeai-default-secret".equals(JWT_SECRET) || oConvertUtils.isEmpty(JWT_SECRET)) {
+            log.warn("【安全警告】homeai.jwt.secret 使用默认值/为空，JWT 可被伪造！生产环境务必在配置中设置强随机密钥。");
+        } else {
+            log.info("HomeaiJwtUtil 已初始化，JWT 签名验证已启用");
+        }
+        //update-end---author:cursor ---date:2026-08-13 for：【安全加固】默认密钥告警-----------
     }
 
     /**
