@@ -39,6 +39,7 @@ import org.jeecg.modules.homeai.user.entity.WxUser;
 import org.jeecg.modules.homeai.user.service.IWxUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -279,6 +280,7 @@ public class StorageController {
      * 创建文件夹
      */
     @PostMapping("/folders")
+    @Transactional(rollbackFor = Exception.class)
     public Result<?> createFolder(@RequestParam String name,
                                   @RequestParam(required = false) String parentId,
                                   @RequestParam(defaultValue = "private") String visibility,
@@ -306,6 +308,7 @@ public class StorageController {
      * 删除文件夹（含其内全部文件及子文件夹）
      */
     @DeleteMapping("/folders/{id}")
+    @Transactional(rollbackFor = Exception.class)
     public Result<?> deleteFolder(@PathVariable String id, HttpServletRequest request) {
         StorageFolder folder = folderService.getById(id);
         if (folder == null) return Result.error("文件夹不存在");
@@ -335,6 +338,7 @@ public class StorageController {
      * 修改文件夹可见性
      */
     @PatchMapping("/folders/{id}/visibility")
+    @Transactional(rollbackFor = Exception.class)
     public Result<?> updateFolderVisibility(@PathVariable String id,
                                             @RequestParam String visibility,
                                             @RequestParam(required = false) String familyIds,
@@ -389,6 +393,7 @@ public class StorageController {
     @PutMapping("/folders/{id}")
     @Operation(summary="资料存储-编辑文件夹")
     @RequiresPermissions("homeai:storage:file:list")
+    @Transactional(rollbackFor = Exception.class)
     public Result<?> updateFolder(@PathVariable String id, @RequestBody Map<String, Object> body,
                                   HttpServletRequest request) {
         StorageFolder folder = folderService.getById(id);
@@ -533,6 +538,7 @@ public class StorageController {
      * 上传文件
      */
     @PostMapping("/files/upload")
+    @Transactional(rollbackFor = Exception.class)
     public Result<?> uploadFile(@RequestParam MultipartFile file,
                                 @RequestParam(required = false) String folderId,
                                 @RequestParam(defaultValue = "private") String visibility,
@@ -576,6 +582,7 @@ public class StorageController {
      * 修改文件可见性
      */
     @PatchMapping("/files/{id}/visibility")
+    @Transactional(rollbackFor = Exception.class)
     public Result<?> updateFileVisibility(@PathVariable String id,
                                           @RequestParam String visibility,
                                           @RequestParam(required = false) String familyIds,
@@ -848,9 +855,25 @@ public class StorageController {
         }
         String ip = r.getHeader("X-Forwarded-For");
         if (oConvertUtils.isNotEmpty(ip)) {
-            return ip.split(",")[0].trim();
+            //update-begin---author:cursor ---date:2026-08-13 for：【安全加固】XFF 取最右侧由可信代理追加的真实 IP（左侧可被客户端伪造），并校验格式-----------
+            String[] parts = ip.split(",");
+            for (int i = parts.length - 1; i >= 0; i--) {
+                String candidate = parts[i].trim();
+                if (isPlausibleIp(candidate)) {
+                    return candidate;
+                }
+            }
+            //update-end---author:cursor ---date:2026-08-13 for：【安全加固】XFF 信任修复-----------
         }
         return r.getRemoteAddr();
+    }
+
+    /** 粗校验 IP 格式（IPv4 或 IPv6），过滤 XFF 注入的非 IP 内容 */
+    private static boolean isPlausibleIp(String ip) {
+        if (oConvertUtils.isEmpty(ip)) {
+            return false;
+        }
+        return ip.matches("^[0-9]{1,3}(\\.[0-9]{1,3}){3}$") || ip.contains(":");
     }
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22/R23】资料回收站 API（文件+文件夹）-----------
 

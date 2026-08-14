@@ -32,6 +32,7 @@ import org.jeecgframework.poi.excel.entity.ImportParams;
 import org.jeecgframework.poi.excel.entity.enmus.ExcelType;
 import org.jeecgframework.poi.excel.view.JeecgEntityExcelView;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
@@ -430,6 +431,7 @@ public class FamilyController {
     @AutoLog(value="家庭-添加成员(管理端)")
     @Operation(summary="家庭-添加成员(管理端)")
     @RequiresPermissions("homeai:family:add")
+    @Transactional(rollbackFor = Exception.class)
     public Result<?> adminAddMember(@RequestBody Map<String, String> body) {
         String familyId = body.get("familyId");
         String userId = body.get("userId");
@@ -544,6 +546,7 @@ public class FamilyController {
     @AutoLog(value="家庭-新增(管理端)")
     @Operation(summary="家庭-新增(管理端)")
     @RequiresPermissions("homeai:family:add")
+    @Transactional(rollbackFor = Exception.class)
     public Result<?> add(@RequestBody Family family, HttpServletRequest request) {
         if (family.getStatus() == null) {
             family.setStatus("normal");
@@ -745,6 +748,7 @@ public class FamilyController {
     @AutoLog(value="家庭-彻底删除")
     @Operation(summary="家庭-彻底删除")
     @RequiresPermissions("homeai:family:deletePermanently")
+    @Transactional(rollbackFor = Exception.class)
     public Result<?> deletePermanently(@RequestBody List<String> ids) {
         for (String id : ids) {
             // 清理该家庭所有成员关联

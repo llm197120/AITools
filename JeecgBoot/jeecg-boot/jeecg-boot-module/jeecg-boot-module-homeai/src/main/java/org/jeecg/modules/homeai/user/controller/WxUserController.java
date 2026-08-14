@@ -31,6 +31,7 @@ import org.jeecgframework.poi.excel.entity.ImportParams;
 import org.jeecgframework.poi.excel.entity.enmus.ExcelType;
 import org.jeecgframework.poi.excel.view.JeecgEntityExcelView;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
@@ -181,6 +182,7 @@ public class WxUserController {
     @AutoLog(value="微信用户-设置所属家庭")
     @Operation(summary="微信用户-设置所属家庭")
     @RequiresPermissions("homeai:user:edit")
+    @Transactional(rollbackFor = Exception.class)
     public Result<?> setFamily(@PathVariable String id, @RequestBody Map<String, String> body) {
         WxUser user = wxUserService.getById(id);
         if (user == null) {
