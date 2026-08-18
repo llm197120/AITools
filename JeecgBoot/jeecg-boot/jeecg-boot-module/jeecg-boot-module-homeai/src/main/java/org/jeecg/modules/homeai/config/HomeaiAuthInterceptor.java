@@ -43,8 +43,12 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
             "/homeai/user/login",
             "/homeai/user/refresh-token",
             //update-begin---author:admin ---date:2026-08-12 for：【HomeAI】订阅模板公开配置-----------
-            "/homeai/config/wechat-public"
+            "/homeai/config/wechat-public",
             //update-end---author:admin ---date:2026-08-12 for：【HomeAI】订阅模板公开配置-----------
+            //update-begin---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录公开接口-----------
+            "/homeai/auth/register",
+            "/homeai/auth/login/password"
+            //update-end---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录公开接口-----------
     );
 
     private static final List<String> ADMIN_PREFIXES = Arrays.asList(

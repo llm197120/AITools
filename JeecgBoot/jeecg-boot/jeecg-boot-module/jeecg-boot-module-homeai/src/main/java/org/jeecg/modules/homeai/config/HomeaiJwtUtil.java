@@ -1,6 +1,7 @@
 package org.jeecg.modules.homeai.config;
 
 import com.auth0.jwt.JWT;
+import com.auth0.jwt.JWTCreator;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
@@ -65,15 +66,36 @@ public class HomeaiJwtUtil {
      * @return JWT token
      */
     public static String sign(String openid, String secret, String clientType) {
+        //update-begin---author:admin ---date:2026-08-17 for:【Android迁移】JWT 增加 userId claim 兼容旧 token---
+        // 兼容旧行为：openid 同时作为 userId 写入，保证旧 token 仍可解析
+        return sign(openid, openid, secret, clientType);
+        //update-end---author:admin ---date:2026-08-17 for:【Android迁移】JWT 增加 userId claim 兼容旧 token---
+    }
+
+    /**
+     * 生成签名（支持 userId 与 openid 双 claim，Android 手机号登录迁移用）
+     * @param userId      用户 ID（WxUser 主键）
+     * @param openid      微信 openid，可为空（手机号登录场景无 openid）
+     * @param secret      签名密钥
+     * @param clientType  客户端类型 APP/PC
+     * @return JWT token
+     */
+    //update-begin---author:admin ---date:2026-08-17 for:【Android迁移】JWT 增加 userId claim 兼容旧 token---
+    public static String sign(String userId, String openid, String secret, String clientType) {
         long expireTime = "APP".equalsIgnoreCase(clientType) ? APP_EXPIRE_TIME : PC_EXPIRE_TIME;
         Date date = new Date(System.currentTimeMillis() + expireTime);
         Algorithm algorithm = Algorithm.HMAC256(secret);
-        return JWT.create()
-                .withClaim("openid", openid)
+        JWTCreator.Builder builder = JWT.create()
+                .withClaim("userId", userId)
                 .withClaim("clientType", clientType)
-                .withExpiresAt(date)
-                .sign(algorithm);
+                .withExpiresAt(date);
+        // java-jwt 的 withClaim 传 null 会抛异常，openid 非空才写入
+        if (oConvertUtils.isNotEmpty(openid)) {
+            builder.withClaim("openid", openid);
+        }
+        return builder.sign(algorithm);
     }
+    //update-end---author:admin ---date:2026-08-17 for:【Android迁移】JWT 增加 userId claim 兼容旧 token---
 
     /**
      * 生成 RefreshToken
@@ -120,4 +142,36 @@ public class HomeaiJwtUtil {
         String token = request.getHeader("X-Access-Token");
         return getOpenid(token);
     }
+
+    /**
+     * 从 token 中验证签名并获取 userId
+     * @param token JWT token
+     * @return userId，验证失败或未携带返回 null
+     */
+    //update-begin---author:admin ---date:2026-08-17 for:【Android迁移】JWT 增加 userId claim 兼容旧 token---
+    public static String getUserId(String token) {
+        try {
+            Algorithm algorithm = Algorithm.HMAC256(JWT_SECRET);
+            DecodedJWT jwt = JWT.require(algorithm).build().verify(token);
+            return jwt.getClaim("userId").asString();
+        } catch (JWTVerificationException e) {
+            log.error("Token 签名验证失败: {}", e.getMessage());
+            return null;
+        } catch (Exception e) {
+            log.error("Token 解析异常: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 从 HttpServletRequest 中提取 userId
+     * @param request HTTP请求
+     * @return userId，如果未登录返回 null
+     */
+    public static String getUserIdFromRequest(jakarta.servlet.http.HttpServletRequest request) {
+        if (request == null) return null;
+        String token = request.getHeader("X-Access-Token");
+        return getUserId(token);
+    }
+    //update-end---author:admin ---date:2026-08-17 for:【Android迁移】JWT 增加 userId claim 兼容旧 token---
 }

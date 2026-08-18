@@ -54,6 +54,11 @@ public class WxUserServiceImpl extends ServiceImpl<WxUserMapper, WxUser> impleme
     @Value("${spring.profiles.active:dev}")
     private String activeProfile;
 
+    //update-begin---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录---
+    @Autowired
+    private WxUserMapper wxUserMapper;
+    //update-end---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录---
+
     /** Token 在 Redis 中的缓存前缀 */
     private static final String PREFIX_USER_TOKEN = "homeai_token:";
     private static final String PREFIX_REFRESH_TOKEN = "homeai_refresh:";
@@ -134,6 +139,25 @@ public class WxUserServiceImpl extends ServiceImpl<WxUserMapper, WxUser> impleme
         query.eq(WxUser::getOpenid, openid);
         return getOne(query);
     }
+
+    //update-begin---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录---
+    @Override
+    public WxUser getByPhone(String phone) {
+        LambdaQueryWrapper<WxUser> q = new LambdaQueryWrapper<>();
+        q.eq(WxUser::getPhone, phone).eq(WxUser::getDelFlag, 0).last("LIMIT 1");
+        return wxUserMapper.selectOne(q);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public WxUser registerByPhone(WxUser user) {
+        // 密码/盐由调用方（控制器）设置，此处仅补全状态与创建时间后落库
+        user.setStatus(CommonConstant.STATUS_1);
+        user.setCreateTime(new Date());
+        save(user);
+        return user;
+    }
+    //update-end---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录---
 
     /**
      * 调用微信 code2Session 接口换取 openid

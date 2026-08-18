@@ -93,11 +93,21 @@ public class HomeaiSecurityUtil {
         if (oConvertUtils.isEmpty(token)) {
             return null;
         }
+        //update-begin---author:admin ---date:2026-08-17 for:【Android迁移】JWT 增加 userId claim 兼容旧 token---
+        // 双 claim 兼容解析：优先 userId claim（新手机号登录 token），未命中则回退 openid claim（旧微信 token）
+        String userId = HomeaiJwtUtil.getUserId(token);
+        if (oConvertUtils.isNotEmpty(userId)) {
+            WxUser wxUser = wxUserService.getById(userId);
+            if (wxUser != null) {
+                return wxUser;
+            }
+        }
         String openid = HomeaiJwtUtil.getOpenid(token);
         if (oConvertUtils.isEmpty(openid)) {
             return null;
         }
         return wxUserService.getByOpenid(openid);
+        //update-end---author:admin ---date:2026-08-17 for:【Android迁移】JWT 增加 userId claim 兼容旧 token---
     }
 
     /**

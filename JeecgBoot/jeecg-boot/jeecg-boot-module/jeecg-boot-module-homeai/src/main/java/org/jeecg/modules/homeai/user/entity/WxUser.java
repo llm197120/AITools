@@ -51,6 +51,20 @@ public class WxUser implements Serializable {
     @Schema(description = "手机号")
     private String phone;
 
+    //update-begin---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录字段---
+    /** 密码(PBE加密) */
+    @Schema(description = "密码(PBE加密)")
+    private String password;
+
+    /** 密码盐 */
+    @Schema(description = "密码盐")
+    private String salt;
+
+    /** 登录方式:wechat/phone */
+    @Schema(description = "登录方式:wechat/phone")
+    private String loginType;
+    //update-end---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录字段---
+
     /** 家庭角色:爸爸/妈妈/孩子/其他 */
     @Excel(name = "家庭角色", width = 10)
     @Schema(description = "家庭角色:爸爸/妈妈/孩子/其他")
