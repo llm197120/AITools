@@ -27,7 +27,8 @@ docs/                          # 文档根目录
 ├── plan/                       # 实现计划与进度
 │   ├── implementation-plan.md   # 8阶段实现计划
 │   ├── phase-progress.md        # 各阶段完成情况记录
-│   ├── homeai-optimization-roadmap.md  # 迭代优化路线图（暂停）
+│   ├── homeai-optimization-roadmap.md  # 迭代优化路线图（第 1～40 轮）
+│   ├── comfyui-roadmap.md             # ComfyUI 本地路线（第 41～42 轮，独立）
 │   └── android-migration-design.md     # 小程序→Android 迁移方案（暂不执行）
 │
 ├── review/                    # 审查记录

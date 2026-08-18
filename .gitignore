@@ -7,3 +7,7 @@
 # Android 签名证书与敏感文档（勿提交仓库）
 *.keystore
 /docs/plan/android-migration-round2-signing.md
+
+# ComfyUI 本地运行日志（勿提交仓库）
+/comfyui.log
+/comfyui.log.err

@@ -161,7 +161,7 @@ FLUX.1 schnell GGUF Q4 加载（ComfyUI-GGUF 节点）→ 1024×1024 → --lowvr
 | 人脸修复 | `codeformer.pth` | 376MB | `models/facerestore_models/` |
 | ControlNet 局部重绘 | `control_v11p_sd15_inpaint.pth` | 1.45GB | `models/controlnet/` |
 
-> Z-Image 来源：ModelScope `Comfy-Org/z_image_turbo`（官方拆分文件）；SDXL 来源：`AI-ModelScope/stable-diffusion-xl-base-1.0`（官方单文件）。常用模型来源：`muse/RealESRGAN_x4plus`、`XiangZL0/4x-UltraSharp`、`muse/GFPGANv1.4`、`a694193787/CodeFormer`、`lllyasviel/ControlNet-v1-1`（均 ModelScope）。人脸修复模型需另装 FaceRestore 类插件（如 ComfyUI-FaceRestore / Impact Pack）才有对应节点。
+> Z-Image 来源：ModelScope `Comfy-Org/z_image_turbo`（官方拆分文件）；SDXL 来源：`AI-ModelScope/stable-diffusion-xl-base-1.0`（官方单文件）。常用模型来源：`muse/RealESRGAN_x4plus`、`XiangZL0/4x-UltraSharp`、`muse/GFPGANv1.4`、`a694193787/CodeFormer`、`lllyasviel/ControlNet-v1-1`（均 ModelScope）。人脸修复节点已通过插件打通（见 6.6）。
 
 ### 6.3 实测出图（API 提交工作流，同一提示词，全部 success）
 
@@ -188,3 +188,16 @@ FLUX.1 schnell GGUF Q4 加载（ComfyUI-GGUF 节点）→ 1024×1024 → --lowvr
 | `stop-comfyui.bat` | 停止 ComfyUI | 按 8188 端口找 PID 强杀，轮询等端口释放（最长 15s，避免 socket 释放延迟误判） |
 
 > 位置：`C:\Users\57089\ComfyUI-portable\`。**编码硬规则**：`.bat` 必须 **ASCII 编码 + CRLF 换行**——中文 Windows 下 UTF-8 中文或 LF 换行会被 cmd 拆词报错（`'cho' 不是内部或外部命令` 等），`chcp 65001` 无法修复。闭环实测：stop → 端口释放 → start → 8188 监听，模型自动重新扫描。
+
+### 6.6 人脸修复插件（第 42 轮，已端到端验证）
+
+| 项 | 落地 |
+|---|---|
+| 插件 | `comfyorg/comfyui-facerestore`（官方 fork，自带 vendored `basicsr/`+`facelib/`，兼容 Python 3.13） |
+| 目录 | `custom_nodes/facerestore_cf/`（**必须重命名**——代码 import 路径是 `custom_nodes.facerestore_cf.*`，目录名不符会加载失败） |
+| 节点 | `FaceRestoreModelLoader`（加载 facerestore_models 下模型）/ `FaceRestoreCFWithModel`（CodeFormer Fidelity 参数）/ `CropFace` |
+| 检测模型 | `models/facedetection/`：`detection_Resnet50_Final.pth`（109MB）+ `parsing_parsenet.pth`（85MB）+ `parsing_bisenet.pth`（53MB），GitHub release 预下载（插件会先查该目录，避免运行时慢速拉取） |
+| 依赖 | 嵌入式 Python 补装 `opencv-python` `scikit-image` `addict` `lmdb` `lpips` `yapf` `gdown` `future`（清华源；未动 torch 2.13.0+cu126） |
+| 验证 | SD1.5 生成人像 → GFPGANv1.4 修复 → `test_facerestore_00001_.png`，`status: success`；工作流 `wf-portrait.json` / `wf-facerestore.json` 已留存 |
+
+> 用法：`FaceRestoreModelLoader`(选 GFPGANv1.4.pth 或 codeformer.pth) → `FaceRestoreCFWithModel`(facedetection 选 retinaface_resnet50，codeformer_fidelity 0~1 控制保真度，0 修复最强 / 1 最保真)。
