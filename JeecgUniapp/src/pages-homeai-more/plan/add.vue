@@ -142,6 +142,9 @@ async function requestPlanSubscribe() {
       })
     })
     // #endif
+    // #ifdef APP-PLUS
+    // TODO【Android迁移】本地通知/厂商推送后续迭代实现，当前 App 端暂无提醒推送
+    // #endif
   } catch {
     // 订阅失败不阻断创建
   }
