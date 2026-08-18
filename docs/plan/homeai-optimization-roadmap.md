@@ -1,13 +1,13 @@
 ---
 name: 家庭AI小工具 - 迭代优化路线图
 version: v4
-status: 进行中（第 13～40 轮已落地；ComfyUI 专项见 comfyui-roadmap.md）
+status: 进行中（第 13～44 轮已落地；ComfyUI 专项见 comfyui-roadmap.md）
 updated: 2026-08-18
 ---
 
 # 家庭AI小工具 - 迭代优化路线图
 
-> 本文档汇总第 **1～12 轮**业务迭代，以及 **第 13～40 轮**工程化/业务/视觉/安全优化落地内容。  
+> 本文档汇总第 **1～12 轮**业务迭代，以及 **第 13～44 轮**工程化/业务/视觉/安全优化落地内容。  
 > ComfyUI 本地路线（第 41～42 轮）已拆分至独立文档 [`comfyui-roadmap.md`](./comfyui-roadmap.md)。  
 > 业务模块后续建议见第三节。
 
@@ -775,6 +775,27 @@ homeai:
 
 ---
 
+### 第 44 轮：后端纯逻辑单测扩展（2026-08-18）
+
+> 沿 `RecipeVisibilityTest` 模式为 homeai 模块纯逻辑类补齐 JUnit 5 单元测试（无 Spring 上下文、无 Mockito），覆盖上传魔数校验、文件名清洗、重复计划日期匹配、AI Token 估算、菜谱可见性/Excel 解析等核心纯逻辑。
+
+| 测试类 | 覆盖内容 | 用例数 |
+|--------|----------|--------|
+| `HomeaiFileMagicUtilTest` | 魔数判定（jpg/png/gif/pdf/zip/OLE/mp4/未知扩展名）+ validate 上传校验（空参/MZ 可执行拦截/内容不匹配） | 16 |
+| `StorageFileNameUtilTest` | 对象路径拼接、原始文件名清洗截断（路径穿越/非法字符/控制字符/超长保留扩展名）、微信临时名判定、扩展名提取 | 14 |
+| `PlanRepeatUtilTest` | 重复计划规则判定 + none/daily/weekly/monthly/未知规则日期匹配 | 9 |
+| `HomeaiAiQuotaEstimateUtilTest` | 输入/输出 token 估算公式（含 trim、整数除法、500 下限） | 8 |
+| `RecipeServiceImplPureLogicTest` | applyFamilyOnSave / applyAdminVisibilityOnSave / parseIngredientsFromExcel / parseStepsFromExcel / RecipeVisibility.isValid | 20 |
+| `HomeaiFileUrlUtilTest` | 绝对/相对地址转换、危险扩展名黑名单（大小写不敏感） | 10 |
+
+**验证：** 临时翻转父 pom `skipTests` 后 `mvn test -pl jeecg-boot-module/jeecg-boot-module-homeai` 全量 **91 用例通过（新增 77 + 既有 14 无回归）**，跑完已还原 pom。
+
+**无新增 SQL。**
+
+**状态：** 已落地。
+
+---
+
 ## 二、数据库迁移清单（已有库按序执行）
 
 新库直接使用 `init_homeai_tables.sql` + `init_homeai_menus.sql` 即可。
@@ -951,7 +972,7 @@ alter_homeai_menus_iteration8.sql
 1. 学习提醒真机订阅联调验收  
 2. AI 场景配额运营报表  
 3. 家庭配额 modal 去重（family/index 与 fileList 各一份，抽公共 hook）  
-4. 后端纯逻辑单测扩展（沿 `RecipeVisibilityTest` 模式；注意父 pom `skipTests` 需临时翻转）  
+4. ~~后端纯逻辑单测扩展（沿 `RecipeVisibilityTest` 模式；注意父 pom `skipTests` 需临时翻转）~~ **【第 44 轮已落地】**  
 
 ### 第 43 轮（可选）
 
