@@ -42,6 +42,10 @@ export default ({ command, mode }) => {
   const env = loadEnv(mode, path.resolve(process.cwd(), 'env'))
   //update-begin---author:cursor ---date:2026-08-13 for：【P0 上线守卫】生产构建禁止携带本机/非 HTTPS 地址-----------
   if (mode === 'production') {
+    //update-begin---author:build-config ---date:2026-08-17 for:【Android 内测】WEIXIN_RELEASE 变量仅微信小程序构建使用，非 mp-weixin 平台（app-android 等）构建跳过校验，允许备案前使用局域网/服务器 IP 侧载 APK-----------
+    // 微信发布地址只对微信小程序构建有意义；app/h5 构建即使保留了 WEIXIN_RELEASE 行也不校验它们
+    const isMpWeixin = UNI_PLATFORM === 'mp-weixin'
+    //update-end---author:build-config ---date:2026-08-17 for:【Android 内测】WEIXIN_RELEASE 变量仅微信小程序构建使用-----------
     const bad: string[] = []
     const releaseVars: Record<string, string | undefined> = {
       VITE_SERVER_BASEURL: env.VITE_SERVER_BASEURL,
@@ -51,6 +55,8 @@ export default ({ command, mode }) => {
     }
     for (const [key, value] of Object.entries(releaseVars)) {
       if (!value) continue
+      // 非微信平台构建不检查微信发布地址（如 app-android 内测 APK）；微信上架前仍需正式 HTTPS 域名
+      if (!isMpWeixin && key.includes('WEIXIN_RELEASE')) continue
       if (/(127\.0\.0\.1|localhost)(:\d+)?/.test(value)) {
         bad.push(`${key}=${value}（仍为本机地址）`)
       } else if (key.includes('WEIXIN_RELEASE') && !value.startsWith('https://')) {

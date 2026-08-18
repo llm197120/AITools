@@ -3,3 +3,7 @@
 
 # 整理的菜品图片（按菜名命名，供批量导入封面使用，体积较大不提交）
 /dish-images/
+
+# Android 签名证书与敏感文档（勿提交仓库）
+*.keystore
+/docs/plan/android-migration-round2-signing.md
