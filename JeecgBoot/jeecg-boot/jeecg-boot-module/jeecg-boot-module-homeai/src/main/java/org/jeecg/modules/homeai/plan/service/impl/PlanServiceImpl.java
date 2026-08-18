@@ -238,6 +238,10 @@ public class PlanServiceImpl extends ServiceImpl<PlanMasterMapper, PlanMaster> i
                 inst.setIsAllDay(m.getIsAllDay());
                 inst.setUserId(m.getUserId());
                 inst.setRepeatRule(m.getRepeatRule());
+                //update-begin---author:admin---date:2026-08-18---for:【Android迁移R2-本地通知】---
+                inst.setStartTime(m.getStartTime());
+                inst.setRemindMinutes(m.getRemindMinutes());
+                //update-end---author:admin---date:2026-08-18---for:【Android迁移R2-本地通知】---
                 //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】计划关联菜谱-----------
                 inst.setRecipeId(m.getRecipeId());
                 if (oConvertUtils.isNotEmpty(m.getRecipeId())) {

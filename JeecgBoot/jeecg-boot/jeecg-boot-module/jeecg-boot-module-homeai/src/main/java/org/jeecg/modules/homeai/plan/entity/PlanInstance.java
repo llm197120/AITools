@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import java.io.Serializable;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Date;
 
 @Data
@@ -51,4 +52,14 @@ public class PlanInstance implements Serializable {
     @com.baomidou.mybatisplus.annotation.TableField(exist = false)
     private String recipeName;
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】计划关联菜谱-----------
+    //update-begin---author:admin---date:2026-08-18---for:【Android迁移R2-本地通知】---
+    /** 冗余展示字段：主计划开始时间 */
+    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    @Schema(description = "主计划开始时间")
+    private LocalTime startTime;
+    /** 冗余展示字段：主计划提醒提前分钟数 */
+    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    @Schema(description = "主计划提醒提前分钟数")
+    private Integer remindMinutes;
+    //update-end---author:admin---date:2026-08-18---for:【Android迁移R2-本地通知】---
 }
