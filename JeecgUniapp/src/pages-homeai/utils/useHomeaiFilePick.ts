@@ -2,6 +2,7 @@
  * HomeAI 统一文件选择：白名单校验 + chooseMessageFile / 图片 / 视频
  */
 import { getExtension, preloadWhitelist, validateUploadFile } from './fileWhitelist'
+import { pickDocument } from '../platform/filePicker'
 
 export interface HomeaiPickedFile {
   path: string
@@ -42,21 +43,12 @@ export function useHomeaiFilePick() {
     preloadWhitelist()
   }
 
-  /** 文档/通用文件：chooseMessageFile + 白名单 */
+  /** 文档/通用文件：平台适配器（小程序 chooseMessageFile / APP chooseFile）+ 白名单 */
   async function pickFiles(opts?: PickFilesOptions): Promise<HomeaiPickedFile[]> {
     const count = opts?.count ?? 1
-    return new Promise((resolve) => {
-      uni.chooseMessageFile({
-        count,
-        type: opts?.type || 'all',
-        extension: opts?.extension,
-        success: async (r) => {
-          const raw = (r.tempFiles || []).map((f: any) => toPicked(f.path, f.name, f.size))
-          resolve(await filterAllowed(raw, opts?.allowedExt))
-        },
-        fail: () => resolve([]),
-      })
-    })
+    const files = await pickDocument({ count, type: opts?.type, extension: opts?.extension })
+    const raw = files.map((f) => toPicked(f.path, f.name, f.size))
+    return filterAllowed(raw, opts?.allowedExt)
   }
 
   /** 图片：优先 chooseImage，失败可走 messageFile */

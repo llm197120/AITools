@@ -1,8 +1,16 @@
 /**
- * 资料存储：下载 / 保存到本地（小程序）
+ * 资料存储：下载 / 保存到本地（小程序 + Android APP）
+ * 平台差异（相册权限、保存/下载/打开）统一走 platform/download.ts 适配层
  */
 import { storageApi } from '../api/storage'
 import { getFileExt, isImageExt, isVideoExt } from './filePreview'
+import {
+  downloadToTemp,
+  openLocalDocument,
+  requestAlbumPermission,
+  saveImageToAlbum,
+  saveVideoToAlbum,
+} from '../platform/download'
 
 export type DownloadFileInput = {
   id?: string
@@ -24,7 +32,18 @@ async function resolveDownloadUrl(input: DownloadFileInput): Promise<string> {
   return input.fileUrl || ''
 }
 
+/**
+ * 请求相册写入权限（保存图片/视频到本地前调用）
+ * - 微信小程序：scope.writePhotosAlbum 授权
+ * - Android APP：运行时权限申请（13+ 媒体权限 / 更早 WRITE_EXTERNAL_STORAGE），拒绝时引导去设置
+ */
 function requestAlbumAuth(): Promise<boolean> {
+  // #ifdef APP-PLUS
+  // Android：走 platform/download.ts 的运行时权限申请
+  return requestAlbumPermission()
+  // #endif
+
+  // #ifdef MP-WEIXIN
   return new Promise((resolve) => {
     uni.getSetting({
       success: (setting) => {
@@ -57,50 +76,7 @@ function requestAlbumAuth(): Promise<boolean> {
       fail: () => resolve(false),
     })
   })
-}
-
-function downloadToTemp(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    uni.downloadFile({
-      url,
-      success: (res) => {
-        if (res.statusCode === 200 && res.tempFilePath) {
-          resolve(res.tempFilePath)
-        } else {
-          reject(new Error('下载失败'))
-        }
-      },
-      fail: (err) => reject(err),
-    })
-  })
-}
-
-function saveImageToAlbum(filePath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    uni.saveImageToPhotosAlbum({
-      filePath,
-      success: () => resolve(),
-      fail: (err) => reject(err),
-    })
-  })
-}
-
-function saveVideoToAlbum(filePath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    uni.saveVideoToPhotosAlbum({
-      filePath,
-      success: () => resolve(),
-      fail: (err) => reject(err),
-    })
-  })
-}
-
-function openLocalDocument(filePath: string) {
-  uni.openDocument({
-    filePath,
-    showMenu: true,
-    fail: () => uni.showToast({ title: '无法打开该文件', icon: 'none' }),
-  })
+  // #endif
 }
 
 /**

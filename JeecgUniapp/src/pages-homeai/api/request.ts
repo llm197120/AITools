@@ -3,7 +3,7 @@
  */
 import { getToken } from '../utils/auth'
 import { useUserStore } from '../stores/user'
-import { getEnvBaseUrl } from '@/utils/index'
+import { getServerBaseUrl as getPlatformServerBaseUrl } from '../platform/env'
 
 const BASE_URL = '/homeai'
 
@@ -12,9 +12,9 @@ export function getBaseUrl(): string {
   return BASE_URL
 }
 
-/** 获取服务器完整地址（读取 VITE_SERVER_BASEURL，微信小程序按环境版本区分） */
+/** 获取服务器完整地址（读取 VITE_SERVER_BASEURL，微信小程序按环境版本区分，见 platform/env.ts） */
 export function getServerBaseUrl(): string {
-  return getEnvBaseUrl()
+  return getPlatformServerBaseUrl()
 }
 
 interface RequestOptions {

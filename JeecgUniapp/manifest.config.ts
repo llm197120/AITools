@@ -55,21 +55,30 @@ export default defineManifestConfig({
         targetSdkVersion: 34,
         abiFilters: ['armeabi-v7a', 'arm64-v8a'],
         permissions: [
-          '<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>',
-          '<uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS"/>',
+          // # Android 权限精简（隐私合规）：仅保留功能必需项，见 docs/plan/android-migration-design.md
+          // 已移除（非必需/敏感）：MOUNT_UNMOUNT_FILESYSTEMS、READ_LOGS、GET_ACCOUNTS、READ_PHONE_STATE、
+          // WRITE_SETTINGS、CHANGE_NETWORK_STATE、CHANGE_WIFI_STATE、FLASHLIGHT
+          // （FLASHLIGHT：Android 6+ 闪光灯由 Camera API 控制，该权限已废弃为 no-op，移除不影响相机使用）
+          // 以下为功能必需权限：
+          // VIBRATE：通知/消息提醒振动
           '<uses-permission android:name="android.permission.VIBRATE"/>',
-          '<uses-permission android:name="android.permission.READ_LOGS"/>',
+          // ACCESS_WIFI_STATE：获取 Wi-Fi 状态（网络连接判断）
           '<uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>',
-          '<uses-feature android:name="android.hardware.camera.autofocus"/>',
+          // ACCESS_NETWORK_STATE：获取网络状态（网络连接判断）
           '<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>',
+          // CAMERA：拍摄/上传图片、扫码
           '<uses-permission android:name="android.permission.CAMERA"/>',
-          '<uses-permission android:name="android.permission.GET_ACCOUNTS"/>',
-          '<uses-permission android:name="android.permission.READ_PHONE_STATE"/>',
-          '<uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>',
+          // WAKE_LOCK：保持唤醒（后台保活/长任务）
           '<uses-permission android:name="android.permission.WAKE_LOCK"/>',
-          '<uses-permission android:name="android.permission.FLASHLIGHT"/>',
+          // 相册/存储权限（保存图片/视频到本地，见 platform/download.ts 运行时申请）：
+          // WRITE_EXTERNAL_STORAGE：Android 13 以下保存到相册需要写外部存储
+          '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>',
+          // READ_MEDIA_IMAGES / READ_MEDIA_VIDEO：Android 13+ 媒体权限模型（targetSdk 34 下读取相册必需）
+          // 隐私合规：仅在用户主动保存图片/视频时申请，拒绝后引导去系统设置开启
+          '<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>',
+          '<uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>',
+          '<uses-feature android:name="android.hardware.camera.autofocus"/>',
           '<uses-feature android:name="android.hardware.camera"/>',
-          '<uses-permission android:name="android.permission.WRITE_SETTINGS"/>',
         ],
       },
       /* ios打包配置 */
@@ -137,10 +146,10 @@ export default defineManifestConfig({
     // lazyCodeLoading 在 uni-app 中会导致小程序空白，暂时禁用
     // lazyCodeLoading: 'requiredComponents',
     /**
-     * 上架前须开启隐私合规：将下一行取消注释为 __usePrivacyCheck__: true，
-     * 并完善隐私协议弹窗 / 权限说明（与微信小程序隐私指引一致）。
+     * 隐私合规：已开启 __usePrivacyCheck__（微信小程序隐私保护指引）。
+     * 上架前须保持开启，并完善隐私协议弹窗 / 权限说明（与微信小程序隐私指引一致）。
      */
-    // __usePrivacyCheck__: true,
+    __usePrivacyCheck__: true,
   },
   'mp-alipay': {
     usingComponents: true,
