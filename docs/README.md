@@ -47,6 +47,16 @@ docs/                          # 文档根目录
     └── README.md              # 使用指南索引
 ```
 
+## 根目录文档（AI 能力调研，2026-08）
+
+| 文档 | 路径 | 说明 |
+|------|------|------|
+| LLM API 价格对比 | `docs/llm-pricing-comparison.md` | 国际/国内主流模型能力×价格对比（含接入注意事项） |
+| AI 图片精修开源工具 | `docs/ai-image-editing-tools.md` | GitHub 精修工具调研（GFPGAN/CodeFormer/Upscayl 等） |
+| 本机本地 AI 方案 | `docs/local-photo-video-ai.md` | RTX 4060 8G + 16G 照片精修/视频剪辑/AI 视频生成方案 |
+| ComfyUI 安装指南 | `docs/comfyui-local-setup.md` | 针对 8GB 显存的 ComfyUI 安装 + 落地工作流 |
+| 百炼图片编辑 API | `docs/qwen-image-edit-api.md` | Qwen-Image-Edit 接入指南（含 JeecgBoot/Java 示例） |
+
 ## 核心设计文档
 
 | 文档 | 路径 | 说明 |
