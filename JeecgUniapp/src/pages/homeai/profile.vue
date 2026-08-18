@@ -140,10 +140,7 @@ async function handleLogin() {
 }
 
 function showPrivacy() {
-  uni.showModal({
-    title: '隐私协议',
-    content: '我们将严格遵守相关法律法规，保护您的个人信息安全。',
-  })
+  uni.navigateTo({ url: '/pages/privacy/index' })
 }
 
 function showAbout() {

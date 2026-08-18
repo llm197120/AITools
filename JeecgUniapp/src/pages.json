@@ -50,6 +50,22 @@
       }
     },
     {
+      "path": "pages/agreement/index",
+      "type": "page",
+      "style": {
+        "navigationBarTitleText": "用户协议",
+        "navigationBarBackgroundColor": "#F3F2EE"
+      }
+    },
+    {
+      "path": "pages/auth/login",
+      "type": "page",
+      "style": {
+        "navigationBarTitleText": "登录",
+        "navigationBarBackgroundColor": "#F3F2EE"
+      }
+    },
+    {
       "path": "pages/homeai/family",
       "type": "page",
       "style": {
@@ -62,6 +78,14 @@
       "type": "page",
       "style": {
         "navigationBarTitleText": "个人中心",
+        "navigationBarBackgroundColor": "#F3F2EE"
+      }
+    },
+    {
+      "path": "pages/privacy/index",
+      "type": "page",
+      "style": {
+        "navigationBarTitleText": "隐私政策",
         "navigationBarBackgroundColor": "#F3F2EE"
       }
     }
@@ -301,6 +325,10 @@
             "navigationBarTitleText": "搜索文件",
             "navigationBarBackgroundColor": "#F3F2EE"
           }
+        },
+        {
+          "path": "storage/StorageBrowser",
+          "type": "page"
         }
       ]
     }

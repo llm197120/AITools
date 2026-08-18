@@ -123,7 +123,7 @@
     </view>
 
     <view class="footer-tip">
-      <text class="tip-text">使用即表示同意《用户服务协议》</text>
+      <text class="tip-text" @tap="goAgreement">使用即表示同意《用户服务协议》</text>
     </view>
     </template>
   </view>
@@ -214,6 +214,10 @@ onShow(async () => {
 
 function goProfile() {
   uni.switchTab({ url: '/pages/homeai/profile' })
+}
+
+function goAgreement() {
+  uni.navigateTo({ url: '/pages/agreement/index' })
 }
 
 function goFamily() {
@@ -662,5 +666,6 @@ function goModule(key: string) {
 .tip-text {
   font-size: 20rpx;
   color: #b5b0a6;
+  text-decoration: underline;
 }
 </style>

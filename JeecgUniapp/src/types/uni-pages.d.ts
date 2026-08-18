@@ -5,8 +5,11 @@
 
 interface NavigateToOptions {
   url: "/pages/homeai/index" |
+       "/pages/agreement/index" |
+       "/pages/auth/login" |
        "/pages/homeai/family" |
        "/pages/homeai/profile" |
+       "/pages/privacy/index" |
        "/pages-homeai-ai/ai/chat" |
        "/pages-homeai-ai/ai/conversations" |
        "/pages-homeai-more/all-functions/index" |
