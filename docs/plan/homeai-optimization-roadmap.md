@@ -1,13 +1,13 @@
 ---
 name: 家庭AI小工具 - 迭代优化路线图
 version: v4
-status: 进行中（第 13～38 轮已落地）
-updated: 2026-08-13
+status: 进行中（第 13～42 轮已落地）
+updated: 2026-08-18
 ---
 
 # 家庭AI小工具 - 迭代优化路线图
 
-> 本文档汇总第 **1～12 轮**业务迭代，以及 **第 13～38 轮**工程化/业务/视觉/安全优化落地内容。  
+> 本文档汇总第 **1～12 轮**业务迭代，以及 **第 13～42 轮**工程化/业务/视觉/安全优化落地内容。  
 > 业务模块后续建议见第三节。
 
 相关路径索引：
@@ -719,6 +719,95 @@ homeai:
 
 ---
 
+### 第 39 轮：Android 迁移启动（手机号+密码登录）（2026-08-17）
+
+> 背景：微信小程序备案受阻，改为 **Android APP 双端并行**（保留 MP-WEIXIN 小程序通道）。本轮为迁移启动：扩展账号体系支持手机号+密码登录，为 APP 端提供登录入口与文件选择能力。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 后端 | 账号字段扩展 | `WxUser` 新增 `password` / `salt` / `login_type`（`wechat` / `phone`）三列 | `WxUser` 实体 |
+| 后端 | 注册 / 登录 | `HomeaiAuthController` 新增 `register` / `login` / `password`（设置/修改密码） | `HomeaiAuthController` |
+| 后端 | JWT userId 双解析 | `getUserId` / `getWxUser` 兼容旧 openid token，新 token 以 `userId` claim 为准 | `HomeaiJwtUtil` |
+| 后端 | 拦截器登记 | 注册/登录等公共路径登记进 `PUBLIC_PATHS` | `HomeaiAuthInterceptor` |
+| 后端 | 手机号唯一性 | 注册与换绑时校验手机号唯一 | 注册/登录 Service |
+| 客户端 | 登录 API 封装 | `platform/auth.ts`（手机号+密码登录） | `JeecgUniapp/src/platform/` |
+| 客户端 | APP 文件选择 | `platform/filePicker.ts`（APP 端文件选择，替代小程序 `chooseMessageFile`） | `JeecgUniapp/src/platform/` |
+| 客户端 | 登录页 | `pages/auth/login.vue` | `JeecgUniapp/pages/auth/login.vue` |
+| 客户端 | 路由拦截 | 拦截器检测 APP 端未登录跳转登录页 | `JeecgUniapp/src/interceptors/` |
+| 客户端 | 内测配置 | `.env.production` 指向内测服务器 IP（侧载 APK 联调用） | `JeecgUniapp/env/.env.production` |
+| 客户端 | manifest 权限精简 | 移除小程序专属权限，适配 APP 包 | `JeecgUniapp/manifest.config.ts` |
+
+**发布策略：** 先侧载 APK 内测（手机号+密码登录），待小程序备案完成后正式上架。
+
+**需执行 SQL：** `alter_homeai_wx_user_android_login.sql`（`homeai_wx_user` 新增 password/salt/login_type 三列，已登记至迁移清单）
+
+**状态：** 已落地。
+
+---
+
+### 第 40 轮：Android 迁移第二轮（权限适配 + platform 层 + 隐私合规 + 签名 APK + 本地通知兜底）（2026-08-18）
+
+> 背景：Android APP 手机号用户无微信 openid，微信订阅消息通道不可用。原计划接入阿里云 EMAS 移动推送，但 EMAS 插件（id=7628/7629）已停止维护、无 Vue3 兼容性声明、官方替代仅支持 uni-app x，故弃用，改为 `plus.push.createMessage` 延迟本地通知兜底。本轮同时补齐下载/相册权限适配、platform 层、隐私合规与签名 APK。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 客户端 | 下载/相册权限适配 | `fileDownload.ts` 增加 APP-PLUS 分支（权限申请 + 保存到相册/文件），manifest 声明相册/存储权限 | `JeecgUniapp/src/pages-homeai/utils/fileDownload.ts`、`manifest.config.ts` |
+| 客户端 | platform 层补齐 | 新增 `platform/download.ts`（下载/相册保存）、`platform/env.ts`（环境地址）；业务层 `fileDownload.ts` / `request.ts` / `useHomeaiFilePick.ts` 改调 platform/* | `JeecgUniapp/src/platform/` |
+| 客户端 | 隐私弹窗合规 | 隐私政策/用户协议内容页 + 三处入口（登录页/个人中心/设置页）+ `App.vue` 首启弹窗 + manifest 开启 `__usePrivacyCheck__` | `JeecgUniapp/pages/privacy/`、`App.vue`、`manifest.config.ts` |
+| 客户端 | 签名 APK | `keytool` 生成 keystore + 签名文档 `docs/guide/android-signing.md` + `.gitignore` 排除 keystore | `JeecgUniapp/manifest.config.ts`、`docs/guide/android-signing.md` |
+| 客户端 | 推送改本地通知兜底 | 新增 `platform/push.ts`：依据计划实例 `startTime` / `remindMinutes` 计算提醒时刻，`plus.push.createMessage` 创建延迟本地通知（仅 App 存活/后台生效，进程被杀无法送达） | `JeecgUniapp/src/platform/push.ts` |
+| 后端 | PlanInstance 补字段 | `PlanInstance` 新增 `startTime` / `remindMinutes` 两个 `@TableField(exist=false)` 冗余展示字段，`fillMasterInfo` 从主计划拷贝，支撑客户端计算提醒时间 | `PlanInstance` 实体、`PlanServiceImpl` |
+
+**EMAS 弃用原因：** 插件（id=7628/7629）停止维护、无 Vue3 兼容性声明、官方替代仅支持 uni-app x；不接入 UniPush/EMAS 厂商推送（后续如需离线推送再评估 uni-app x 或原生厂商通道）。
+
+**无新增 SQL**（`PlanInstance` 两个字段均为 `@TableField(exist=false)` 冗余展示字段，无 DDL；原 EMAS 方案 `alter_homeai_wx_user_emas_push.sql` 不再需要执行）。
+
+**状态：** 已落地。
+
+---
+
+### 第 41 轮：ComfyUI 本地落地 + 双模型验证（SDXL + Z-Image-Turbo）（2026-08-18）
+
+> 背景：承接本地 AI 方案调研（`docs/local-photo-video-ai.md`、`docs/comfyui-local-setup.md`），在本机（i7-14650HX + RTX 4060 Laptop 8GB + 16GB 内存）安装 ComfyUI 便携版，下载并验证 SDXL 与 Z-Image-Turbo 双模型文生图，为照片精修能力铺路。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 环境 | ComfyUI 便携版 | 0.33.1 便携包（内置 Python 3.13.14）；torch 2.13.0+cu126（驱动 576.28 不支持 CUDA 13，故弃 cu130 用 cu126） | `C:\Users\57089\ComfyUI-portable\` |
+| 环境 | 长路径坑 | Windows 长路径 WinError 206 → `subst X:` 映射解决（重启后失效，需重新 subst） | — |
+| 模型 | SD 1.5（既有） | `v1-5-pruned-emaonly.safetensors`（3.97GB）→ checkpoints | `models/checkpoints/` |
+| 模型 | SDXL | `sd_xl_base_1.0.safetensors`（6.6GB，ModelScope）→ checkpoints | `models/checkpoints/` |
+| 模型 | Z-Image-Turbo 三件套 | int8 扩散 `z_image_turbo_int8_convrot`（5.8GB）+ Qwen3-4B fp8 文本编码器（5.2GB）+ ae VAE（320MB），均 ModelScope 官方 `Comfy-Org/z_image_turbo` | `models/diffusion_models/`、`text_encoders/`、`vae/` |
+| 验证 | 三模型 API 出图 | SD1.5 512px 8s / SDXL 1024px 46s / Z-Image-Turbo 1024px 68s（10 步 CFG=1.0），全部 `status: success`，PNG 头校验合法 | `wf.json` / `wf-sdxl.json` / `wf-zimage.json` |
+
+**关键结论：** 8GB 显存 + `--lowvram` 可跑三模型共存；Z-Image-Turbo 蒸馏模型 **CFG 必须 =1.0**（euler + simple，10 步）；bf16 版扩散模型 12.3GB 超显存，故选 int8/fp8 量化版。
+
+**无新增 SQL。**
+
+**状态：** 已落地。
+
+---
+
+### 第 42 轮：ComfyUI 常用模型下载 + 启停脚本（2026-08-18）
+
+> 承接第 41 轮，补齐照片精修常用模型（放大 / 人脸修复 / 局部重绘 ControlNet），并新增 ComfyUI 一键启动/停止脚本。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 模型 | 放大 | `RealESRGAN_x4plus.pth`（67MB）+ `4x-UltraSharp.pth`（67MB）→ `models/upscale_models/` | ModelScope `muse/RealESRGAN_x4plus`、`XiangZL0/4x-UltraSharp` |
+| 模型 | 人脸修复 | `GFPGANv1.4.pth`（348MB）+ `codeformer.pth`（376MB）→ `models/facerestore_models/`（新建目录） | ModelScope `muse/GFPGANv1.4`、`a694193787/CodeFormer` |
+| 模型 | ControlNet | `control_v11p_sd15_inpaint.pth`（1.45GB）→ `models/controlnet/` | ModelScope `lllyasviel/ControlNet-v1-1` |
+| 脚本 | 启动 | `start-comfyui.bat`：端口 8188 已监听则跳过，否则 `--lowvram --port 8188` 后台启动并写日志 | `C:\Users\57089\ComfyUI-portable\` |
+| 脚本 | 停止 | `stop-comfyui.bat`：按 8188 端口找 PID 强杀 + 轮询等端口释放（最长 15s） | 同上 |
+| 验证 | 模型识别 | 重启后 `/object_info`：UpscaleModelLoader 2 个、ControlNetLoader 1 个均识别 | — |
+
+**关键结论：** ① `.bat` 脚本在中文 Windows 必须 **ASCII 编码 + CRLF**（UTF-8 中文会被 cmd 拆词报错，`chcp 65001` 无法救）；② 人脸修复模型已就位但 **base ComfyUI 不含 FaceRestore 节点**，需另装插件（如 ComfyUI-FaceRestore / Impact Pack）方可使用；③ 所有 5 个模型字节数与 ModelScope API 精确一致。
+
+**无新增 SQL。**
+
+**状态：** 已落地。
+
+---
+
 ## 二、数据库迁移清单（已有库按序执行）
 
 新库直接使用 `init_homeai_tables.sql` + `init_homeai_menus.sql` 即可。
@@ -756,6 +845,16 @@ alter_homeai_menus_iteration26.sql      # 综合统计菜单
 ```text
 alter_homeai_menus_iteration32.sql      # 家庭配额运营看板菜单
 ```
+
+### 第 39 轮（已有库）
+
+```text
+alter_homeai_wx_user_android_login.sql  # WxUser 新增 password/salt/login_type（Android 手机号+密码登录）
+```
+
+### 第 40 轮（已有库）
+
+> **第 40 轮：无新增 SQL**（`PlanInstance` 新增 `startTime` / `remindMinutes` 均为 `@TableField(exist=false)` 冗余展示字段，无 DDL）。原 EMAS 方案已弃用，`alter_homeai_wx_user_emas_push.sql` 不再需要执行。
 
 ### 历史增量（第 1～7 轮，若从未执行按需补跑）
 
@@ -887,7 +986,7 @@ alter_homeai_menus_iteration8.sql
 3. 家庭配额 modal 去重（family/index 与 fileList 各一份，抽公共 hook）  
 4. 后端纯逻辑单测扩展（沿 `RecipeVisibilityTest` 模式；注意父 pom `skipTests` 需临时翻转）  
 
-### 第 40 轮（可选）
+### 第 43 轮（可选）
 
 1. ~~（可选）微信正式上架：`VITE_*_RELEASE` 填真实域名；隐私协议弹窗（`__usePrivacyCheck__`）与微信后台合法域名~~ **【已暂缓，按产品决定不上架】**；生产构建守卫（第 38 轮）已就位，后续如需上架按此清单执行即可  
 2. 菜谱推荐多样性（近期做过降权，避免总推同一道）  
@@ -988,4 +1087,4 @@ SOURCE /path/to/init_homeai_menus.sql;
 
 ---
 
-*最后更新：2026-08-13 · 第 1～38 轮已归档 · 第 33～36 轮（双端上传统一、P0 安全/正确性、时区/事务/性能、体验与死代码清理）、第 37 轮（菜谱导入封面图）、第 38 轮（P0 加固 + P1 体验收尾 + 工程化收敛）已落地*
+*最后更新：2026-08-18 · 第 1～42 轮已归档 · 第 42 轮（ComfyUI 常用模型下载 + 启停脚本）已落地*

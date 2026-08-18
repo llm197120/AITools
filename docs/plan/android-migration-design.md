@@ -1,16 +1,16 @@
 ---
 name: HomeAI 小程序 → Android 端迁移方案
-version: v1
-status: 暂不执行（方案已固定，待决策恢复后再启动 Phase 0）
+version: v3
+status: 执行中
 created: 2026-08-07
-updated: 2026-08-07
+updated: 2026-08-18
 owner: 项目组
 ---
 
 # HomeAI 小程序 → Android 端迁移方案
 
-> **文档状态：暂不执行**  
-> 本文档为已固定的方案设计，用于后续部署与备案规划。**当前不启动开发、不修改代码**，恢复实施前需重新评审「待确认决策」一节。
+> **文档状态：执行中**  
+> v1 方案章节保留为设计基线；v2 起进入实施，认证体系（手机号 + 密码）、平台适配层、APP 登录页、内测路径等已落地；v3（2026-08-18）推送方案改为本地通知兜底、platform 层五文件结构落地、签名 APK 与隐私合规落地。备案完成前以侧载 APK 内测推进，后续迭代以本文档为基线更新。
 
 相关路径索引：
 
@@ -110,24 +110,25 @@ owner: 项目组
 ```
 Android App (uni-app app-plus)
   ├─ HomeAI 业务页面（pages-homeai*，尽量不改）
-  ├─ platform/ 平台适配层（新增）
-  │    ├─ auth.ts
-  │    ├─ filePicker.ts
-  │    ├─ download.ts
-  │    ├─ push.ts
-  │    └─ env.ts
+  ├─ platform/ 平台适配层（v3 已落地五文件）
+  │    ├─ auth.ts          ✅ 手机号+密码登录（v2）
+  │    ├─ filePicker.ts    ✅ 文件选择（v2）
+  │    ├─ download.ts      ✅ 下载/相册权限适配（v3 新增）
+  │    ├─ env.ts           ✅ 环境地址（v3 新增）
+  │    └─ push.ts          ✅ 本地通知兜底（v3 新增）
   └─ pages/auth/ 登录注册页（Android 主入口）
 
 后端（JeecgBoot 扩展）
   ├─ /homeai/auth/* 新认证 API
   ├─ /homeai/user/* 保留小程序登录
   ├─ /homeai/* 业务 API 基本不变
-  └─ 推送服务（UniPush/极光等）
+  └─ 推送：本地通知兜底（plus.push.createMessage，v3 弃用 EMAS）
 
 合规层
   ├─ 域名 ICP 备案
   ├─ APP 备案
-  └─ 隐私政策 / 用户协议
+  ├─ 隐私政策 / 用户协议（v3 已落地）
+  └─ 签名 APK（v3 已落地）
 ```
 
 ### 4.2 客户端分层原则
@@ -142,63 +143,94 @@ Android App (uni-app app-plus)
 
 ### 5.1 认证体系（最高优先级）
 
-**现状**
+> **v2 更新（2026-08-17）**：手机号 + 密码登录已落地（register / login / password），数据模型按现状修正（见下）。v1 中「手机号 + 验证码」等未实现项保留在「v1 规划参考」中，供后续迭代参考。
+
+**现状（v2）**
 
 ```
-小程序 code → jscode2session → openid → JWT(claim=openid) → Redis
+小程序 code → jscode2session → openid → JWT(claim=openid) → Redis   （小程序路径，保留）
+手机号 + 密码 → PasswordUtil 校验 → JWT(claim=userId, openid) → Redis  （Android 路径，已落地）
 ```
 
-**目标**
+**目标（v2）**
 
 ```
 登录方式（任选）→ 统一 userId → JWT(claim=userId) → Redis
 ```
 
-| 登录方式 | Android | 小程序（可选保留） |
-|----------|---------|-------------------|
-| 手机号 + 验证码 | ✅ 主推荐 | 可选 |
-| 手机号 + 密码 | ✅ | 可选 |
-| 微信开放平台 OAuth | ✅ 可选 | — |
+| 登录方式 | Android | 小程序（保留） |
+|----------|---------|----------------|
+| 手机号 + 密码 | ✅ 已落地 | 可选 |
+| 手机号 + 验证码 | 规划中（未启动） | 可选 |
+| 微信开放平台 OAuth | 可选（未启动） | — |
 | 小程序 code 登录 | — | ✅ 保留 |
 
-**建议新增后端 API**
+**已落地后端 API（v2）**
 
 ```
-POST /homeai/auth/sms/send          发送验证码
-POST /homeai/auth/login/phone       手机号+验证码登录（自动注册）
-POST /homeai/auth/login/password    手机号+密码登录
-POST /homeai/auth/register          注册（设密码）
-POST /homeai/auth/refresh           刷新 token
-POST /homeai/user/login             保留：小程序 code 登录
-POST /homeai/user/bind-wechat       可选：绑定微信
+POST /homeai/auth/register      注册（设密码，手机号用户）
+POST /homeai/auth/login         手机号 + 密码登录
+POST /homeai/auth/password      密码相关操作
+POST /homeai/user/login         保留：小程序 code 登录
 ```
 
-**数据模型扩展（示意）**
+**数据模型（v2 已落地）**
+
+`phone` 字段 WxUser 实体已有，无需新增；本轮新增以下三列，DDL 脚本见 `sql/alter_homeai_wx_user_android_login.sql`：
 
 ```sql
 ALTER TABLE homeai_wx_user
-  ADD COLUMN phone VARCHAR(20) UNIQUE COMMENT '手机号',
-  ADD COLUMN password_hash VARCHAR(128) COMMENT '密码哈希',
-  ADD COLUMN login_type VARCHAR(20) DEFAULT 'wechat' COMMENT 'wechat/phone',
-  ADD COLUMN push_client_id VARCHAR(128) COMMENT '推送设备ID';
--- openid 改为可空；JWT sub 改为主键 userId
+  ADD COLUMN password VARCHAR(128) COMMENT '密码哈希',
+  ADD COLUMN salt VARCHAR(64) COMMENT '每用户 8 位随机 salt',
+  ADD COLUMN login_type VARCHAR(20) DEFAULT 'wechat' COMMENT 'wechat/phone，手机号用户为 phone';
 ```
 
-**JWT 改造要点**
+- 密码存储：`PasswordUtil.encrypt(password, PasswordUtil.SALT, salt)`，`salt` 为每用户 8 位随机值
+- `openid` 可空：手机号用户无 openid，JWT 以 userId 为 claim
+- `login_type` 默认 `wechat`，手机号注册/登录用户为 `phone`
 
-- Claim：`sub = userId`（主键），不再用 openid
-- 兼容期：拦截器同时支持旧 token（openid）与新 token（userId）
+**JWT 改造要点（v2）**
+
+- Claim：以 `userId`（主键）为主 claim；`HomeaiJwtUtil.sign(userId, openid, secret, clientType)` 重载 + `getUserId`，`HomeaiSecurityUtil.getWxUser` 双 claim 解析（兼容旧 openid token 与新 userId token）
+- 拦截器：新认证端点已登记 `HomeaiAuthInterceptor.PUBLIC_PATHS`，小程序与 Android 同走 homeai JWT（`X-Access-Token`）
 - Redis key：`homeai_token:{userId}`
 
-### 5.2 推送与计划提醒
+**v1 规划参考（保留）**
+
+v1 曾规划的以下接口暂未实现，列入后续迭代：
+
+```
+POST /homeai/auth/sms/send          发送验证码（规划）
+POST /homeai/auth/login/phone       手机号+验证码登录（规划）
+POST /homeai/auth/refresh           刷新 token（规划）
+POST /homeai/user/bind-wechat       可选：绑定微信（规划）
+```
+
+v1 规划 SQL 中的 `password_hash`、`push_client_id` 字段命名以 v2 落地为准（`password` / `salt` / `login_type`，推送字段后续再补）。
+
+### 5.2 推送与计划提醒（v3：本地通知兜底）
+
+> **v3 更新（2026-08-18）**：EMAS 移动推送方案弃用，改为 `plus.push.createMessage` 延迟本地通知兜底。原因与落地见下。
+
+**EMAS 弃用原因**
+
+- EMAS 推送插件（id=7628/7629）已停止维护，无 Vue3 兼容性声明
+- 官方替代方案仅支持 uni-app x，与当前 uni-app 3 + Vue3 工程不兼容
+- 结论：不接入 UniPush/EMAS 厂商推送（后续如需离线推送，可评估 uni-app x 迁移或原生厂商通道，见 9. 待确认决策第 5 项）
+
+**落地方案（v3）**
 
 | 能力 | 小程序 | Android |
 |------|--------|---------|
-| 触发 | 用户订阅 + 微信订阅消息 | 通知权限 + 后端推送 |
-| 前端 | `requestSubscribeMessage` | `uni.getPushClientId` + 系统通知 |
-| 后端 | `HomeaiWxSubscribeServiceImpl` | 新增 `IHomeaiPushService` |
+| 触发 | 用户订阅 + 微信订阅消息 | 本地延迟通知（`plus.push.createMessage`） |
+| 前端 | `requestSubscribeMessage` | `platform/push.ts` 计算提醒时刻并创建本地通知 |
+| 后端 | `HomeaiWxSubscribeServiceImpl` | `PlanInstance` 冗余展示 `startTime` / `remindMinutes`（`fillMasterInfo` 拷贝） |
 
-计划提醒：`PlanRemindScheduler` 改为双通道（微信订阅 + App 推送），保留小程序时可并行。
+- 小程序 `requestSubscribeMessage` 通道保持不变
+- Android 端：`platform/push.ts` 依据计划实例的 `startTime` 与 `remindMinutes` 计算提醒时刻，调用 `plus.push.createMessage` 创建延迟本地通知
+- 后端：`PlanInstance` 新增 `startTime` / `remindMinutes` 两个 `@TableField(exist=false)` 冗余展示字段，`fillMasterInfo` 从主计划拷贝，供客户端计算提醒时间（无 DDL）
+
+> ⚠️ **局限（文档标注）**：本地通知仅在 App 存活/后台时生效，进程被杀后无法送达；不依赖厂商推送通道，无离线推送能力。
 
 ### 5.3 文件与存储
 
@@ -209,7 +241,7 @@ ALTER TABLE homeai_wx_user
 | 下载/保存 | 相册 scope | Android 媒体权限 + `plus.gallery` |
 | OSS 预签名 | 已实现 | **直接复用** |
 
-新增 `platform/filePicker.ts` 统一封装，`useStorageUpload.ts` 只调 platform 层。
+`platform/filePicker.ts` 统一封装文件选择，`useHomeaiFilePick.ts` 只调 platform 层；`platform/download.ts` 统一封装下载/相册保存（APP-PLUS 分支 + 权限申请），`fileDownload.ts` 只调 platform 层。
 
 ### 5.4 API 与环境配置
 
@@ -220,6 +252,25 @@ ALTER TABLE homeai_wx_user
 | 401 | 跳转个人中心 Tab | 跳转 `/pages/auth/login` |
 
 生产示例：`https://api.yourdomain.com/jeecg-boot/homeai/...`
+
+### 5.5 平台适配层（platform/*，v3 落地）
+
+> **v3 更新（2026-08-18）**：platform 层补齐为五文件结构，业务层统一改调 platform/*，避免 `#ifdef` 散落。
+
+| 文件 | 职责 | 落地 |
+|------|------|------|
+| `platform/auth.ts` | 手机号 + 密码登录（register/login/password） | ✅ v2 |
+| `platform/filePicker.ts` | APP 端文件选择（替代小程序 `chooseMessageFile`） | ✅ v2 |
+| `platform/download.ts` | 下载/相册保存（APP-PLUS 分支 + 权限申请） | ✅ v3 新增 |
+| `platform/env.ts` | 环境地址（APP 端固定生产域名） | ✅ v3 新增 |
+| `platform/push.ts` | 本地通知兜底（`plus.push.createMessage` 延迟通知） | ✅ v3 新增 |
+
+**业务层调用关系（v3）**
+
+- `fileDownload.ts` → `platform/download.ts`
+- `request.ts` → `platform/env.ts`
+- `useHomeaiFilePick.ts` → `platform/filePicker.ts`
+- 计划提醒计算 → `platform/push.ts`（配合后端 `PlanInstance.startTime` / `remindMinutes`）
 
 ---
 
@@ -249,11 +300,38 @@ Android App → HTTPS → Nginx → JeecgBoot → MySQL / Redis / 阿里云 OSS
 管理端 Vue3 ────────────────┘
 ```
 
+### 6.1 备案前内测路径（v2 新增，2026-08-17）
+
+> 备案（域名 ICP / APP 备案）受阻期间，先通过**侧载 APK 内测**，备案完成后切换正式域名，不阻塞开发与真机验证。
+
+- **现状**：备案尚未完成，App 暂不进入应用商店；先打包 APK 侧载到测试设备内测
+- **环境地址**：`.env.production` 配置为局域网 / 云服务器 IP，如 `http://192.168.1.100:8080/jeecg-boot`
+- **生产守卫**：`vite.config.ts` 生产守卫已放行非 mp-weixin 构建，App 内测构建不会被 localhost / HTTPS 校验中断
+- **切换路径**：备案完成后，将 `.env.production` 中的 IP 替换为正式域名，重新构建签名 APK 即可上线
+
+### 6.2 第二轮落地（v3，2026-08-18）
+
+> 本轮完成签名 APK 与隐私合规两项发布前置工作，备案完成后即可按 6.1 切换正式域名重新构建签名 APK 上架。
+
+**签名 APK**
+
+- `keytool` 生成 keystore，`manifest.config.ts` 配置签名信息
+- 签名文档：`docs/guide/android-signing.md`（keystore 生成、签名配置、构建签名 APK 步骤）
+- `.gitignore` 排除 keystore 与签名相关敏感文件，避免密钥入库
+
+**隐私合规**
+
+- 隐私政策 / 用户协议内容页（`pages/privacy/*`）
+- 三处入口：登录页、个人中心、设置页
+- `App.vue` 首启隐私弹窗（同意后进入，拒绝则退出）
+- `manifest.config.ts` 开启 `__usePrivacyCheck__`
+- 相册 / 存储权限说明与申请（配合 `platform/download.ts`）
+
 ---
 
 ## 7. 实施阶段规划（恢复执行时参考）
 
-> ⚠️ 以下阶段**当前均不启动**，仅作后续实施路线图。
+> ⚠️ v1 阶段划分保留为实施路线图；v2 起已按 Phase 1 推进（认证体系、平台适配层、APP 登录页、内测路径已落地）；v3 起推进 Phase 2/3 部分项（下载/相册权限适配、platform 层补齐、隐私弹窗、签名 APK、推送改本地通知兜底），未完成项以对应 checkbox 状态为准。
 
 ### Phase 0：方案确认（约 1 周）
 
@@ -306,6 +384,9 @@ Android App → HTTPS → Nginx → JeecgBoot → MySQL / Redis / 阿里云 OSS
 
 ## 9. 待确认决策（恢复执行前必填）
 
+> **v2 更新（2026-08-17）**：第 2 项已确认「双端并行」：Android 与小程序共用后端，并行迭代一段时间，小程序保留维护。其余项沿用 v1 决策或待后续确认。  
+> **v3 更新（2026-08-18）**：第 5 项已确认「不采用 DCloud UniPush/EMAS」——插件停止维护且无 Vue3 兼容性声明，改本地通知兜底（见 5.2）；后续如需离线推送再评估 uni-app x 或原生厂商通道。
+
 1. **登录主方式**：手机号验证码（推荐）还是账号密码？
 2. **是否保留微信小程序**：双端并行，还是 Android 替代后小程序仅维护？
 3. **发布渠道**：仅企业内部分发 APK，还是上应用商店？
@@ -316,9 +397,9 @@ Android App → HTTPS → Nginx → JeecgBoot → MySQL / Redis / 阿里云 OSS
 
 ## 10. 结论
 
-**推荐路径**：在现有 `JeecgUniapp` 基础上，通过 **uni-app app-plus 编译 Android**，重点改造认证体系、平台适配层、推送；业务 API 与页面大面积复用。备案按 **域名 ICP + APP 备案 + 隐私合规** 独立推进。
+**推荐路径**：在现有 `JeecgUniapp` 基础上，通过 **uni-app app-plus 编译 Android**，重点改造认证体系、平台适配层、推送；业务 API 与页面大面积复用。备案按 **域名 ICP + APP 备案 + 隐私合规** 独立推进，备案完成前走侧载内测（见 6.1）。
 
-**当前动作：无。** 本文档已固定，标记为 **暂不执行**；决策确认后再从 Phase 0 启动，并更新本文档 `status` 字段。
+**当前状态：执行中。** v2 起认证体系（手机号 + 密码）、平台适配层（`platform/auth.ts`、`platform/filePicker.ts`）、APP 登录页、内测路径已落地；v3 起推送改本地通知兜底（EMAS 弃用）、platform 层补齐五文件（`download.ts` / `env.ts` / `push.ts`）、签名 APK 与隐私合规落地；后续按 Phase 2 剩余能力补齐与 Phase 3 备案上架推进。
 
 ---
 
@@ -327,3 +408,5 @@ Android App → HTTPS → Nginx → JeecgBoot → MySQL / Redis / 阿里云 OSS
 | 日期 | 版本 | 说明 |
 |------|------|------|
 | 2026-08-07 | v1 | 初版方案固定，状态：暂不执行 |
+| 2026-08-17 | v2 | 状态转为执行中。关键落地：手机号+密码登录（register/login/password）、JWT userId claim 双解析、platform/auth.ts + platform/filePicker.ts、APP 登录页 pages/auth/login.vue、拦截器登记 PUBLIC_PATHS、manifest 权限精简、双端并行策略确认、新增「备案前内测路径」 |
+| 2026-08-18 | v3 | 推送方案改本地通知兜底（EMAS 插件 id=7628/7629 停止维护、无 Vue3 兼容性声明、官方替代仅支持 uni-app x → 弃用；`plus.push.createMessage` 延迟本地通知，标注进程被杀无法送达局限；小程序 requestSubscribeMessage 通道不变；后端 `PlanInstance` 补 `startTime`/`remindMinutes` 冗余展示字段）；platform 层补齐五文件（`download.ts`/`env.ts` 新增，业务层 fileDownload.ts/request.ts/useHomeaiFilePick.ts 改调 platform/*）；第二轮落地：签名 APK（keystore + 签名文档 + .gitignore）、隐私合规（隐私政策/用户协议内容页 + 三处入口 + App.vue 首启弹窗 + `__usePrivacyCheck__` 开启 + 相册/存储权限） |
