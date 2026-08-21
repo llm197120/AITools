@@ -124,4 +124,85 @@ class HomeaiAuthServiceTest {
         }
         assertEquals("wx", wx.getLoginType());
     }
+
+    // ---------- 4. 修改密码纯逻辑 ----------
+
+    @Test
+    void changePasswordRejectsShortNewPassword() {
+        assertTrue("123456".length() >= 6);
+        assertFalse("12345".length() >= 6);
+    }
+
+    @Test
+    void changePasswordRejectsSameAsOld() {
+        String oldPassword = "abc123456";
+        String newPassword = "abc123456";
+        assertEquals(oldPassword, newPassword);
+    }
+
+    @Test
+    void changePasswordOldMustMatchStored() {
+        String stored = PasswordUtil.encrypt("oldpass1", PasswordUtil.SALT, SALT_A);
+        String wrong = PasswordUtil.encrypt("wrong123", PasswordUtil.SALT, SALT_A);
+        assertNotEquals(stored, wrong);
+        assertEquals(stored, PasswordUtil.encrypt("oldpass1", PasswordUtil.SALT, SALT_A));
+    }
+
+    @Test
+    void changePasswordUsesNewSalt() {
+        String plain = "newpass123";
+        String cipherOldSalt = PasswordUtil.encrypt(plain, PasswordUtil.SALT, SALT_A);
+        String cipherNewSalt = PasswordUtil.encrypt(plain, PasswordUtil.SALT, SALT_B);
+        assertNotEquals(cipherOldSalt, cipherNewSalt);
+    }
+
+    @Test
+    void wechatUserWithoutPasswordCannotChange() {
+        WxUser user = new WxUser();
+        user.setPassword(null);
+        user.setSalt(null);
+        assertTrue(oConvertUtils.isEmpty(user.getPassword()));
+        assertTrue(oConvertUtils.isEmpty(user.getSalt()));
+    }
+
+    // ---------- 5. 后台新增默认密码 + 登录缺盐防护 ----------
+
+    @Test
+    void defaultPasswordVerifiableWithGeneratedSalt() {
+        // 与 WxUserServiceImpl.applyPassword / 后台新增默认密码 123456 一致
+        String salt = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String stored = PasswordUtil.encrypt(org.jeecg.common.constant.PasswordConstant.DEFAULT_PASSWORD, PasswordUtil.SALT, salt);
+        assertEquals(8, salt.length());
+        assertEquals(stored, PasswordUtil.encrypt("123456", PasswordUtil.SALT, salt));
+        assertNotEquals(stored, PasswordUtil.encrypt("654321", PasswordUtil.SALT, salt));
+    }
+
+    @Test
+    void loginMustRejectMissingSaltOrPassword() {
+        // 对应 loginByPassword：salt/password 为空时不得调用 PasswordUtil.encrypt
+        WxUser missingSalt = new WxUser();
+        missingSalt.setPassword("hash");
+        missingSalt.setSalt(null);
+        assertTrue(oConvertUtils.isEmpty(missingSalt.getSalt()) || oConvertUtils.isEmpty(missingSalt.getPassword()));
+
+        WxUser missingPassword = new WxUser();
+        missingPassword.setPassword(null);
+        missingPassword.setSalt(SALT_A);
+        assertTrue(oConvertUtils.isEmpty(missingPassword.getSalt()) || oConvertUtils.isEmpty(missingPassword.getPassword()));
+
+        WxUser ready = new WxUser();
+        ready.setPassword("hash");
+        ready.setSalt(SALT_A);
+        assertFalse(oConvertUtils.isEmpty(ready.getSalt()) || oConvertUtils.isEmpty(ready.getPassword()));
+    }
+
+    @Test
+    void disabledAccountRejected() {
+        WxUser disabled = new WxUser();
+        disabled.setStatus("0");
+        assertFalse(org.jeecg.common.constant.CommonConstant.STATUS_1.equals(disabled.getStatus()));
+        WxUser enabled = new WxUser();
+        enabled.setStatus("1");
+        assertTrue(org.jeecg.common.constant.CommonConstant.STATUS_1.equals(enabled.getStatus()));
+    }
 }

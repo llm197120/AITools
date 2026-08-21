@@ -62,6 +62,7 @@ class HomeaiFileMagicUtilTest {
         // ZIP 家族（zip/docx/xlsx/pptx）魔数 PK
         byte[] header = {'P', 'K', 0x03, 0x04};
         assertTrue(HomeaiFileMagicUtil.matchesMagic(header, "zip"));
+        assertTrue(HomeaiFileMagicUtil.matchesMagic(header, "apk"));
         assertTrue(HomeaiFileMagicUtil.matchesMagic(header, "docx"));
         assertTrue(HomeaiFileMagicUtil.matchesMagic(header, "xlsx"));
         assertTrue(HomeaiFileMagicUtil.matchesMagic(header, "pptx"));
@@ -84,10 +85,28 @@ class HomeaiFileMagicUtilTest {
     }
 
     @Test
+    void webpMagicPasses() {
+        byte[] header = {'R', 'I', 'F', 'F', 0x00, 0x00, 0x00, 0x00, 'W', 'E', 'B', 'P'};
+        assertTrue(HomeaiFileMagicUtil.matchesMagic(header, "webp"));
+    }
+
+    @Test
+    void wavMagicPasses() {
+        byte[] header = {'R', 'I', 'F', 'F', 0x00, 0x00, 0x00, 0x00, 'W', 'A', 'V', 'E'};
+        assertTrue(HomeaiFileMagicUtil.matchesMagic(header, "wav"));
+    }
+
+    @Test
+    void mp3MagicPasses() {
+        assertTrue(HomeaiFileMagicUtil.matchesMagic(new byte[]{'I', 'D', '3', 0x04}, "mp3"));
+        assertTrue(HomeaiFileMagicUtil.matchesMagic(new byte[]{(byte) 0xFF, (byte) 0xFB, 0x00}, "mp3"));
+    }
+
+    @Test
     void unknownExtensionDefaultsToTrue() {
         // 未登记扩展名走 default 分支，直接放行
         byte[] header = {0x01, 0x02, 0x03};
-        assertTrue(HomeaiFileMagicUtil.matchesMagic(header, "webp"));
+        assertTrue(HomeaiFileMagicUtil.matchesMagic(header, "bin"));
     }
 
     @Test
