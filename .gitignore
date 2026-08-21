@@ -7,6 +7,11 @@
 # Android 签名证书与敏感文档（勿提交仓库）
 *.keystore
 /docs/plan/android-migration-round2-signing.md
+/JeecgUniapp/android-pack.local.json
+/JeecgUniapp/dist/apk/
+
+# 本地 Agent 会话（勿提交仓库）
+/.omo/
 
 # ComfyUI 本地运行日志（勿提交仓库）
 /comfyui.log

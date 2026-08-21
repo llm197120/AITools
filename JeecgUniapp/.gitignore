@@ -13,3 +13,13 @@ dist
 
 ## front
 /yarn-error.log
+
+# 本地 APK 打包（离线工程在仓库外；密钥与产物不入库）
+android-pack.local.json
+dist/apk/
+unpackage/
+android/.gradle/
+android/app/build/
+android/app/keystore.properties
+android/local.properties
+android/app/src/main/assets/public/
