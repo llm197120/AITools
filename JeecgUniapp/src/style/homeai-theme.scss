@@ -44,6 +44,10 @@ page {
   padding-bottom: 120rpx;
 }
 
+.hai-page--bottom-bar {
+  padding-bottom: calc(160rpx + env(safe-area-inset-bottom));
+}
+
 .hai-card {
   background: var(--hai-card);
   border-radius: var(--hai-radius);
@@ -80,10 +84,17 @@ page {
 }
 
 .hai-bottom-bar {
+  position: fixed;
+  left: 32rpx;
+  right: 32rpx;
+  bottom: 0;
+  z-index: 20;
   display: flex;
   gap: 16rpx;
-  margin-top: 32rpx;
-  padding-bottom: env(safe-area-inset-bottom);
+  margin-top: 0;
+  padding-top: 16rpx;
+  padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, var(--hai-bg) 28%);
 }
 
 .hai-bottom-bar .hai-bottom-btn {
@@ -118,4 +129,23 @@ page {
 .hai-press:active {
   opacity: 0.88;
   transform: scale(0.98);
+}
+
+/* APP 底部选择器：圆角弹层 + 主题色操作条 */
+.wd-select-picker__header,
+.wd-picker__toolbar,
+.wd-datetime-picker__toolbar {
+  border-bottom: 1rpx solid var(--hai-border);
+}
+
+.wd-picker__action,
+.wd-datetime-picker__action {
+  color: var(--hai-primary) !important;
+  font-weight: 600;
+}
+
+.wd-picker__action--cancel,
+.wd-datetime-picker__action--cancel {
+  color: var(--hai-text-secondary) !important;
+  font-weight: 400;
 }

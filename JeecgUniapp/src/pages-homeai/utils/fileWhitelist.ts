@@ -1,19 +1,14 @@
 /**
  * 文件白名单同步与校验（本地缓存 5 分钟）
  */
+import { DEFAULT_UPLOAD_EXTS } from '../platform/fileAccept'
 import { get as getApi } from '../api/request'
 
 const CACHE_KEY = 'homeai_file_whitelist'
 const CACHE_TIME_KEY = 'homeai_file_whitelist_time'
 const TTL = 5 * 60 * 1000
 
-const DEFAULT_EXTENSIONS = [
-  'jpg', 'jpeg', 'png', 'gif', 'bmp',
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-  'mp4', 'avi', 'mov', 'mkv',
-  'zip', 'rar', '7z',
-  'txt', 'csv', 'md',
-]
+const DEFAULT_EXTENSIONS = [...DEFAULT_UPLOAD_EXTS]
 
 export function getExtension(filePathOrName: string): string {
   if (!filePathOrName) return ''
@@ -47,7 +42,11 @@ export async function getWhitelistExtensions(force = false): Promise<string[]> {
 
 export function isAllowedExtension(ext: string, whitelist: string[]): boolean {
   if (!ext) return false
-  return whitelist.includes(ext.toLowerCase())
+  const e = ext.toLowerCase()
+  if (whitelist.includes(e)) return true
+  if (e === 'jpg' && whitelist.includes('jpeg')) return true
+  if (e === 'jpeg' && whitelist.includes('jpg')) return true
+  return false
 }
 
 /** 上传前校验，不通过时 toast 并返回 false */
@@ -55,7 +54,7 @@ export async function validateUploadFile(filePath: string, fileName?: string): P
   const ext = getExtension(fileName || filePath)
   const whitelist = await getWhitelistExtensions()
   if (!isAllowedExtension(ext, whitelist)) {
-    uni.showToast({ title: '不支持该文件格式', icon: 'none' })
+    uni.showToast({ title: ext ? `不支持 .${ext} 格式` : '不支持该文件格式', icon: 'none' })
     return false
   }
   return true

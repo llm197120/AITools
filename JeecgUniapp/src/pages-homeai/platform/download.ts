@@ -4,7 +4,15 @@
  * - 保存图片/视频到相册：APP 端 plus.gallery.save + Android 运行时权限申请
  *   （Android 13+ 申请 READ_MEDIA_IMAGES/READ_MEDIA_VIDEO，更早版本申请 WRITE_EXTERNAL_STORAGE）
  * - 下载临时文件 / 打开本地文档：APP 端 plus.downloader / plus.runtime.openFile，小程序走 uni API
+ * - Capacitor H5 壳：platform/capDownload.ts（相册 Media、文档 Share）
  */
+// #ifdef H5
+import {
+  capacitorOpenDocument,
+  capacitorSaveImage,
+  capacitorSaveVideo,
+} from './capDownload'
+// #endif
 
 /** Android 13+（API 33）媒体权限模型：以 READ_MEDIA_* 替代写外部存储 */
 const ANDROID_13_PERMISSIONS = [
@@ -118,6 +126,10 @@ export function saveImageToAlbum(filePath: string): Promise<void> {
       fail: (err) => reject(err),
     })
     // #endif
+
+    // #ifdef H5
+    void capacitorSaveImage(filePath).then(resolve).catch(reject)
+    // #endif
   })
 }
 
@@ -142,6 +154,10 @@ export function saveVideoToAlbum(filePath: string): Promise<void> {
       success: () => resolve(),
       fail: (err) => reject(err),
     })
+    // #endif
+
+    // #ifdef H5
+    void capacitorSaveVideo(filePath).then(resolve).catch(reject)
     // #endif
   })
 }
@@ -181,6 +197,17 @@ export function downloadToTemp(url: string): Promise<string> {
       fail: (err) => reject(err),
     })
     // #endif
+
+    // #ifdef H5
+    uni.downloadFile({
+      url,
+      success: (res) => {
+        if (res.statusCode === 200 && res.tempFilePath) resolve(res.tempFilePath)
+        else reject(new Error('下载失败'))
+      },
+      fail: (err) => reject(err),
+    })
+    // #endif
   })
 }
 
@@ -204,5 +231,11 @@ export function openLocalDocument(filePath: string) {
     showMenu: true,
     fail: () => uni.showToast({ title: '无法打开该文件', icon: 'none' }),
   })
+  // #endif
+
+  // #ifdef H5
+  void capacitorOpenDocument(filePath).catch(() =>
+    uni.showToast({ title: '无法打开该文件', icon: 'none' }),
+  )
   // #endif
 }

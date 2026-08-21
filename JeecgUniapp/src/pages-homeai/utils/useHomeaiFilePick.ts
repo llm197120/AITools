@@ -1,8 +1,9 @@
 /**
  * HomeAI 统一文件选择：白名单校验 + chooseMessageFile / 图片 / 视频
  */
-import { getExtension, preloadWhitelist, validateUploadFile } from './fileWhitelist'
+import { AUDIO_EXTS, extensionFromMime } from '../platform/fileAccept'
 import { pickDocument } from '../platform/filePicker'
+import { getExtension, preloadWhitelist, validateUploadFile } from './fileWhitelist'
 
 export interface HomeaiPickedFile {
   path: string
@@ -20,16 +21,30 @@ export interface PickFilesOptions {
   allowedExt?: string[]
 }
 
-function toPicked(path: string, name?: string, size?: number): HomeaiPickedFile {
+function toPicked(path: string, name?: string, size?: number, mimeType?: string, fallbackExt?: string): HomeaiPickedFile {
   const n = name || path.split(/[/\\]/).pop() || path
-  return { path, name: n, ext: getExtension(n), size }
+  let ext = getExtension(n) || getExtension(path) || extensionFromMime(mimeType) || (fallbackExt || '')
+  if (ext === 'jpeg') ext = 'jpg'
+  let displayName = n
+  if (ext && !getExtension(displayName)) {
+    displayName = `${displayName}.${ext}`
+  }
+  return { path, name: displayName, ext, size }
+}
+
+function extAllowed(ext: string, allowedExt: string[]): boolean {
+  const set = new Set(allowedExt.map((e) => e.toLowerCase()))
+  if (set.has(ext)) return true
+  if (ext === 'jpg' && set.has('jpeg')) return true
+  if (ext === 'jpeg' && set.has('jpg')) return true
+  return false
 }
 
 async function filterAllowed(files: HomeaiPickedFile[], allowedExt?: string[]): Promise<HomeaiPickedFile[]> {
   const out: HomeaiPickedFile[] = []
   for (const f of files) {
     if (!(await validateUploadFile(f.path, f.name))) continue
-    if (allowedExt?.length && !allowedExt.map((e) => e.toLowerCase()).includes(f.ext)) {
+    if (allowedExt?.length && !extAllowed(f.ext, allowedExt)) {
       uni.showToast({ title: `仅支持 ${allowedExt.join('/')}`, icon: 'none' })
       continue
     }
@@ -47,7 +62,7 @@ export function useHomeaiFilePick() {
   async function pickFiles(opts?: PickFilesOptions): Promise<HomeaiPickedFile[]> {
     const count = opts?.count ?? 1
     const files = await pickDocument({ count, type: opts?.type, extension: opts?.extension })
-    const raw = files.map((f) => toPicked(f.path, f.name, f.size))
+    const raw = files.map((f) => toPicked(f.path, f.name, f.size, f.mimeType))
     return filterAllowed(raw, opts?.allowedExt)
   }
 
@@ -63,7 +78,12 @@ export function useHomeaiFilePick() {
         sourceType: opts?.sourceType || ['album', 'camera'],
         success: async (r) => {
           const paths = r.tempFilePaths || []
-          const raw = paths.map((p) => toPicked(p))
+          const tempFiles = (r.tempFiles || []) as any[]
+          const raw = paths.map((p, i) => {
+            const tf = tempFiles[i]
+            const name = tf?.name || (typeof tf?.path === 'string' ? String(tf.path).split(/[/\\]/).pop() : undefined)
+            return toPicked(p, name, tf?.size, tf?.type, 'jpg')
+          })
           resolve(await filterAllowed(raw))
         },
         fail: async () => {
@@ -94,7 +114,7 @@ export function useHomeaiFilePick() {
         success: async (r) => {
           const raw = (r.tempFiles || [])
             .filter((f: any) => f?.tempFilePath)
-            .map((f: any) => toPicked(f.tempFilePath, undefined, f.size))
+            .map((f: any) => toPicked(f.tempFilePath, f.name, f.size, f.fileType || f.type, 'jpg'))
           resolve(await filterAllowed(raw))
         },
         fail: async () => {
@@ -119,7 +139,7 @@ export function useHomeaiFilePick() {
             return
           }
           const name = r.tempFilePath.split(/[/\\]/).pop() || `VIDEO_${Date.now()}.mp4`
-          resolve(await filterAllowed([toPicked(r.tempFilePath, name, r.size)]))
+          resolve(await filterAllowed([toPicked(r.tempFilePath, name, r.size, undefined, 'mp4')]))
         },
         fail: () => resolve([]),
       })
@@ -161,8 +181,8 @@ export function useHomeaiFilePick() {
     ) => void | Promise<void>,
   ) {
     uni.showActionSheet({
-      itemList: ['拍照', '从相册选择', '选择视频', '选择文件(PDF/TXT等)'],
-      success: async (res) => {
+        itemList: ['拍照', '从相册选择', '选择视频', '选择音频', '选择文件(PDF/文档等)'],
+        success: async (res) => {
         let files: HomeaiPickedFile[] = []
         let source: 'camera' | 'album' | 'video' | 'file' = 'file'
         if (res.tapIndex === 0) {
@@ -175,6 +195,14 @@ export function useHomeaiFilePick() {
           source = 'video'
           files = await pickVideo()
         } else if (res.tapIndex === 3) {
+          source = 'file'
+          files = await pickFiles({
+            count: 1,
+            type: 'all',
+            extension: [...AUDIO_EXTS],
+            allowedExt: [...AUDIO_EXTS],
+          })
+        } else if (res.tapIndex === 4) {
           source = 'file'
           files = await pickFiles({ count: 9, type: 'all' })
         }

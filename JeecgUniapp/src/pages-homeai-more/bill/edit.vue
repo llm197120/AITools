@@ -21,19 +21,21 @@
         <text class="cat-name">{{ c.name }}</text>
       </view>
     </view>
-    <view class="extra">
-      <picker mode="date" :value="form.billDate" @change="onDateChange">
-        <view class="extra-item"><text>日期</text><text>{{ form.billDate }}</text></view>
-      </picker>
-      <picker :range="payMethods" @change="(e: any) => (form.paymentMethod = payMethods[e.detail.value])">
-        <view class="extra-item"><text>支付方式</text><text>{{ form.paymentMethod || '选择' }}</text></view>
-      </picker>
-      <view class="extra-item remark-row">
-        <text>备注</text>
-        <input class="remark-input" v-model="form.remark" placeholder="可选" />
-      </view>
+    <view class="home-form-group">
+      <wd-cell-group border>
+        <HomeDateCell v-model="form.billDate" label="日期" title="选择日期" />
+        <HomePickerCell
+          v-model="form.paymentMethod"
+          label="支付方式"
+          title="选择支付方式"
+          :columns="payColumns"
+        />
+        <wd-cell title="备注" title-width="180rpx" center>
+          <input class="home-form-cell-input" v-model="form.remark" placeholder="可选" />
+        </wd-cell>
+      </wd-cell-group>
     </view>
-    <wd-button size="large" type="primary" block :loading="saving" @click="save">保存</wd-button>
+    <wd-button class="home-form-save" size="large" type="primary" block round :loading="saving" @click="save">保存</wd-button>
     <wd-button size="large" type="error" plain block custom-class="delete-btn" @click="remove">删除此账单</wd-button>
   </HomeFormCard>
 </template>
@@ -43,6 +45,8 @@ import { onLoad } from '@dcloudio/uni-app'
 import { billApi } from '../../pages-homeai/api/bill'
 import { localDateStr } from '../../pages-homeai/utils/date'
 import HomeFormCard from '../../components/HomeFormCard.vue'
+import HomePickerCell from '../../pages-homeai/components/HomePickerCell.vue'
+import HomeDateCell from '../../pages-homeai/components/HomeDateCell.vue'
 
 const entryId = ref('')
 const saving = ref(false)
@@ -55,19 +59,24 @@ const form = ref({
   remark: '',
 })
 const categories = ref<any[]>([])
-const payMethods = ['微信', '支付宝', '现金', '银行卡', '其他']
+const payColumns = [
+  { label: '微信', value: '微信' },
+  { label: '支付宝', value: '支付宝' },
+  { label: '现金', value: '现金' },
+  { label: '银行卡', value: '银行卡' },
+  { label: '其他', value: '其他' },
+]
 
 async function loadCategories(type: string) {
   categories.value = (await billApi.categories(type)) || []
+  if (categories.value.length && !categories.value.find((c) => c.id === form.value.categoryId)) {
+    form.value.categoryId = categories.value[0].id
+  }
 }
 
 function switchType(type: string) {
   form.value.type = type
   loadCategories(type)
-}
-
-function onDateChange(e: any) {
-  form.value.billDate = e.detail.value
 }
 
 onLoad(async (opts: any) => {
@@ -94,8 +103,9 @@ onLoad(async (opts: any) => {
 })
 
 async function save() {
-  if (!form.value.amount || !form.value.categoryId) {
-    uni.showToast({ title: '请填写完整', icon: 'none' })
+  const amount = parseFloat(form.value.amount)
+  if (!form.value.categoryId || !Number.isFinite(amount) || amount <= 0) {
+    uni.showToast({ title: '请填写有效金额和分类', icon: 'none' })
     return
   }
   saving.value = true
@@ -103,10 +113,12 @@ async function save() {
     await billApi.update({
       id: entryId.value,
       ...form.value,
-      amount: parseFloat(form.value.amount),
+      amount,
     })
     uni.showToast({ title: '保存成功', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 800)
+  } catch {
+    // request 层已 toast
   } finally {
     saving.value = false
   }
@@ -138,10 +150,5 @@ function remove() {
 .cat-item { padding: 20rpx 16rpx; background: var(--hai-card); border-radius: var(--hai-radius-sm); font-size: 26rpx; width: calc(25% - 12rpx); box-sizing: border-box; text-align: center; box-shadow: var(--hai-shadow); border: 1rpx solid transparent; }
 .cat-item.selected { background: var(--hai-primary-soft); border-color: var(--hai-primary); }
 .cat-name { display: block; margin-top: 6rpx; text-align: center; font-size: 22rpx; color: var(--hai-text-secondary); }
-.extra { background: var(--hai-card); border-radius: var(--hai-radius); margin-bottom: 32rpx; overflow: hidden; box-shadow: var(--hai-shadow); }
-.extra-item { display: flex; justify-content: space-between; align-items: center; padding: 28rpx; border-bottom: 1rpx solid var(--hai-border); font-size: 28rpx; color: var(--hai-text); }
-.extra-item:last-child { border-bottom: none; }
-.remark-row { gap: 20rpx; }
-.remark-input { flex: 1; text-align: right; font-size: 28rpx; color: var(--hai-text); }
 .delete-btn { margin-top: 24rpx; }
 </style>

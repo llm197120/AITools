@@ -59,6 +59,8 @@ export const storageApi = {
     get<any>('/storage/office/generate/quota-check', instruction ? { instruction } : undefined),
   convert: (fileId: string, targetFormat: string) =>
     post('/storage/office/convert', { params: { fileId, targetFormat } }),
+  preview: (id: string) => get<any>(`/storage/files/${id}/preview`),
+  previewPdf: (id: string) => post(`/storage/files/${id}/preview-pdf`),
   generate: (fileId: string, instruction: string, docType?: string) =>
     post('/storage/office/generate', { params: { fileId, instruction, docType: docType || 'word' } }),
   convertHistory: () => get<any[]>('/storage/office/history'),

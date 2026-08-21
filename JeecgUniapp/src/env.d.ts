@@ -15,6 +15,10 @@ interface ImportMetaEnv {
   readonly VITE_SERVER_PORT: string
   /** 后台接口地址 */
   readonly VITE_SERVER_BASEURL: string
+  /** Android 真机调试接口地址（局域网 IP，不能用 localhost） */
+  readonly VITE_SERVER_BASEURL_APP?: string
+  /** Android 真机调试上传地址 */
+  readonly VITE_UPLOAD_BASEURL_APP?: string
   /** H5是否需要代理 */
   readonly VITE_APP_PROXY: 'true' | 'false'
   /** H5是否需要代理，需要的话有个前缀 */

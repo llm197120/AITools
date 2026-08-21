@@ -41,9 +41,8 @@
   },
   "pages": [
     {
-      "path": "pages/homeai/index",
+      "path": "pages/launch/index",
       "type": "home",
-      "layout": "default",
       "style": {
         "navigationStyle": "custom",
         "navigationBarTitleText": "家庭AI小工具"
@@ -58,10 +57,26 @@
       }
     },
     {
+      "path": "pages/auth/change-password",
+      "type": "page",
+      "style": {
+        "navigationBarTitleText": "修改密码",
+        "navigationBarBackgroundColor": "#F3F2EE"
+      }
+    },
+    {
       "path": "pages/auth/login",
       "type": "page",
       "style": {
         "navigationBarTitleText": "登录",
+        "navigationBarBackgroundColor": "#F3F2EE"
+      }
+    },
+    {
+      "path": "pages/auth/profile-edit",
+      "type": "page",
+      "style": {
+        "navigationBarTitleText": "编辑资料",
         "navigationBarBackgroundColor": "#F3F2EE"
       }
     },
@@ -71,6 +86,15 @@
       "style": {
         "navigationBarTitleText": "我的家庭",
         "navigationBarBackgroundColor": "#F3F2EE"
+      }
+    },
+    {
+      "path": "pages/homeai/index",
+      "type": "page",
+      "layout": "default",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "家庭AI小工具"
       }
     },
     {
@@ -257,7 +281,8 @@
           "type": "page",
           "style": {
             "navigationBarTitleText": "烹饪指南",
-            "navigationBarBackgroundColor": "#F3F2EE"
+            "navigationBarBackgroundColor": "#F3F2EE",
+            "onReachBottomDistance": 80
           }
         },
         {

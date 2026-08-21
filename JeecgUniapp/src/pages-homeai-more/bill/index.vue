@@ -3,10 +3,17 @@
 </route>
 
 <template>
-  <view class="hai-page">
+  <view class="hai-page hai-page--bottom-bar">
     <view class="toolbar">
-      <text class="tool-link" @click="goStatistics">统计</text>
-      <text class="tool-link" @click="goImport">导入</text>
+      <view class="month-nav">
+        <text class="month-btn" @click="changeMonth(-1)">‹</text>
+        <text class="month-text">{{ currentMonth }}</text>
+        <text class="month-btn" @click="changeMonth(1)">›</text>
+      </view>
+      <view class="toolbar-links">
+        <text class="tool-link" @click="goStatistics">统计</text>
+        <text class="tool-link" @click="goImport">导入</text>
+      </view>
     </view>
     <view class="summary">
       <view class="card"><text class="label">本月支出</text><text class="value red">¥{{ summary.expense }}</text></view>
@@ -45,6 +52,7 @@
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { billApi } from '../../pages-homeai/api/bill'
+import { addMonths, localMonthStr } from '../../pages-homeai/utils/date'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 
@@ -55,13 +63,13 @@ const allEntries = ref<any[]>([])
 const displayCount = ref(PAGE_STEP)
 const summary = ref({ expense: '0', income: '0', balance: '0' })
 const cats = ref<any[]>([])
+const currentMonth = ref(localMonthStr())
 
 const displayedEntries = computed(() => allEntries.value.slice(0, displayCount.value))
 const hasMore = computed(() => displayCount.value < allEntries.value.length)
 
 async function loadData() {
-  const now = new Date()
-  const m = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const m = currentMonth.value
   allEntries.value = (await billApi.entries(m)) || []
   displayCount.value = PAGE_STEP
   const sum: any = await billApi.summary(m)
@@ -71,6 +79,11 @@ async function loadData() {
     balance: sum.balance ?? '0',
   }
   cats.value = (await billApi.categories()) || []
+}
+
+function changeMonth(delta: number) {
+  currentMonth.value = addMonths(currentMonth.value, delta)
+  loadData()
 }
 
 function loadMore() {
@@ -104,7 +117,11 @@ function goImport() {
 
 <style scoped>
 /* page shell: .hai-page */
-.toolbar{display:flex;justify-content:flex-end;gap:24rpx;margin-bottom:16rpx}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:16rpx;margin-bottom:16rpx}
+.month-nav{display:flex;align-items:center;gap:16rpx}
+.month-btn{font-size:40rpx;color:var(--hai-primary);padding:0 8rpx;line-height:1}
+.month-text{font-size:28rpx;font-weight:600;color:var(--hai-text)}
+.toolbar-links{display:flex;gap:24rpx}
 .tool-link{font-size:26rpx;color:var(--hai-primary)}
 .summary{display:flex;gap:16rpx;margin-bottom:24rpx}
 .card{flex:1;background:var(--hai-card);border-radius:24rpx;padding:24rpx 16rpx;text-align:center;box-shadow:var(--hai-shadow)}

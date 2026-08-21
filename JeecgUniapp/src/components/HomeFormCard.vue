@@ -66,4 +66,57 @@
   white-space: nowrap;
   font-size: 26rpx;
 }
+
+/* 分组卡片：一行一项、内部发丝分割，避免多张小卡片挤在一起 */
+.home-form-group {
+  background: var(--hai-card, #fff);
+  border-radius: var(--hai-radius, 28rpx);
+  margin-bottom: 24rpx;
+  overflow: hidden;
+  box-shadow: var(--hai-shadow, 0 8rpx 32rpx rgba(27, 40, 60, 0.06));
+}
+
+.home-form-group .wd-cell-group,
+.home-form-group .wd-cell-group__body {
+  background: transparent !important;
+  margin: 0;
+}
+
+.home-form-group .wd-cell,
+.home-form-group .wd-picker,
+.home-form-group .wd-select-picker,
+.home-form-group .wd-datetime-picker {
+  background: #fff !important;
+}
+
+.home-form-group .wd-cell__wrapper {
+  padding: 28rpx 24rpx;
+  min-height: 96rpx;
+  box-sizing: border-box;
+}
+
+.home-form-group .wd-cell__title,
+.home-form-group .wd-cell__left {
+  color: var(--hai-text, #2c271f);
+  font-size: 28rpx;
+}
+
+.home-form-group .wd-cell__value,
+.home-form-group .wd-picker,
+.home-form-group .wd-select-picker .wd-cell__value {
+  color: var(--hai-text-secondary, #8a857c);
+  font-size: 26rpx;
+}
+
+.home-form-cell-input {
+  flex: 1;
+  width: 100%;
+  text-align: right;
+  font-size: 28rpx;
+  color: var(--hai-text, #2c271f);
+}
+
+.home-form-save {
+  margin-top: 8rpx;
+}
 </style>

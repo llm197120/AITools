@@ -11,7 +11,35 @@
  */
 
 import { planApi } from '../api/plan'
+import { isStandaloneApp } from '../platform/runtime'
 import { localDateStr } from './date'
+// #ifdef H5
+import {
+  initCapacitorLocalNotify,
+  scheduleCapacitorLearnGoal,
+  scheduleCapacitorPlanNotifies,
+} from '../platform/notify'
+// #endif
+
+/**
+ * 5+ 运行时：未打入 Push 原生模块时，访问 plus.push 会直接抛「缺少push模块」，
+ * typeof plus.push 同样会抛，必须 try-catch。
+ */
+function getPush(): PlusPush | null {
+  // #ifdef APP-PLUS
+  try {
+    const push = plus.push
+    if (!push || typeof push.createMessage !== 'function') {
+      return null
+    }
+    return push
+  } catch {
+    console.warn('[push] 当前安装包未包含 Push 模块，本地通知已跳过')
+    return null
+  }
+  // #endif
+  return null
+}
 
 /** 待提醒计划项（用于创建本地通知） */
 export interface PlanRemindItem {
@@ -41,6 +69,8 @@ export interface PlanRemindItem {
  */
 export function schedulePlanLocalNotify(items: PlanRemindItem[]): void {
   // #ifdef APP-PLUS
+  const push = getPush()
+  if (!push) return
   const now = new Date()
   for (const item of items) {
     if (item.status && item.status !== 'pending') continue
@@ -55,15 +85,31 @@ export function schedulePlanLocalNotify(items: PlanRemindItem[]): void {
     const delaySec = Math.round((remindAt.getTime() - now.getTime()) / 1000)
     if (delaySec <= 0) continue // 提醒时间已过去
     const payload = JSON.stringify({ planInstanceId: item.planInstanceId })
-    plus.push.createMessage(item.content, payload, {
+    push.createMessage(item.content, payload, {
       title: item.title,
       delay: delaySec,
     })
   }
   // #endif
-  // #ifndef APP-PLUS
-  // 小程序走微信订阅消息（requestSubscribeMessage），本地通知为空实现
+  // #ifdef H5
+  void scheduleCapacitorPlanNotifies(items)
   // #endif
+}
+
+/** Android 13+ 本地通知需运行时申请 POST_NOTIFICATIONS */
+function requestPostNotificationsPermission(): void {
+  try {
+    const version = String(plus.os.version || '')
+    const major = parseInt(version.split('.')[0], 10)
+    if (Number.isNaN(major) || major < 13) return
+    plus.android.requestPermissions(
+      ['android.permission.POST_NOTIFICATIONS'],
+      () => undefined,
+      () => undefined,
+    )
+  } catch {
+    // 旧 runtime 无 requestPermissions 时忽略
+  }
 }
 
 /**
@@ -72,7 +118,10 @@ export function schedulePlanLocalNotify(items: PlanRemindItem[]): void {
  */
 export function initLocalNotify(): void {
   // #ifdef APP-PLUS
-  plus.push.addEventListener('click', (result) => {
+  const push = getPush()
+  if (!push) return
+  requestPostNotificationsPermission()
+  push.addEventListener('click', (result) => {
     // 点击本地通知：跳转计划页（payload 携带 planInstanceId，可扩展跳转计划详情）
     const msg = result as unknown as PlusPushPushMessage
     const payload = msg?.payload
@@ -89,8 +138,8 @@ export function initLocalNotify(): void {
     uni.navigateTo({ url: '/pages-homeai-more/plan/index' })
   })
   // #endif
-  // #ifndef APP-PLUS
-  // 小程序走微信订阅消息，无需本地通知监听
+  // #ifdef H5
+  void initCapacitorLocalNotify()
   // #endif
 }
 
@@ -101,12 +150,11 @@ export function initLocalNotify(): void {
  * 或 App 启动且已登录时调用。
  *
  * ⚠️ 依赖后端接口：GET /homeai/plan/date/{date}（planApi.byDate）。
- * 当前该接口返回的计划实例缺少 startTime / remindMinutes 字段（二者在 PlanMaster 上，
- * fillMasterInfo 未填充到实例），导致本地通知暂时无法计算提醒时间而被跳过；
- * 需后端在 byDate 返回的实例上补充 startTime、remindMinutes 字段后本功能即生效。
+ * 实例上的 startTime / remindMinutes 由 fillMasterInfo 从主计划填入。
+ * APP 创建计划时须带开始时间，全天计划不调度本地提醒。
  */
 export async function scheduleTodayPlanReminds(): Promise<void> {
-  // #ifdef APP-PLUS
+  if (!isStandaloneApp()) return
   try {
     const instances = (await planApi.byDate(localDateStr())) || []
     const items: PlanRemindItem[] = instances.map((inst) => ({
@@ -122,8 +170,55 @@ export async function scheduleTodayPlanReminds(): Promise<void> {
   } catch (e) {
     console.error('[push] 今日计划本地提醒调度失败', e)
   }
+}
+
+let learnGoalScheduledFor = ''
+
+/**
+ * 今晚 20:00 学习目标未达标时发本地通知（APP 端）。
+ * 同一天只调度一次；已达标或已过 20:00 则跳过。
+ */
+export function scheduleLearnGoalRemind(goal?: {
+  reached?: boolean
+  goalMinutes?: number
+  todayMinutes?: number
+}): void {
+  // #ifdef APP-PLUS
+  const today = localDateStr()
+  if (!goal || goal.reached) {
+    learnGoalScheduledFor = today
+    return
+  }
+  if (learnGoalScheduledFor === today) return
+  const now = new Date()
+  const at = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0, 0)
+  const delaySec = Math.round((at.getTime() - now.getTime()) / 1000)
+  if (delaySec <= 0) return
+  const push = getPush()
+  if (!push) {
+    learnGoalScheduledFor = today
+    return
+  }
+  const remain = Math.max(0, (goal.goalMinutes || 30) - (goal.todayMinutes || 0))
+  push.createMessage(`今日学习还差 ${remain} 分钟`, 'learn-goal', {
+    title: '学习目标提醒',
+    delay: delaySec,
+  })
+  learnGoalScheduledFor = today
   // #endif
-  // #ifndef APP-PLUS
-  // 小程序走微信订阅消息，无需本地通知调度
+  // #ifdef H5
+  const todayH5 = localDateStr()
+  if (!goal || goal.reached) {
+    learnGoalScheduledFor = todayH5
+    return
+  }
+  if (learnGoalScheduledFor === todayH5) return
+  const nowH5 = new Date()
+  const atH5 = new Date(nowH5.getFullYear(), nowH5.getMonth(), nowH5.getDate(), 20, 0, 0)
+  const delayH5 = Math.round((atH5.getTime() - nowH5.getTime()) / 1000)
+  if (delayH5 <= 0) return
+  const remainH5 = Math.max(0, (goal.goalMinutes || 30) - (goal.todayMinutes || 0))
+  void scheduleCapacitorLearnGoal(delayH5, remainH5)
+  learnGoalScheduledFor = todayH5
   // #endif
 }

@@ -49,19 +49,14 @@
 
       <view class="doc-section">
         <text class="doc-h2">四、第三方 SDK 清单</text>
-        <text class="doc-p">为保障相关功能的实现与安全稳定运行，我们可能接入第三方 SDK，具体如下：</text>
-        <text class="doc-h3">1. 阿里云 EMAS 移动推送 SDK</text>
-        <text class="doc-p">用途：向您推送家庭动态、学习提醒等服务通知；</text>
-        <text class="doc-p">收集信息：设备标识信息（如设备型号、操作系统版本、设备唯一标识）、推送消息记录；</text>
-        <text class="doc-p">隐私政策：https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202103011017_20637.html</text>
-        <text class="doc-h3">2. 阿里云 OSS SDK</text>
+        <text class="doc-p">为保障相关功能的实现与安全稳定运行，我们可能接入第三方服务，具体如下：</text>
+        <text class="doc-h3">1. 阿里云 OSS</text>
         <text class="doc-p">用途：提供图片、文件等家庭资料的云端存储服务；</text>
         <text class="doc-p">收集信息：上传的文件内容及必要的设备信息；</text>
         <text class="doc-p">隐私政策：https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202103011017_20637.html</text>
-        <text class="doc-h3">3. 微信开放平台 SDK（微信登录）</text>
-        <text class="doc-p">用途：提供微信授权登录能力；</text>
-        <text class="doc-p">收集信息：微信昵称、头像及 OpenID 等授权信息；</text>
-        <text class="doc-p">隐私政策：https://privacy.weixin.qq.com/</text>
+        <text class="doc-h3">2. DCloud 应用运行时</text>
+        <text class="doc-p">用途：提供 Android 应用运行环境与本地通知能力；</text>
+        <text class="doc-p">收集信息：设备型号、操作系统版本等运行所必需的基础信息。</text>
       </view>
 
       <view class="doc-section">

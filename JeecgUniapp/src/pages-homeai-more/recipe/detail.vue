@@ -17,6 +17,10 @@
           <wd-icon name="edit" size="16px" color="#1B4F8A" />
           <text>编辑</text>
         </view>
+        <view class="act danger" @click="deleteVisible = true" v-if="canEdit">
+          <wd-icon name="delete" size="16px" color="#C45C4A" />
+          <text>删除</text>
+        </view>
         <view class="act" @click="copyIngredients" v-if="ingredients.length > 0">
           <wd-icon name="file-copy" size="16px" color="#1B4F8A" />
           <text>复制食材</text>
@@ -42,12 +46,24 @@
       <text class="tips-text">{{ recipe.tips }}</text>
     </view>
   </view>
+
+  <wd-popup v-model="deleteVisible" position="center" custom-style="width:80%;border-radius:28rpx;overflow:hidden">
+    <view class="dialog-title">删除菜谱</view>
+    <view class="dialog-body">
+      <text class="dialog-hint">{{ deleteHint }}</text>
+    </view>
+    <view class="dialog-footer">
+      <wd-button block @click="deleteVisible = false">取消</wd-button>
+      <wd-button type="error" block @click="doDelete">确认删除</wd-button>
+    </view>
+  </wd-popup>
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi } from '../../pages-homeai/api/request'
+import { recipeApi } from '../../pages-homeai/api/recipe'
 import { useUserStore } from '../../pages-homeai/stores/user'
 import { formatQuantityUnit } from '../../pages-homeai/utils/recipeIngredient'
 const recipe = ref<any>({})
@@ -57,6 +73,13 @@ const userStore = useUserStore()
 const canEdit = ref(false)
 const isFavorited = ref(false)
 const recipeId = ref('')
+const deleteVisible = ref(false)
+const deleteHint = computed(() => {
+  if (recipe.value.visibility === 'family') {
+    return '删除后家庭成员将无法再看到这道菜，确定继续？'
+  }
+  return '确定删除该菜谱？'
+})
 function diffLabel(d: any) {
   const map: Record<number, string> = { 1: '入门', 2: '简单', 3: '中等', 4: '较难', 5: '困难' }
   return map[Number(d)] || '中等'
@@ -66,17 +89,27 @@ function visibilityLabel(v?: string) {
   if (v === 'family') return '家庭共享'
   return '仅自己'
 }
-onLoad(async (opts:any) => {
-  recipeId.value = opts.id
-  const res = await getApi(`/recipe/${opts.id}`)
-  recipe.value = res.recipe
-  ingredients.value = (res.ingredients || []).map((x: any) => ({
-    ...x,
-    amount: formatQuantityUnit(x.quantity, x.unit, x.amount),
-  }))
-  steps.value = res.steps || []
-  isFavorited.value = !!res.isFavorited
-  canEdit.value = !!res.recipe && res.recipe.userId === userStore.userInfo?.id
+onLoad(async (opts: any) => {
+  const id = opts?.id
+  if (!id) {
+    uni.showToast({ title: '参数错误', icon: 'none' })
+    return
+  }
+  recipeId.value = id
+  try {
+    const res = await getApi(`/recipe/${id}`)
+    recipe.value = res.recipe
+    ingredients.value = (res.ingredients || []).map((x: any) => ({
+      ...x,
+      amount: formatQuantityUnit(x.quantity, x.unit, x.amount),
+    }))
+    steps.value = res.steps || []
+    isFavorited.value = !!res.isFavorited
+    canEdit.value = res.canModify === true
+      || (!!res.recipe && res.recipe.userId === userStore.userInfo?.id)
+  } catch {
+    // request 层已 toast
+  }
 })
 
 async function toggleFavorite() {
@@ -87,6 +120,18 @@ async function toggleFavorite() {
 
 function goEdit() {
   uni.navigateTo({ url: `/pages-homeai-more/recipe/add?id=${recipe.value.id}` })
+}
+
+async function doDelete() {
+  if (!recipeId.value) return
+  try {
+    await recipeApi.remove(recipeId.value)
+    deleteVisible.value = false
+    uni.showToast({ title: '已删除', icon: 'success' })
+    setTimeout(() => uni.navigateBack(), 600)
+  } catch {
+    // request 层已 toast
+  }
 }
 
 function copyIngredients() {
@@ -212,4 +257,15 @@ function copyIngredients() {
   color: var(--hai-text-secondary);
   line-height: 1.5;
 }
+.dialog-title {
+  font-family: var(--hai-serif);
+  font-size: 32rpx;
+  font-weight: 700;
+  text-align: center;
+  padding: 36rpx 24rpx 10rpx;
+  color: var(--hai-text);
+}
+.dialog-body { padding: 20rpx 30rpx; }
+.dialog-hint { display: block; font-size: 26rpx; color: var(--hai-text-secondary); line-height: 1.5; }
+.dialog-footer { display: flex; gap: 20rpx; padding: 0 30rpx 30rpx; }
 </style>

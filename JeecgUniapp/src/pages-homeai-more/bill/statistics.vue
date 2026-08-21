@@ -5,9 +5,9 @@
 <template>
   <view class="hai-page">
     <view class="month-select">
-      <text @click="changeMonth(-1)">◀</text>
+      <text class="month-btn" @click="changeMonth(-1)">‹</text>
       <text class="month">{{ currentMonth }}</text>
-      <text @click="changeMonth(1)">▶</text>
+      <text class="month-btn" @click="changeMonth(1)">›</text>
     </view>
     <view class="stats">
       <view class="stat-item"><text class="s-label">总支出</text><text class="s-value red">¥{{ summary.expense }}</text></view>
@@ -75,7 +75,9 @@ onShow(loadStats)
 
 <style scoped>
 /* page shell: .hai-page */
-.month-select { display: flex; justify-content: center; align-items: center; gap: 40rpx; padding: 30rpx; font-size: 32rpx; font-weight: 600; color: var(--hai-text); }
+.month-select { display: flex; justify-content: center; align-items: center; gap: 16rpx; padding: 16rpx 0 30rpx; }
+.month-btn { font-size: 40rpx; color: var(--hai-primary); padding: 0 8rpx; line-height: 1; }
+.month { font-size: 28rpx; font-weight: 600; color: var(--hai-text); }
 .stats { display: flex; gap: 16rpx; margin-bottom: 30rpx; }
 .stat-item { flex: 1; background: var(--hai-card); border-radius: 24rpx; padding: 30rpx; text-align: center; box-shadow: var(--hai-shadow); }
 .s-label { font-size: 22rpx; color: var(--hai-text-muted); }

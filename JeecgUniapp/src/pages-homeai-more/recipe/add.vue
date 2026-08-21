@@ -20,45 +20,42 @@
     />
 
     <!-- 基本信息 -->
-    <view class="form-card">
-      <view class="form-group">
-        <text class="label">菜名</text>
-        <input class="input" v-model="form.name" placeholder="输入菜名" />
-      </view>
-      <view class="form-group">
-        <text class="label">分类</text>
-        <picker :range="categories" range-key="name" @change="onCategoryChange">
-          <view class="picker-value">{{ currentCategoryName || '选择分类' }}</view>
-        </picker>
-      </view>
-      <view class="form-group">
-        <text class="label">难度</text>
-        <view class="radio-group">
-          <view :class="'radio '+(form.difficulty==='1'?'active':'')" @click="form.difficulty='1'">入门</view>
-          <view :class="'radio '+(form.difficulty==='2'?'active':'')" @click="form.difficulty='2'">简单</view>
-          <view :class="'radio '+(form.difficulty==='3'?'active':'')" @click="form.difficulty='3'">中等</view>
-          <view :class="'radio '+(form.difficulty==='4'?'active':'')" @click="form.difficulty='4'">较难</view>
-          <view :class="'radio '+(form.difficulty==='5'?'active':'')" @click="form.difficulty='5'">困难</view>
-        </view>
-      </view>
-      <view class="form-group row">
-        <view class="half">
-          <text class="label">烹饪时间(分钟)</text>
-          <input class="input" type="number" v-model="form.cookTime" />
-        </view>
-        <view class="half">
-          <text class="label">份数</text>
-          <input class="input" type="number" v-model="form.servings" />
-        </view>
-      </view>
-      <view class="form-group">
-        <text class="label">可见性</text>
-        <view class="radio-group">
-          <view :class="'radio '+(form.visibility==='private'?'active':'')" @click="form.visibility='private'">仅自己</view>
-          <view :class="'radio '+(form.visibility==='family'?'active':'')" @click="form.visibility='family'">家庭共享</view>
-          <view :class="'radio '+(form.visibility==='public'?'active':'')" @click="form.visibility='public'">公开</view>
-        </view>
-      </view>
+    <view class="home-form-group">
+      <wd-cell-group border>
+        <wd-cell title="菜名" title-width="180rpx" center>
+          <input class="home-form-cell-input" v-model="form.name" placeholder="输入菜名" />
+        </wd-cell>
+        <HomePickerCell
+          v-model="form.categoryId"
+          label="分类"
+          title="选择分类"
+          placeholder="请选择分类"
+          :columns="categoryColumns"
+          :filterable="categoryColumns.length > 8"
+        />
+        <wd-cell title="难度" title-width="180rpx">
+          <view class="radio-group">
+            <view :class="'radio '+(form.difficulty==='1'?'active':'')" @click="form.difficulty='1'">入门</view>
+            <view :class="'radio '+(form.difficulty==='2'?'active':'')" @click="form.difficulty='2'">简单</view>
+            <view :class="'radio '+(form.difficulty==='3'?'active':'')" @click="form.difficulty='3'">中等</view>
+            <view :class="'radio '+(form.difficulty==='4'?'active':'')" @click="form.difficulty='4'">较难</view>
+            <view :class="'radio '+(form.difficulty==='5'?'active':'')" @click="form.difficulty='5'">困难</view>
+          </view>
+        </wd-cell>
+        <wd-cell title="烹饪时间" title-width="180rpx" center>
+          <input class="home-form-cell-input" type="number" v-model="form.cookTime" placeholder="分钟" />
+        </wd-cell>
+        <wd-cell title="份数" title-width="180rpx" center>
+          <input class="home-form-cell-input" type="number" v-model="form.servings" />
+        </wd-cell>
+        <wd-cell title="可见性" title-width="180rpx">
+          <view class="radio-group">
+            <view :class="'radio '+(form.visibility==='private'?'active':'')" @click="form.visibility='private'">仅自己</view>
+            <view :class="'radio '+(form.visibility==='family'?'active':'')" @click="form.visibility='family'">家庭共享</view>
+            <view :class="'radio '+(form.visibility==='public'?'active':'')" @click="form.visibility='public'">公开</view>
+          </view>
+        </wd-cell>
+      </wd-cell-group>
     </view>
 
     <!-- 食材清单 -->
@@ -67,9 +64,9 @@
       <view class="ing-row" v-for="(ing, i) in ingredients" :key="i">
         <input class="input small" v-model="ing.name" placeholder="食材名" />
         <input class="input small" v-model="ing.amount" placeholder="用量" />
-        <text class="del-btn" @click="ingredients.splice(i, 1)">✕</text>
+        <text class="del-btn hai-press" @click="ingredients.splice(i, 1)">删除</text>
       </view>
-      <text class="add-btn" @click="ingredients.push({ name: '', amount: '' })">+ 添加食材</text>
+      <view class="add-btn hai-press" @click="ingredients.push({ name: '', amount: '' })">+ 添加食材</view>
     </view>
 
     <!-- 烹饪步骤 -->
@@ -79,9 +76,9 @@
         <view class="step-head">
           <text class="step-no">{{ i + 1 }}</text>
           <view class="step-ops">
-            <text class="op-btn" @click="moveStep(i, -1)">↑</text>
-            <text class="op-btn" @click="moveStep(i, 1)">↓</text>
-            <text class="op-btn danger" @click="steps.splice(i, 1)">✕</text>
+            <text class="op-btn hai-press" @click="moveStep(i, -1)">上移</text>
+            <text class="op-btn hai-press" @click="moveStep(i, 1)">下移</text>
+            <text class="op-btn danger hai-press" @click="steps.splice(i, 1)">删除</text>
           </view>
         </view>
         <HomeMediaUpload
@@ -93,7 +90,7 @@
         />
         <textarea class="step-input" v-model="s.description" placeholder="步骤说明..." :maxlength="300" />
       </view>
-      <text class="add-btn" @click="addStep">+ 添加步骤</text>
+      <view class="add-btn hai-press" @click="addStep">+ 添加步骤</view>
     </view>
 
     <!-- 做菜视频 -->
@@ -116,18 +113,19 @@
       <textarea class="tips-input" v-model="form.tips" placeholder="添加小贴士（可选）" />
     </view>
 
-    <wd-button size="large" type="primary" block :loading="saving" @click="submit">保存</wd-button>
+    <wd-button class="home-form-save" size="large" type="primary" block round :loading="saving" @click="submit">保存</wd-button>
     <view style="height: 40rpx"></view>
   </HomeFormCard>
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi, put as putApi } from '../../pages-homeai/api/request'
 import { formatQuantityUnit, parseAmountToQuantityUnit } from '../../pages-homeai/utils/recipeIngredient'
 import HomeFormCard from '../../components/HomeFormCard.vue'
 import HomeMediaUpload from '../../pages-homeai/components/HomeMediaUpload.vue'
+import HomePickerCell from '../../pages-homeai/components/HomePickerCell.vue'
 
 const editId = ref('')
 const saving = ref(false)
@@ -147,7 +145,11 @@ const form = ref<any>({
 const ingredients = ref<any[]>([{ name: '', amount: '' }])
 const steps = ref<any[]>([{ description: '', imageUrl: '' }])
 
-const currentCategoryName = ref('')
+const categoryColumns = computed(() =>
+  categories.value
+    .filter((c: any) => c?.id && c?.name)
+    .map((c: any) => ({ label: String(c.name), value: String(c.id) })),
+)
 
 async function loadCategories() {
   try {
@@ -155,14 +157,6 @@ async function loadCategories() {
     categories.value = Array.isArray(res) ? res : []
   } catch {
     categories.value = []
-  }
-}
-
-function onCategoryChange(e: any) {
-  const c = categories.value[e.detail.value]
-  if (c) {
-    form.value.categoryId = c.id
-    currentCategoryName.value = c.name
   }
 }
 
@@ -181,8 +175,6 @@ async function loadDetail(id: string) {
     visibility: r.visibility || 'family',
     tips: r.tips || '',
   }
-  const cat = categories.value.find((c: any) => c.id === r.categoryId)
-  currentCategoryName.value = cat?.name || ''
   ingredients.value = (res.ingredients || []).map((x: any) => ({
     name: x.name,
     amount: formatQuantityUnit(x.quantity, x.unit, x.amount),
@@ -300,26 +292,32 @@ async function submit() {
 }
 .picker-value {
   height: 72rpx;
-  line-height: 72rpx;
   padding: 0 20rpx;
   background: var(--hai-bg);
-  border-radius: 12rpx;
+  border-radius: 16rpx;
   font-size: 28rpx;
   color: var(--hai-text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.picker-value .muted {
+  color: var(--hai-text-muted);
 }
 .radio-group {
   display: flex;
   flex-wrap: wrap;
   gap: 12rpx;
+  justify-content: flex-end;
 }
 .radio {
-  flex: 1;
-  min-width: 140rpx;
+  flex: none;
+  min-width: 0;
   text-align: center;
-  padding: 16rpx;
+  padding: 10rpx 16rpx;
   background: var(--hai-bg);
-  border-radius: 12rpx;
-  font-size: 26rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
   color: var(--hai-text-secondary);
 }
 .radio.active {
@@ -334,14 +332,19 @@ async function submit() {
 }
 .del-btn {
   color: var(--hai-danger);
-  font-size: 28rpx;
-  padding: 8rpx;
+  font-size: 24rpx;
+  padding: 10rpx 20rpx;
+  border-radius: 999rpx;
+  background: var(--hai-danger-soft);
 }
 .add-btn {
   color: var(--hai-primary);
   font-size: 26rpx;
-  padding: 12rpx 0;
+  padding: 16rpx 0;
+  text-align: center;
   display: block;
+  border-radius: 999rpx;
+  background: var(--hai-primary-soft);
 }
 .step-item {
   border: 1rpx solid var(--hai-border);
@@ -371,10 +374,14 @@ async function submit() {
 }
 .op-btn {
   color: var(--hai-primary);
-  font-size: 28rpx;
+  font-size: 24rpx;
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  background: var(--hai-primary-soft);
 }
 .op-btn.danger {
   color: var(--hai-danger);
+  background: var(--hai-danger-soft);
 }
 .step-input {
   width: 100%;

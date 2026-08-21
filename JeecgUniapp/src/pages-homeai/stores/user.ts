@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { get as getApi, post as postApi } from '../api/request'
-import type { AuthResult } from '../platform/auth'
+import { get as getApi, post as postApi, put as putApi } from '../api/request'
+import { logout as logoutApi, type AuthResult } from '../platform/auth'
 import { scheduleTodayPlanReminds } from '../utils/push'
 
 export const useUserStore = defineStore('homeai-user', () => {
@@ -35,28 +35,61 @@ export const useUserStore = defineStore('homeai-user', () => {
    */
   function setAuth(auth: AuthResult) {
     token.value = auth.token
-    userInfo.value = auth.userInfo
+    const safeUser = auth.userInfo ? { ...auth.userInfo } : null
+    if (safeUser) {
+      delete safeUser.password
+      delete safeUser.salt
+    }
+    userInfo.value = safeUser
     uni.setStorageSync('homeai_token', auth.token)
-    uni.setStorageSync('homeai_user', JSON.stringify(auth.userInfo))
+    uni.setStorageSync('homeai_user', JSON.stringify(safeUser))
     // 登录成功后调度今日计划本地提醒（APP 端；小程序走微信订阅消息，内部为空实现）
     scheduleTodayPlanReminds()
   }
 
   async function refreshUserInfo() {
     try {
-      userInfo.value = await getApi('/user/info')
+      const info = await getApi('/user/info')
+      if (info) {
+        delete info.password
+        delete info.salt
+      }
+      userInfo.value = info
       uni.setStorageSync('homeai_user', JSON.stringify(userInfo.value))
     } catch (e) {
       console.error('获取用户信息失败', e)
     }
   }
 
-  function logout() {
+  async function updateProfile(patch: { nickname?: string; avatarUrl?: string }) {
+    const info = await putApi('/user/info', patch)
+    if (info) {
+      delete info.password
+      delete info.salt
+    }
+    userInfo.value = info
+    uni.setStorageSync('homeai_user', JSON.stringify(info))
+    return info
+  }
+
+  /** 仅清本地登录态（401 过期时不要再打服务端，避免循环） */
+  function clearLocalSession() {
     token.value = ''
     userInfo.value = null
     uni.removeStorageSync('homeai_token')
     uni.removeStorageSync('homeai_user')
   }
 
-  return { userInfo, token, isLogin, login, setAuth, refreshUserInfo, logout }
+  async function logout() {
+    try {
+      if (token.value) {
+        await logoutApi()
+      }
+    } catch {
+      // 服务端作废失败仍清本地
+    }
+    clearLocalSession()
+  }
+
+  return { userInfo, token, isLogin, login, setAuth, refreshUserInfo, updateProfile, logout, clearLocalSession }
 })

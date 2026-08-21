@@ -59,7 +59,10 @@
 import { reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi, put as putApi, del as delApi } from '../../pages-homeai/api/request'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
 import HomeEmpty from '../../components/HomeEmpty.vue'
+
+useHomeaiPageGuard()
 
 const list = ref<any[]>([])
 const loading = ref(false)

@@ -15,6 +15,10 @@ export function isVideoExt(ext: string): boolean {
   return ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v'].includes(ext)
 }
 
+export function isAudioExt(ext: string): boolean {
+  return ['mp3', 'wav', 'm4a', 'aac'].includes(ext)
+}
+
 export function isPdfExt(ext: string): boolean {
   return ext === 'pdf'
 }
@@ -23,8 +27,13 @@ export function isTextExt(ext: string): boolean {
   return ['txt', 'md', 'log', 'json', 'csv'].includes(ext)
 }
 
+export function isOfficeExt(ext: string): boolean {
+  return ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext)
+}
+
 export type PreviewFileInput = {
   id?: string
+  materialId?: string
   fileUrl?: string
   url?: string
   originalName?: string
@@ -32,22 +41,23 @@ export type PreviewFileInput = {
   extension?: string
 }
 
-/** 跳转资料预览页（支持图片/视频/PDF/TXT） */
+/** 跳转资料预览页（支持图片/视频/音频/PDF/Office/TXT） */
 export function previewFile(file: PreviewFileInput) {
-  if (file.id) {
-    uni.navigateTo({
-      url: `/pages-homeai-more/storage/preview?fileId=${encodeURIComponent(file.id)}`,
-    })
-    return
-  }
+  const qs: string[] = []
+  if (file.id) qs.push(`fileId=${encodeURIComponent(file.id)}`)
+  if (file.materialId) qs.push(`materialId=${encodeURIComponent(file.materialId)}`)
   const url = file.fileUrl || file.url
-  if (!url) {
+  if (url) qs.push(`url=${encodeURIComponent(url)}`)
+  const name = file.originalName || file.title || '文件'
+  qs.push(`name=${encodeURIComponent(name)}`)
+  const ext = file.extension || getFileExt(file.originalName || file.title || url || '')
+  if (ext) qs.push(`ext=${encodeURIComponent(ext)}`)
+  if (!file.id && !file.materialId && !url) {
     uni.showToast({ title: '无可预览内容', icon: 'none' })
     return
   }
-  const ext = file.extension || getFileExt(file.originalName || file.title || url)
   uni.navigateTo({
-    url: `/pages-homeai-more/storage/preview?url=${encodeURIComponent(url)}&name=${encodeURIComponent(file.originalName || file.title || '文件')}&ext=${encodeURIComponent(ext)}`,
+    url: `/pages-homeai-more/storage/preview?${qs.join('&')}`,
   })
 }
 

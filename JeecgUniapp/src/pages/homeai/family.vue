@@ -38,7 +38,7 @@
       <view class="section">
         <view class="section-title">
           <text class="section-title-text">家庭成员</text>
-          <text class="invite-btn" @click="generateInviteCode" v-if="isAdmin">+ 邀请</text>
+          <text class="invite-btn hai-press" @click="generateInviteCode" v-if="isAdmin">邀请成员</text>
         </view>
         <view class="member-list">
           <view class="member-item" v-for="member in members" :key="member.memberId">
@@ -70,21 +70,58 @@
         <wd-input v-model="createName" placeholder="请输入家庭名称" />
       </view>
       <view class="dialog-footer">
-        <wd-button @click="createVisible = false">取消</wd-button>
-        <wd-button type="primary" @click="createFamily">确认创建</wd-button>
+        <wd-button block @click="createVisible = false">取消</wd-button>
+        <wd-button type="primary" block @click="createFamily">确认创建</wd-button>
       </view>
     </wd-popup>
 
     <wd-popup v-model="joinVisible" position="center" custom-style="width:80%;border-radius:28rpx;overflow:hidden">
       <view class="dialog-title">加入家庭</view>
       <view class="dialog-body">
-        <wd-input v-model="inviteCode" placeholder="请输入6位邀请码" maxlength="6" />
+        <wd-input v-model="inviteCode" placeholder="请输入6位邀请码" :maxlength="6" />
       </view>
       <view class="dialog-footer">
-        <wd-button @click="joinVisible = false">取消</wd-button>
-        <wd-button type="primary" @click="joinFamily">确认加入</wd-button>
+        <wd-button block @click="joinVisible = false">取消</wd-button>
+        <wd-button type="primary" block @click="joinFamily">确认加入</wd-button>
       </view>
     </wd-popup>
+
+    <wd-popup v-model="editNameVisible" position="center" custom-style="width:80%;border-radius:28rpx;overflow:hidden">
+      <view class="dialog-title">编辑家庭名称</view>
+      <view class="dialog-body">
+        <wd-input v-model="editName" placeholder="请输入家庭名称" />
+      </view>
+      <view class="dialog-footer">
+        <wd-button block @click="editNameVisible = false">取消</wd-button>
+        <wd-button type="primary" block @click="saveFamilyName">保存</wd-button>
+      </view>
+    </wd-popup>
+
+    <wd-popup v-model="disbandVisible" position="center" custom-style="width:80%;border-radius:28rpx;overflow:hidden">
+      <view class="dialog-title">解散家庭</view>
+      <view class="dialog-body">
+        <text class="dialog-hint">解散后数据保留，所有成员将退出。请输入「确认解散」继续。</text>
+        <wd-input v-model="disbandConfirm" placeholder="请输入确认解散" />
+      </view>
+      <view class="dialog-footer">
+        <wd-button block @click="disbandVisible = false">取消</wd-button>
+        <wd-button type="error" block @click="doDisband">确认解散</wd-button>
+      </view>
+    </wd-popup>
+
+    <wd-message-box />
+    <wd-action-sheet
+      v-model="transferVisible"
+      :actions="transferActions"
+      cancel-text="取消"
+      @select="onTransferSelect"
+    />
+    <wd-action-sheet
+      v-model="inviteSheetVisible"
+      :actions="inviteSheetActions"
+      cancel-text="取消"
+      @select="onInviteSelect"
+    />
   </view>
 </template>
 
@@ -94,11 +131,13 @@ import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '../../pages-homeai/stores/user'
 import { useFamilyStore } from '../../pages-homeai/stores/family'
 import { get as getApi, post as postApi, del as delApi, put as putApi } from '../../pages-homeai/api'
-import { ensureProfileWhenGuest } from '../../pages-homeai/utils/homeaiAuth'
+import { ensureProfileWhenGuest, HOMEAI_ONBOARD_FAMILY_KEY } from '../../pages-homeai/utils/homeaiAuth'
+import { useMessage } from 'wot-design-uni'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
+const message = useMessage()
 
 const members = ref<any[]>([])
 const currentUserId = computed(() => userStore.userInfo?.id)
@@ -111,6 +150,21 @@ const createName = ref('')
 // 加入家庭
 const joinVisible = ref(false)
 const inviteCode = ref('')
+const editNameVisible = ref(false)
+const editName = ref('')
+const disbandVisible = ref(false)
+const disbandConfirm = ref('')
+const transferVisible = ref(false)
+const transferCandidates = ref<any[]>([])
+const transferActions = computed(() =>
+  transferCandidates.value.map((m) => ({ name: m.nickname || '未命名' })),
+)
+const inviteSheetVisible = ref(false)
+const inviteSheetActions = [
+  { name: '复制邀请码' },
+  { name: '系统分享' },
+]
+const pendingInviteCode = ref('')
 
 onShow(async () => {
   if (!ensureProfileWhenGuest()) {
@@ -119,6 +173,15 @@ onShow(async () => {
   await familyStore.fetchFamilyInfo()
   if (familyStore.hasFamily) {
     await fetchMembers()
+    uni.removeStorageSync(HOMEAI_ONBOARD_FAMILY_KEY)
+    return
+  }
+  const onboard = uni.getStorageSync(HOMEAI_ONBOARD_FAMILY_KEY)
+  uni.removeStorageSync(HOMEAI_ONBOARD_FAMILY_KEY)
+  if (onboard === 'create') {
+    showCreate()
+  } else if (onboard === 'join') {
+    showJoin()
   }
 })
 
@@ -168,7 +231,16 @@ async function joinFamily() {
 
 // 生成邀请码
 async function generateInviteCode() {
-  const code = await postApi('/family/invite-code')
+  const code = String(await postApi('/family/invite-code') || '')
+  if (!code) {
+    uni.showToast({ title: '生成失败', icon: 'none' })
+    return
+  }
+  pendingInviteCode.value = code
+  inviteSheetVisible.value = true
+}
+
+function copyInviteCode(code: string) {
   uni.setClipboardData({
     data: code,
     success: () => {
@@ -177,82 +249,105 @@ async function generateInviteCode() {
   })
 }
 
-// 移除成员
-function removeMember(member: any) {
-  uni.showModal({
-    title: '提示',
-    content: `确定移除 ${member.nickname} 吗？`,
-    success: async (res) => {
-      if (res.confirm) {
-        await delApi(`/family/member/${member.memberId}`)
-        await fetchMembers()
-      }
-    },
+function shareInviteCode(code: string) {
+  const name = familyStore.familyInfo?.name || '家庭'
+  const summary = `邀请你加入「${name}」，邀请码：${code}`
+  // #ifdef APP-PLUS
+  uni.shareWithSystem({
+    type: 'text',
+    summary,
+    success: () => uni.showToast({ title: '已打开系统分享', icon: 'none' }),
+    fail: () => copyInviteCode(code),
   })
+  return
+  // #endif
+  copyInviteCode(code)
+}
+
+function onInviteSelect({ index }: { index: number }) {
+  const code = pendingInviteCode.value
+  if (!code) return
+  if (index === 0) copyInviteCode(code)
+  else shareInviteCode(code)
+}
+
+// 移除成员
+async function removeMember(member: any) {
+  try {
+    await message.confirm({
+      title: '移除成员',
+      msg: `确定移除 ${member.nickname} 吗？`,
+    })
+  } catch {
+    return
+  }
+  await delApi(`/family/member/${member.memberId}`)
+  await fetchMembers()
 }
 
 // 编辑名称
 function showEditName() {
-  uni.showModal({
-    title: '编辑家庭名称',
-    editable: true,
-    content: familyStore.familyInfo?.name || '',
-    success: async (res) => {
-      if (res.confirm && res.content) {
-        await putApi('/family', { id: familyStore.familyInfo?.id, name: res.content })
-        await familyStore.fetchFamilyInfo()
-      }
-    },
-  })
+  editName.value = familyStore.familyInfo?.name || ''
+  editNameVisible.value = true
+}
+
+async function saveFamilyName() {
+  if (!editName.value.trim()) {
+    uni.showToast({ title: '请输入家庭名称', icon: 'none' })
+    return
+  }
+  await putApi('/family', { id: familyStore.familyInfo?.id, name: editName.value.trim() })
+  editNameVisible.value = false
+  await familyStore.fetchFamilyInfo()
 }
 
 // 转让管理员
 function showTransfer() {
-  const candidates = members.value.filter(m => m.role !== 'admin')
+  const candidates = members.value.filter((m) => m.role !== 'admin')
   if (candidates.length === 0) {
     uni.showToast({ title: '没有可转让的成员', icon: 'none' })
     return
   }
-  uni.showActionSheet({
-    itemList: candidates.map(m => m.nickname),
-    success: async (res) => {
-      const target = candidates[res.tapIndex]
-      await postApi('/family/transfer', { params: { targetUserId: target.userId } })
-      uni.showToast({ title: '转让成功' })
-      await fetchMembers()
-    },
-  })
+  transferCandidates.value = candidates
+  transferVisible.value = true
+}
+
+async function onTransferSelect({ index }: { index: number }) {
+  const target = transferCandidates.value[index]
+  if (!target) return
+  await postApi('/family/transfer', { params: { targetUserId: target.userId } })
+  uni.showToast({ title: '转让成功' })
+  await fetchMembers()
 }
 
 // 解散家庭
 function confirmDisband() {
-  uni.showModal({
-    title: '解散家庭',
-    content: '解散后家庭将被标记为已解散（数据保留），所有成员将退出家庭。请输入"确认解散"继续。',
-    editable: true,
-    success: async (res) => {
-      if (res.confirm && res.content === '确认解散') {
-        await familyStore.disbandFamily()
-        uni.showToast({ title: '家庭已解散' })
-      } else if (res.confirm) {
-        uni.showToast({ title: '请输入"确认解散"', icon: 'none' })
-      }
-    },
-  })
+  disbandConfirm.value = ''
+  disbandVisible.value = true
+}
+
+async function doDisband() {
+  if (disbandConfirm.value !== '确认解散') {
+    uni.showToast({ title: '请输入「确认解散」', icon: 'none' })
+    return
+  }
+  await familyStore.disbandFamily()
+  disbandVisible.value = false
+  uni.showToast({ title: '家庭已解散' })
 }
 
 // 退出家庭
-function confirmLeave() {
-  uni.showModal({
-    title: '退出家庭',
-    content: '确定退出当前家庭吗？',
-    success: async (res) => {
-      if (res.confirm) {
-        await familyStore.leaveFamily()
-        uni.showToast({ title: '已退出家庭' })
-      }
-    },
-  })
+async function confirmLeave() {
+  try {
+    await message.confirm({
+      title: '退出家庭',
+      msg: '确定退出当前家庭吗？',
+    })
+  } catch {
+    return
+  }
+  await familyStore.leaveFamily()
+  uni.showToast({ title: '已退出家庭' })
 }
 </script>
 
@@ -367,7 +462,10 @@ function confirmLeave() {
 
 .invite-btn {
   color: var(--hai-primary);
-  font-size: 26rpx;
+  font-size: 24rpx;
+  padding: 8rpx 22rpx;
+  border-radius: 999rpx;
+  background: var(--hai-primary-soft);
 }
 
 .member-list {
@@ -452,6 +550,14 @@ function confirmLeave() {
 
 .dialog-body {
   padding: 20rpx 30rpx;
+}
+
+.dialog-hint {
+  display: block;
+  font-size: 24rpx;
+  color: var(--hai-text-secondary);
+  line-height: 1.5;
+  margin-bottom: 16rpx;
 }
 
 .dialog-footer {

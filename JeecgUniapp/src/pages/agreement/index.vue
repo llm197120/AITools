@@ -26,7 +26,7 @@
 
       <view class="doc-section">
         <text class="doc-h2">二、账号规则</text>
-        <text class="doc-p">1. 您需使用真实、合法的手机号或微信账号注册，不得冒用他人身份；</text>
+        <text class="doc-p">1. 您需使用真实、合法的手机号注册，不得冒用他人身份；</text>
         <text class="doc-p">2. 一个账号仅限本人使用，不得转让、出借或出售账号；</text>
         <text class="doc-p">3. 您应对账号下的所有行为负责，不得利用本应用从事违法违规活动；</text>
         <text class="doc-p">4. 如发现账号存在异常或被盗用，请及时联系我们处理。</text>
@@ -36,7 +36,7 @@
         <text class="doc-h2">三、免责声明</text>
         <text class="doc-p">1. 本应用提供的 AI 生成内容仅供参考，不构成任何专业建议，请结合实际情况判断使用；</text>
         <text class="doc-p">2. 因不可抗力、网络故障、第三方服务异常等非我方原因导致的服务中断或数据损失，我们不承担相应责任；</text>
-        <text class="doc-p">3. 您在使用第三方服务（如微信登录、云存储）时，应同时遵守第三方相关协议与规则。</text>
+        <text class="doc-p">3. 您在使用第三方服务（如云存储）时，应同时遵守第三方相关协议与规则。</text>
       </view>
 
       <view class="doc-section">

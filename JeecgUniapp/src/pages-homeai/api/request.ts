@@ -1,6 +1,7 @@
 /**
  * HomeAI 小程序 API 请求封装
  */
+import { isMpWeixin } from '@/utils/platform'
 import { getToken } from '../utils/auth'
 import { useUserStore } from '../stores/user'
 import { getServerBaseUrl as getPlatformServerBaseUrl } from '../platform/env'
@@ -91,8 +92,25 @@ async function request<T = any>(options: RequestOptions): Promise<T> {
           resolve(data.result)
         } else if (data.code === 401) {
           // Token 过期：清理登录态（storage + Pinia store），避免 isLogin 残留
-          useUserStore().logout()
-          uni.switchTab({ url: '/pages/homeai/profile' })
+          useUserStore().clearLocalSession()
+          if (!isMpWeixin) {
+            const pages = getCurrentPages()
+            const cur: any = pages[pages.length - 1]
+            const route = cur?.route ? `/${cur.route}` : ''
+            let loginUrl = '/pages/auth/login'
+            if (route && route !== '/pages/auth/login' && route !== '/pages/launch/index') {
+              const opts = cur.options || {}
+              const keys = Object.keys(opts)
+              const q = keys
+                .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(opts[k]))}`)
+                .join('&')
+              const full = q ? `${route}?${q}` : route
+              loginUrl += `?redirect=${encodeURIComponent(full)}`
+            }
+            uni.reLaunch({ url: loginUrl })
+          } else {
+            uni.switchTab({ url: '/pages/homeai/profile' })
+          }
           reject(new Error(data.message || '登录已过期'))
         } else {
           uni.showToast({ title: data.message || '请求失败', icon: 'none' })
@@ -100,7 +118,11 @@ async function request<T = any>(options: RequestOptions): Promise<T> {
         }
       },
       fail: (err) => {
-        uni.showToast({ title: '网络异常，请稍后重试', icon: 'none' })
+        const msg = String((err as any)?.errMsg || '')
+        const title = /127\.0\.0\.1|localhost/.test(msg)
+          ? '连不上本机 8080，真机请用电脑局域网 IP'
+          : '网络异常，请稍后重试'
+        uni.showToast({ title, icon: 'none', duration: 3000 })
         reject(err)
       },
     })

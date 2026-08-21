@@ -86,6 +86,39 @@
       <view class="fab" @click="createFolder(folderId)">📁 新建</view>
       <view class="fab primary" @click="uploadFiles">📤 上传</view>
     </view>
+
+    <wd-action-sheet
+      v-model="folderSheetVisible"
+      :actions="folderSheetActions"
+      cancel-text="取消"
+      @select="onFolderSheetSelect"
+    />
+    <wd-action-sheet
+      v-model="fileSheetVisible"
+      :actions="fileSheetActions"
+      cancel-text="取消"
+      @select="onFileSheetSelect"
+    />
+    <wd-popup v-model="namePopupVisible" position="center" custom-style="width:80%;border-radius:28rpx;overflow:hidden">
+      <view class="dialog-title">{{ namePopupTitle }}</view>
+      <view class="dialog-body">
+        <wd-input v-model="namePopupValue" :placeholder="namePopupPlaceholder" />
+      </view>
+      <view class="dialog-footer">
+        <wd-button block @click="namePopupVisible = false">取消</wd-button>
+        <wd-button type="primary" block @click="submitNamePopup">确定</wd-button>
+      </view>
+    </wd-popup>
+    <wd-popup v-model="confirmVisible" position="center" custom-style="width:80%;border-radius:28rpx;overflow:hidden">
+      <view class="dialog-title">{{ confirmTitle }}</view>
+      <view class="dialog-body">
+        <text class="dialog-hint">{{ confirmMessage }}</text>
+      </view>
+      <view class="dialog-footer">
+        <wd-button block @click="confirmVisible = false">取消</wd-button>
+        <wd-button type="error" block @click="submitConfirm">确认删除</wd-button>
+      </view>
+    </wd-popup>
   </view>
 </template>
 
@@ -119,6 +152,21 @@ const {
   showFolderActions,
   showFileActions,
   canEditFolder,
+  folderSheetVisible,
+  folderSheetActions,
+  onFolderSheetSelect,
+  fileSheetVisible,
+  fileSheetActions,
+  onFileSheetSelect,
+  namePopupVisible,
+  namePopupTitle,
+  namePopupPlaceholder,
+  namePopupValue,
+  submitNamePopup,
+  confirmVisible,
+  confirmTitle,
+  confirmMessage,
+  submitConfirm,
 } = useStorageBrowser(
   () => props.folderId,
   () => props.userId,
@@ -200,4 +248,15 @@ function formatTime(t: string) {
 }
 .fab { padding: 20rpx 36rpx; background: var(--hai-card); border-radius: 999rpx; font-size: 26rpx; color: var(--hai-text); box-shadow: var(--hai-shadow); }
 .fab.primary { background: var(--hai-primary); color: var(--hai-on-primary); box-shadow: 0 8rpx 28rpx rgba(27, 79, 138, 0.28); }
+.dialog-title {
+  font-family: var(--hai-serif);
+  font-size: 32rpx;
+  font-weight: 700;
+  text-align: center;
+  padding: 36rpx 24rpx 10rpx;
+  color: var(--hai-text);
+}
+.dialog-body { padding: 20rpx 30rpx; }
+.dialog-hint { display: block; font-size: 26rpx; color: var(--hai-text-secondary); line-height: 1.5; }
+.dialog-footer { display: flex; gap: 20rpx; padding: 0 30rpx 30rpx; }
 </style>

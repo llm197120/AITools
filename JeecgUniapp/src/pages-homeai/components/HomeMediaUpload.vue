@@ -23,6 +23,14 @@
           <view class="hmu-btn danger" @click="clearValue">删除视频</view>
         </view>
       </view>
+      <!-- 音频预览 -->
+      <view v-else-if="mode === 'audio'" class="hmu-audio-wrap">
+        <NativeHtmlAudio :src="modelValue" />
+        <view class="hmu-actions">
+          <view class="hmu-btn" @click="pickAndUpload">更换</view>
+          <view class="hmu-btn danger" @click="clearValue">删除音频</view>
+        </view>
+      </view>
       <!-- 文件预览 -->
       <view v-else class="hmu-file">
         <view class="hmu-file-icon">📄</view>
@@ -64,13 +72,15 @@
 import { computed, ref } from 'vue'
 import { getServerBaseUrl } from '../api/request'
 import { getToken } from '../utils/auth'
+import { AUDIO_EXTS } from '../platform/fileAccept'
 import { useHomeaiFilePick } from '../utils/useHomeaiFilePick'
 import { previewFile } from '../utils/filePreview'
+import NativeHtmlAudio from './NativeHtmlAudio'
 
 const props = defineProps({
   /** 当前媒体地址 */
   modelValue: { type: String, default: '' },
-  /** 模式：image / video / file */
+  /** 模式：image / video / audio / file（学习 add 用 file/audio） */
   mode: { type: String, default: 'file' },
   /** 上传接口完整路径，如 /homeai/recipe/cover */
   url: { type: String, required: true },
@@ -86,6 +96,8 @@ const props = defineProps({
   maxVideoDuration: { type: Number, default: 60 },
   /** 图片/空状态高度（rpx） */
   height: { type: Number, default: 320 },
+  /** 额外收窄扩展名（如学习资料按 type） */
+  allowedExt: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['update:modelValue', 'change'])
 
@@ -98,16 +110,26 @@ const fileName = ref('')
 const emptyIcon = computed(() => {
   if (props.mode === 'image') return '🖼️'
   if (props.mode === 'video') return '🎬'
+  if (props.mode === 'audio') return '🎵'
   return '📄'
 })
 
 async function pickAndUpload() {
   if (uploading.value) return
   let files: any[] = []
-  if (props.mode === 'image') {
+  const extra = (props.allowedExt || []) as string[]
+  if (props.mode === 'image' && extra.length === 0) {
     files = await pickImages({ count: 1 })
-  } else if (props.mode === 'video') {
+  } else if (props.mode === 'video' && extra.length === 0) {
     files = await pickVideo({ maxDuration: props.maxVideoDuration })
+  } else if (props.mode === 'audio' || extra.length) {
+    const exts = extra.length ? extra : [...AUDIO_EXTS]
+    files = await pickFiles({
+      count: 1,
+      type: props.mode === 'video' ? 'video' : props.mode === 'image' ? 'image' : props.mode === 'audio' ? 'all' : 'file',
+      extension: exts,
+      allowedExt: exts,
+    })
   } else {
     files = await pickFiles({ count: 1, type: 'all' })
   }
@@ -205,6 +227,10 @@ function clearValue() {
   width: 100%;
   height: 360rpx;
   border-radius: var(--hai-radius-md, 24rpx);
+}
+.hmu-audio-wrap .hmu-audio {
+  width: 100%;
+  margin: 12rpx 0;
 }
 .hmu-actions {
   display: flex;

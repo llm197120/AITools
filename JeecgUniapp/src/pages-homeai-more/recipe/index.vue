@@ -1,5 +1,11 @@
 <route lang="json5">
-{ style: { navigationBarTitleText: '烹饪指南', navigationBarBackgroundColor: '#F3F2EE' } }
+{
+  style: {
+    navigationBarTitleText: '烹饪指南',
+    navigationBarBackgroundColor: '#F3F2EE',
+    onReachBottomDistance: 80,
+  },
+}
 </route>
 
 <template>
@@ -52,6 +58,11 @@
       action-text="添加菜谱"
       @action="goAdd"
     />
+    <view v-if="tab === 'all' && recipes.length > 0" class="load-more-wrap">
+      <view v-if="loadingMore" class="load-more-tip">加载中...</view>
+      <view v-else-if="hasMore" class="load-more-btn" @click="loadMore">加载更多</view>
+      <view v-else class="load-more-tip">没有更多了</view>
+    </view>
     <view class="hai-fab" @click="goAdd">
       <wd-icon name="add" size="24px" color="#fff" />
     </view>
@@ -60,7 +71,7 @@
 
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { recipeApi } from '../../pages-homeai/api/recipe'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 import HomeEmpty from '../../components/HomeEmpty.vue'
@@ -74,6 +85,10 @@ const recommends = ref<any[]>([])
 const newRecipes = ref<any[]>([])
 const tab = ref<'all' | 'hot' | 'favorite'>('all')
 const loading = ref(false)
+const PAGE_SIZE = 20
+const pageNo = ref(1)
+const hasMore = ref(true)
+const loadingMore = ref(false)
 
 const emptyTitle = computed(() => {
   if (tab.value === 'favorite') return '暂无收藏'
@@ -122,31 +137,60 @@ async function loadNewRecipes() {
   }
 }
 
-async function load() {
-  loading.value = true
-  try {
-    if (tab.value === 'favorite') {
-      recipes.value = (await recipeApi.favorites()) || []
-    } else if (tab.value === 'hot') {
-      recipes.value = (await recipeApi.hot(30)) || []
-    } else {
-      const res = await recipeApi.list()
-      recipes.value = res?.records || res || []
+async function load(reset = true) {
+  if (tab.value !== 'all') {
+    loading.value = true
+    try {
+      if (tab.value === 'favorite') {
+        recipes.value = (await recipeApi.favorites()) || []
+      } else {
+        recipes.value = (await recipeApi.hot(30)) || []
+      }
+    } finally {
+      loading.value = false
     }
+    return
+  }
+  if (!reset && (loadingMore.value || !hasMore.value)) return
+  if (reset) {
+    loading.value = true
+    pageNo.value = 1
+    hasMore.value = true
+  } else {
+    loadingMore.value = true
+  }
+  try {
+    const nextPage = reset ? 1 : pageNo.value + 1
+    const res = await recipeApi.list({ pageNo: String(nextPage), pageSize: String(PAGE_SIZE) })
+    const records: any[] = res?.records || (Array.isArray(res) ? res : [])
+    recipes.value = reset ? records : recipes.value.concat(records)
+    pageNo.value = nextPage
+    const total = res?.total
+    hasMore.value = typeof total === 'number' ? recipes.value.length < total : records.length >= PAGE_SIZE
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
+}
+
+function loadMore() {
+  if (tab.value !== 'all') return
+  load(false)
 }
 
 function switchTab(t: 'all' | 'hot' | 'favorite') {
   tab.value = t
-  load()
+  load(true)
 }
 
 onShow(() => {
   loadRecommend()
   loadNewRecipes()
-  load()
+  load(true)
+})
+
+onReachBottom(() => {
+  loadMore()
 })
 
 function diffLabel(d: any) {
@@ -156,7 +200,7 @@ function diffLabel(d: any) {
 
 async function search() {
   if (!keyword.value.trim()) {
-    await load()
+    await load(true)
     return
   }
   loading.value = true
@@ -165,6 +209,7 @@ async function search() {
     const res: any = await get('/recipe/search', { keyword: keyword.value.trim() })
     recipes.value = Array.isArray(res) ? res : []
     tab.value = 'all'
+    hasMore.value = false
   } finally {
     loading.value = false
   }
@@ -207,4 +252,7 @@ function goCategory() {
 .tag-public{font-size:20rpx;color:var(--hai-primary)}
 .tag-family{font-size:20rpx;color:#2d6a4f}
 .tag-views{font-size:20rpx;color:var(--hai-text-muted)}
+.load-more-wrap{width:100%;padding:24rpx 0 40rpx;text-align:center}
+.load-more-btn{display:inline-block;padding:16rpx 48rpx;font-size:26rpx;color:var(--hai-primary);background:var(--hai-card);border-radius:999rpx;box-shadow:var(--hai-shadow)}
+.load-more-tip{font-size:24rpx;color:var(--hai-text-muted)}
 </style>

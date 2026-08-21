@@ -1,0 +1,101 @@
+/**
+ * 运行时判断：现行发版是 uni-app H5 + Capacitor；已装的旧云打包壳仍是 APP-PLUS。
+ * 业务页不要直接碰 plus / Capacitor，只通过 platform/* 调用。
+ */
+export function isCapacitorNative(): boolean {
+  try {
+    const cap = (typeof window !== 'undefined' && (window as any).Capacitor) || undefined
+    return !!cap?.isNativePlatform?.()
+  } catch {
+    return false
+  }
+}
+
+/** 独立安装的 Android App（DCloud 壳或 Capacitor 壳），不是微信小程序、也不是普通浏览器 */
+export function isStandaloneApp(): boolean {
+  // #ifdef APP-PLUS
+  return true
+  // #endif
+  return isCapacitorNative()
+}
+
+export function exitStandaloneApp(): void {
+  // #ifdef APP-PLUS
+  plus.runtime.quit()
+  return
+  // #endif
+  if (!isCapacitorNative()) return
+  import('@capacitor/app')
+    .then((m) => m.App.exitApp())
+    .catch(() => undefined)
+}
+
+export function openExternalUrl(url: string): void {
+  // #ifdef APP-PLUS
+  plus.runtime.openURL(url)
+  return
+  // #endif
+  if (isCapacitorNative()) {
+    import('@capacitor/browser')
+      .then((m) => m.Browser.open({ url }))
+      .catch(() => {
+        if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer')
+      })
+    return
+  }
+  if (typeof window !== 'undefined') {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+}
+
+/** 栈底页：系统返回应直接退出，不要回到启动页或停在「再按一次」 */
+const APP_ROOT_ROUTES = new Set([
+  'pages/launch/index',
+  'pages/auth/login',
+  'pages/homeai/index',
+  'pages/homeai/family',
+  'pages/homeai/profile',
+])
+
+function pageRoute(page: any): string {
+  const raw = page?.route || page?.$page?.route || ''
+  return String(raw).replace(/^\//, '')
+}
+
+function canPopUniPage(): boolean {
+  const pages = getCurrentPages()
+  if (!pages.length) return false
+  const current = pageRoute(pages[pages.length - 1])
+  if (APP_ROOT_ROUTES.has(current)) return false
+  return pages.length > 1
+}
+
+let backButtonBound = false
+
+/** Capacitor 壳：状态栏 + 返回键（有栈则返回，无可返回则退出） */
+export async function initStandaloneShell(): Promise<void> {
+  if (!isCapacitorNative()) return
+  try {
+    const { StatusBar, Style } = await import('@capacitor/status-bar')
+    await StatusBar.setOverlaysWebView({ overlay: false })
+    await StatusBar.setBackgroundColor({ color: '#F3F2EE' })
+    await StatusBar.setStyle({ style: Style.Light })
+  } catch {
+    // 无 StatusBar 插件时忽略
+  }
+  if (backButtonBound) return
+  try {
+    const { App } = await import('@capacitor/app')
+    await App.addListener('backButton', () => {
+      if (canPopUniPage()) {
+        uni.navigateBack({})
+        return
+      }
+      // 栈底仍调 exitApp：Capacitor 一旦挂了 backButton 监听就不会走系统默认 finish
+      void App.exitApp()
+    })
+    backButtonBound = true
+  } catch {
+    // ignore
+  }
+}

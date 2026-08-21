@@ -41,6 +41,20 @@ export function registerByPhone(
 }
 
 /**
+ * 已登录修改密码
+ */
+export function changePassword(oldPassword: string, newPassword: string): Promise<void> {
+  return post('/auth/change-password', { data: { oldPassword, newPassword } })
+}
+
+/**
+ * 退出登录（服务端作废 Redis token，需携带当前 JWT）
+ */
+export function logout(): Promise<void> {
+  return post('/auth/logout')
+}
+
+/**
  * 校验中国大陆手机号格式
  * @param phone 手机号
  */

@@ -1,4 +1,4 @@
-import { get, post, put } from './request'
+import { get, post, put, del } from './request'
 
 export const recipeApi = {
   list: (params?: Record<string, string>) => get<any>('/recipe/list', params),
@@ -12,5 +12,6 @@ export const recipeApi = {
     get<any[]>('/recipe/new', { limit: String(limit), days: String(days) }),
   create: (data: any) => post('/recipe', { data }),
   update: (data: any) => put('/recipe', { data }),
+  remove: (id: string) => del(`/recipe/${id}`),
   toggleFavorite: (id: string) => post(`/recipe/${id}/favorite`),
 }

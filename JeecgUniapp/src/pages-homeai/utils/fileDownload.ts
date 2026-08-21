@@ -43,6 +43,9 @@ function requestAlbumAuth(): Promise<boolean> {
   return requestAlbumPermission()
   // #endif
 
+  // #ifdef H5
+  return requestAlbumPermission()
+  // #endif
   // #ifdef MP-WEIXIN
   return new Promise((resolve) => {
     uni.getSetting({

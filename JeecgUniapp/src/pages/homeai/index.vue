@@ -1,6 +1,5 @@
 <route lang="json5">
 {
-  type: 'home',
   layout: 'default',
   style: {
     navigationStyle: 'custom',
@@ -135,7 +134,8 @@ import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '../../pages-homeai/stores/user'
 import { useFamilyStore } from '../../pages-homeai/stores/family'
 import { get as getApi } from '../../pages-homeai/api/request'
-import { ensureLoginForAction, ensureProfileWhenGuest } from '../../pages-homeai/utils/homeaiAuth'
+import { ensureLoginForAction, ensureProfileWhenGuest, openAuthPage } from '../../pages-homeai/utils/homeaiAuth'
+import { localDateStr } from '../../pages-homeai/utils/date'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 
 const userStore = useUserStore()
@@ -165,6 +165,7 @@ const windowWidth = sys.windowWidth || 375
 // 与页面左右 32rpx 对齐，额外为微信胶囊让位
 const pagePadPx = (32 * windowWidth) / 750
 let headerRightPx = 12
+// #ifdef MP-WEIXIN
 try {
   const menu = uni.getMenuButtonBoundingClientRect()
   if (menu?.left) {
@@ -173,6 +174,7 @@ try {
 } catch {
   headerRightPx = 96
 }
+// #endif
 
 const quickEntries = [
   { key: 'ai', icon: 'chat', label: 'AI对话', sub: '智能问答' },
@@ -197,9 +199,7 @@ onShow(async () => {
   try {
     await familyStore.fetchFamilyInfo()
     try {
-      const now = new Date()
-      const d = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-      const list = await getApi(`/plan/date/${d}`)
+      const list = await getApi(`/plan/date/${localDateStr()}`)
       const arr = Array.isArray(list) ? list : []
       todayTodo.value = arr.filter((p: any) => p.status === 'pending').length
       todayCookPlans.value = arr.filter((p: any) => p.recipeId)
@@ -212,10 +212,6 @@ onShow(async () => {
   }
 })
 
-function goProfile() {
-  uni.switchTab({ url: '/pages/homeai/profile' })
-}
-
 function goAgreement() {
   uni.navigateTo({ url: '/pages/agreement/index' })
 }
@@ -227,7 +223,7 @@ function goFamily() {
 
 function onFamilyClick() {
   if (!userStore.isLogin) {
-    goProfile()
+    openAuthPage()
     return
   }
   goFamily()

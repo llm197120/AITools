@@ -23,6 +23,12 @@
       </view>
       <HomeEmpty v-if="searched && results.length === 0" title="未找到相关文件" hint="换个关键词再试试" :card="true" />
     </view>
+    <wd-action-sheet
+      v-model="fileSheetVisible"
+      :actions="fileSheetActions"
+      cancel-text="取消"
+      @select="onFileSheetSelect"
+    />
   </view>
 </template>
 
@@ -38,6 +44,12 @@ import HomeEmpty from '../../components/HomeEmpty.vue'
 const keyword = ref('')
 const results = ref<any[]>([])
 const searched = ref(false)
+const fileSheetVisible = ref(false)
+const fileSheetActions = [
+  { name: '预览' },
+  { name: '下载' },
+]
+const fileSheetTarget = ref<any>(null)
 
 async function doSearch() {
   searched.value = true
@@ -58,20 +70,22 @@ function openPreview(file: any) {
 }
 
 function downloadFile(file: any) {
-  uni.showActionSheet({
-    itemList: ['下载', '预览'],
-    success: (res) => {
-      if (res.tapIndex === 0) {
-        downloadStorageFile({
-          id: file.id,
-          fileUrl: file.fileUrl,
-          originalName: file.originalName,
-          extension: file.extension,
-        })
-      } else {
-        openPreview(file)
-      }
-    },
+  fileSheetTarget.value = file
+  fileSheetVisible.value = true
+}
+
+function onFileSheetSelect({ index }: { index: number }) {
+  const file = fileSheetTarget.value
+  if (!file) return
+  if (index === 0) {
+    openPreview(file)
+    return
+  }
+  downloadStorageFile({
+    id: file.id,
+    fileUrl: file.fileUrl,
+    originalName: file.originalName,
+    extension: file.extension,
   })
 }
 

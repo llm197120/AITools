@@ -119,6 +119,43 @@ export const getNeedLoginPages = (): string[] => getAllPages('needLogin').map((p
  */
 export const needLoginPages: string[] = getAllPages('needLogin').map((page) => page.path)
 
+function isLoopbackOrPrivateHost(url: string): boolean {
+  try {
+    const host = new URL(url).hostname
+    if (host === 'localhost' || host === '127.0.0.1' || host === '10.0.2.2') return true
+    if (/^192\.168\./.test(host) || /^10\./.test(host)) return true
+    if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) return true
+    return false
+  } catch {
+    return true
+  }
+}
+
+/**
+ * Android 真机不能访问手机自己的 localhost；优先用编译进包的 APP 地址。
+ * 本机/局域网旧缓存不会盖过公网地址（避免 HBuilderX 运行仍打到 192.168）。
+ */
+function resolveAppBaseUrl(fallback: string, appEnv?: string): string {
+  if (isMpWeixin) return fallback
+  const compiled = String(appEnv || '').replace(/\/$/, '')
+  try {
+    const override = uni.getStorageSync('homeai_api_base')
+    if (typeof override === 'string' && /^https?:\/\//.test(override)) {
+      const cached = override.replace(/\/$/, '')
+      const staleLanCache = compiled && !isLoopbackOrPrivateHost(compiled) && isLoopbackOrPrivateHost(cached)
+      if (!staleLanCache) {
+        return cached
+      }
+    }
+  } catch {
+    // ignore
+  }
+  if (compiled) {
+    return compiled
+  }
+  return fallback
+}
+
 /**
  * 根据微信小程序当前环境，判断应该获取的BaseUrl
  */
@@ -145,7 +182,7 @@ export const getEnvBaseUrl = () => {
     }
   }
 
-  return baseUrl
+  return resolveAppBaseUrl(baseUrl, import.meta.env.VITE_SERVER_BASEURL_APP)
 }
 
 /**
@@ -174,7 +211,10 @@ export const getEnvBaseUploadUrl = () => {
     }
   }
 
-  return baseUploadUrl
+  return resolveAppBaseUrl(
+    baseUploadUrl,
+    import.meta.env.VITE_UPLOAD_BASEURL_APP || import.meta.env.VITE_SERVER_BASEURL_APP,
+  )
 }
 /**
  * 时间格式化

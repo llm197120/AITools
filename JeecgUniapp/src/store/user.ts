@@ -59,7 +59,7 @@ export const useUserStore = defineStore(
       userInfoRaw.value = { ...initState }
       // 同步清理 HomeAI 登录态
       try {
-        useHomeaiUserStore().logout()
+        useHomeaiUserStore().clearLocalSession()
       } catch {
         // ignore
       }

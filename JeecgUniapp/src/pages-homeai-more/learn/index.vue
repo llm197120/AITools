@@ -31,7 +31,7 @@
       <view class="goal-bar">
         <view class="goal-bar-inner" :style="{ width: Math.min(100, goal.progressPercent || 0) + '%' }"></view>
       </view>
-      <text class="goal-tip">{{ goal.reached ? '今日目标已达成' : '每晚 20:00 未达标将提醒（需授权订阅）' }}</text>
+      <text class="goal-tip">{{ goal.reached ? '今日目标已达成' : remindHint }}</text>
     </view>
 
     <view v-if="activeSession.materialId" class="learn-bar">
@@ -66,7 +66,7 @@
     </view>
 
     <template v-else>
-      <view class="material-item" v-for="m in materials" :key="m.id" @click="startLearn(m)">
+      <view class="material-item" v-for="m in materials" :key="m.id" @click="openDetail(m)">
         <view class="mat-icon">{{ getTypeIcon(m.type) }}</view>
         <view class="mat-info">
           <text class="mat-title">{{ m.title }}</text>
@@ -92,6 +92,12 @@
     <view class="hai-fab" @click="goAdd">
       <wd-icon name="add" size="24px" color="#fff" />
     </view>
+    <wd-action-sheet
+      v-model="goalSheetVisible"
+      :actions="goalActions"
+      cancel-text="取消"
+      @select="onGoalSelect"
+    />
   </view>
 </template>
 
@@ -101,9 +107,15 @@ import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { learnApi, configApi } from '../../pages-homeai/api/index'
 import { preloadWhitelist } from '../../pages-homeai/utils/fileWhitelist'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+import { scheduleLearnGoalRemind } from '../../pages-homeai/utils/push'
+import { isStandaloneApp } from '../../pages-homeai/platform/runtime'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 
 useHomeaiPageGuard()
+
+const remindHint = isStandaloneApp()
+  ? '每晚 20:00 未达标将发本地通知（进程被杀时可能收不到）'
+  : '每晚 20:00 未达标将提醒（需授权订阅）'
 
 const PAGE_SIZE = 20
 const materials = ref<any[]>([])
@@ -121,6 +133,8 @@ const loadingMore = ref(false)
 let timerHandle: ReturnType<typeof setInterval> | null = null
 const weekLabels = ['日', '一', '二', '三', '四', '五', '六']
 const GOAL_OPTIONS = [15, 30, 45, 60, 90]
+const goalSheetVisible = ref(false)
+const goalActions = GOAL_OPTIONS.map((m) => ({ name: `每日 ${m} 分钟` }))
 
 const yearMonthParam = computed(() =>
   `${viewYear.value}-${String(viewMonth.value).padStart(2, '0')}`,
@@ -207,6 +221,7 @@ async function fetchMaterials(reset = false) {
 async function loadGoal() {
   try {
     goal.value = (await learnApi.goal()) || goal.value
+    scheduleLearnGoalRemind(goal.value)
   } catch {
     // 目标加载失败不阻断页面
   }
@@ -225,25 +240,22 @@ async function requestLearnSubscribe() {
       })
     })
     // #endif
-    // #ifdef APP-PLUS
-    // TODO【Android迁移】本地通知/厂商推送后续迭代实现，当前 App 端暂无提醒推送
-    // #endif
   } catch {
     // 订阅失败不阻断
   }
 }
 
 function editGoal() {
-  uni.showActionSheet({
-    itemList: GOAL_OPTIONS.map((m) => `每日 ${m} 分钟`),
-    success: async (res) => {
-      const minutes = GOAL_OPTIONS[res.tapIndex]
-      if (!minutes) return
-      await requestLearnSubscribe()
-      goal.value = (await learnApi.setGoal(minutes)) || goal.value
-      uni.showToast({ title: '目标已更新', icon: 'success' })
-    },
-  })
+  goalSheetVisible.value = true
+}
+
+async function onGoalSelect({ index }: { index: number }) {
+  const minutes = GOAL_OPTIONS[index]
+  if (!minutes) return
+  await requestLearnSubscribe()
+  goal.value = (await learnApi.setGoal(minutes)) || goal.value
+  scheduleLearnGoalRemind(goal.value)
+  uni.showToast({ title: '目标已更新', icon: 'success' })
 }
 
 // 统计/目标短 TTL 缓存：避免频繁返回本页重复拉取（列表与进行中会话保持实时）
@@ -286,8 +298,8 @@ function nextMonth() {
   loadCalendar()
 }
 
-function startLearn(m: any) {
-  uni.navigateTo({ url: `/pages-homeai-more/learn/detail?id=${m.id}&autoStart=1` })
+function openDetail(m: any) {
+  uni.navigateTo({ url: `/pages-homeai-more/learn/detail?id=${m.id}` })
 }
 
 async function stopLearn() {
