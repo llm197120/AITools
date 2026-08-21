@@ -1,14 +1,14 @@
 ---
 name: 家庭AI小工具 - 迭代优化路线图
 version: v4
-status: 进行中（第 13～44 轮已落地；ComfyUI 专项见 comfyui-roadmap.md）
-updated: 2026-08-18
+status: 进行中（第 13～78 轮已落地；ComfyUI 专项见仓库根目录 ComfyUI/）
+updated: 2026-08-21
 ---
 
 # 家庭AI小工具 - 迭代优化路线图
 
-> 本文档汇总第 **1～12 轮**业务迭代，以及 **第 13～44 轮**工程化/业务/视觉/安全优化落地内容。  
-> ComfyUI 本地路线（第 41～42 轮）已拆分至独立文档 [`comfyui-roadmap.md`](./comfyui-roadmap.md)。  
+> 本文档汇总第 **1～12 轮**业务迭代，以及 **第 13～78 轮**工程化/业务/视觉/安全优化落地内容。  
+> ComfyUI 本地路线（第 41～42 轮）已拆分至独立目录 [`ComfyUI/`](../../ComfyUI/README.md)（路线图：[comfyui-roadmap.md](../../ComfyUI/docs/comfyui-roadmap.md)）。  
 > 业务模块后续建议见第三节。
 
 相关路径索引：
@@ -769,7 +769,7 @@ homeai:
 
 ### 第 41～42 轮：ComfyUI 本地路线（已拆分独立文档）
 
-> ComfyUI 本地部署与照片精修能力建设（第 41 轮：双模型验证；第 42 轮：常用模型 + 启停脚本 + 人脸修复插件）已拆分至独立文档：`docs/plan/comfyui-roadmap.md`。
+> ComfyUI 本地部署与照片精修能力建设（第 41 轮：双模型验证；第 42 轮：常用模型 + 启停脚本 + 人脸修复插件）已拆分至独立目录：`ComfyUI/`（路线图 `ComfyUI/docs/comfyui-roadmap.md`）。
 
 **状态：** 已落地。
 
@@ -789,6 +789,500 @@ homeai:
 | `HomeaiFileUrlUtilTest` | 绝对/相对地址转换、危险扩展名黑名单（大小写不敏感） | 10 |
 
 **验证：** 临时翻转父 pom `skipTests` 后 `mvn test -pl jeecg-boot-module/jeecg-boot-module-homeai` 全量 **91 用例通过（新增 77 + 既有 14 无回归）**，跑完已还原 pom。
+
+**无新增 SQL。**
+
+**状态：** 已落地。
+
+---
+
+### 第 45 轮：Android 未登录引导 + 注册入口（2026-08-20）
+
+> 真机测试：个人中心无注册按钮；点注册提示失败；未登录进 APP 提示「登录失败」而非进入登录页。根因是个人中心仍走微信 `uni.login`，且路由白名单未放行 `/pages/auth/login`，`uni-mini-router` 会把登录页拦回个人中心。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 客户端 | 个人中心登录/注册 | APP 显示登录+注册，跳转 `/pages/auth/login`（`?mode=register`）；不再调用微信登录 | `pages/homeai/profile.vue` |
+| 客户端 | 未登录引导 | 启动/Tab/401/退出登录均 `reLaunch` 到手机号登录页，不 toast「登录失败」 | `App.vue`、`homeaiAuth.ts`、`request.ts`、`router/index.ts` |
+| 客户端 | 路由白名单 | APP 放行登录页、用户协议、隐私政策；拦截后 `navType=replaceAll`（登录页非 Tab） | `router/index.ts` |
+| 客户端 | 注册校验 | 密码至少 6 位；注册失败不再误报「登录失败」 | `pages/auth/login.vue` |
+| 客户端 | 网络权限 | 自定义 permissions 补回 `INTERNET`；内测允许 HTTP 明文（`usesCleartextTraffic`） | `manifest.config.ts` |
+| 后端 | 手机号注册 | 占位 `openid=phone_{手机号}`，避免旧库 NOT NULL/UNIQUE 插入失败；响应剔除 password/salt | `HomeaiAuthController` |
+| 后端 | Token 校验 | APP JWT 优先按 `userId` 对 Redis `homeai_token:` 校验 | `HomeaiAuthInterceptor` |
+
+**无新增 SQL。** 若注册仍报字段错误，请确认已执行 `alter_homeai_wx_user_android_login.sql` 与 `alter_homeai_wx_user_openid_nullable.sql`。
+
+**状态：** 已落地。
+
+---
+
+### 第 46 轮：Android 账号闭环 + 启动/回跳/资料编辑（2026-08-20）
+
+> 走查结论：登录进功能已通，卡住的是账号闭环（忘密/改密/改资料）和新用户无建家引导；启动会先闪首页再踢登录。本轮按优先级落地。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 客户端 | 启动中转 | `pages/launch/index` 为 APP 首页：未登录 `reLaunch` 登录页，已登录进首页；首启隐私不同意则退出 | `pages/launch/index.vue`、`pages.json` |
+| 客户端 | 注册建家 | 注册成功可选创建/加入家庭，家庭 Tab 自动打开对应弹窗 | `login.vue`、`family.vue`、`homeaiAuth.ts` |
+| 客户端 | 改密/资料 | 个人中心进入修改密码、编辑昵称/头像；去掉「微信用户」兜底 | `change-password.vue`、`profile-edit.vue`、`profile.vue` |
+| 客户端 | 401 回跳 | 登录成功回到原 Tab/功能页；登录页显示密码、注册确认密码、须勾选协议 | `request.ts`、`login.vue` |
+| 客户端 | Android 体验 | 首页家庭入口未登录进登录页；APP 不预留微信胶囊；学习提醒改为本地通知文案；账单可切月份 | `index.vue`、`learn/index.vue`、`bill/index.vue` |
+| 后端 | 改密 | `POST /homeai/auth/change-password`（需登录，不进 PUBLIC_PATHS） | `HomeaiAuthController` |
+| 后端 | 资料 | `GET/PUT /homeai/user/info` 按 JWT `userId` 解析并剔除密码盐；`POST /homeai/user/info/avatar` 白名单+魔数 | `WxUserController` |
+
+**无新增 SQL。** 需重启后端；启动页变更后请重新编译/安装 APP（自定义基座若未含 launch 页也需重打）。
+
+**状态：** 已落地。
+
+### 第 47 轮：手机号 JWT 身份解析统一 + 退出作废 token（2026-08-20）
+
+> 走查结论：个人中心/改密已通，家庭/账单/计划等仍 toast「未登录」（HTTP 200）。根因是手机号登录 `HomeaiJwtUtil.sign(user.getId(), secret, APP)` 把 userId 与 openid claim 都写成主键 UUID，库内 `openid` 是 `phone_手机号`；拦截器按 userId 放行 Redis，业务控制器却 `getOpenid + getByOpenid` 查不到人。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 后端 | 身份解析 | 新增 `HomeaiSecurityUtil.getWxUserId`；`getCurrentUserId` 控制台优先再回退 APP；家庭/账单/对话用 `getWxUserId`，菜谱/计划/学习/资料用 `getCurrentUserId` | `HomeaiSecurityUtil`、`FamilyController`、`BillController`、`HomeaiChatController`、`RecipeController`、`PlanController`、`LearnController`、`StorageController`、`StorageOfficeController` |
+| 后端 | 退出作废 | `POST /homeai/auth/logout`（需登录，不进 PUBLIC_PATHS）；同时删 `homeai_token/refresh` 的 userId 与 openid 两把 Redis 钥匙 | `HomeaiAuthController`、`invalidateWxUserTokens` |
+| 客户端 | 退出登录 | 先打 `/auth/logout` 再清本地；401 只清本地避免循环 | `platform/auth.ts`、`stores/user.ts`、`profile.vue`、`request.ts` |
+| 测试 | 纯逻辑 | 手机号占位 openid ≠ 主键；签发后两 claim 均为 userId；解析顺序 getById 再 getByOpenid | `HomeaiJwtIdentityTest` |
+
+**无新增 SQL。** 需重启后端；退出登录改动后请重新编译/安装 APP。
+
+**补记（同日）：** 真机/侧载 APP 不能把 API 写成 `localhost`/`127.0.0.1`（那是手机自己）。开发环境增加 `VITE_SERVER_BASEURL_APP`（当前电脑 WLAN `192.168.222.157`），启动页会探测模拟器 `10.0.2.2` / `adb reverse` 的 `127.0.0.1`。已有库若缺列：须执行 `alter_homeai_wx_user_android_login.sql`、`alter_homeai_storage_folder_recycle.sql`（或一次性 `alter_homeai_deleted_at_schema_gap.sql`）。
+
+**状态：** 已落地。
+
+### 第 48 轮：APP 表单选择器体验 + 学习记录 study_date（2026-08-20）
+
+> 计划添加页选项挤成多张小卡片、原生 `<picker>` 仍是微信滚轮；结束学习 insert 因旧库 `study_date` NOT NULL 无默认值失败；家庭邀请码 `maxlength="6"` 触发 wot Number 类型告警。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| APP | 分组选择 | 计划/学习/账单添加页改为单卡片 + 行分割；底部列表选择替代原生 picker | `HomePickerCell`、`HomeDateCell`、`plan/add`、`learn/add`、`bill/add`、`bill/edit`、`recipe/add` |
+| APP | 操作按钮 | 胶囊芯片、wot 按钮；邀请码 `:maxlength="6"` | `family.vue`、`learn/detail.vue`、`recipe/add.vue` |
+| 后端 | 学习记录 | 实体写入 `studyDate`；旧库列改为可空并回填 | `LearnRecord`、`LearnServiceImpl`、`alter_homeai_learn_record_study_date.sql` |
+
+**有 SQL：** 已有库执行 `alter_homeai_learn_record_study_date.sql`。需重启后端；APP 选择器改动后请重新编译/运行自定义基座。
+
+**状态：** 已落地。
+
+### 第 49 轮：越权修补 + 页面守卫（2026-08-20）
+
+> 四视角审查：账单删除无所有权；存储上传可挂到他人文件夹；解散后邀请码仍可用；改密不作废 token；学习资料列表全量可见；菜谱详情缺 id、金额校验不严。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 后端 | 账单删除 | APP 须登录且只能删自己的；管理端回收站 `userId=null` 仍可软删 | `BillEntryAccess`、`BillController.delete`、`BillEntryServiceImpl.softDelete` |
+| 后端 | 存储上传 | 指定 `folderId` 须存在且 `canWriteFolder`（管理端跳过） | `StorageController.uploadFile` |
+| 后端 | 家庭邀请 | 仅管理员生成码；解散作废未使用码；加入校验未解散；`tryOccupy` 原子占用 | `FamilyController`、`FamilyServiceImpl`、`FamilyInviteCodeServiceImpl` |
+| 后端 | 改密 / 学习 | 改密后 `invalidateWxUserTokens`；APP `GET /learn/materials` 按 `user_id` 过滤 | `HomeaiAuthController`、`LearnController` |
+| 后端 | 菜谱详情 | 返回 `canModify`，对齐 `canModifyRecipe` | `RecipeServiceImpl.getDetailWithRelations` |
+| APP | 页面守卫 | 菜谱缺 id 拦截；资料加载失败不 autoStart；账单金额须有限且 >0；改密后清会话回登录 | `recipe/detail`、`learn/detail`、`bill/add`、`bill/edit`、`change-password` |
+| 测试 | 纯逻辑 | 账单删除所有权三用例 | `BillEntryAccessTest` |
+
+**无新增 SQL。** 需重启后端；改密/邀请/学习列表改动后请重新编译/安装 APP。
+
+**状态：** 已落地。
+
+### 第 50 轮：计划提醒 + 学习先预览 + UI 收口（2026-08-20）
+
+> 审查剩余 P1：计划无开始时间导致本地通知被跳过；学习点列表即计时；20:00 文案无实现；计时条挡内容；家庭仍用微信弹层；菜谱表单散装、列表一次拉全量；日历全表扫描。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| APP | 计划提醒 | 非全天可选开始时间+提前提醒；全天隐藏提醒；创建当天立刻调度本地通知 | `HomeTimeCell`、`plan/add.vue`、`push.ts` |
+| APP | 学习 | 列表进详情后手动开始；未达标调度当晚 20:00 本地通知；目标用 wot 底栏 | `learn/index.vue`、`scheduleLearnGoalRemind` |
+| APP | 计时条 | 学习中页面加底留白，避免挡住视频/文档 | `learn/detail.vue` `.hai-page--timer` |
+| APP | 家庭弹层 | 移除/退出用 message-box；改名/解散用 popup；转让用 action-sheet | `family.vue` |
+| APP | 菜谱 | 基本信息改分组卡片；全部 tab 分页触底加载 | `recipe/add.vue`、`recipe/index.vue` |
+| 后端 | 学习日历 | 按 `study_date` 月份区间查库，不再全表内存过滤 | `LearnServiceImpl.getLearnCalendarDates` |
+
+**无新增 SQL。** 学习日历改动需重启后端；计划/学习/家庭/菜谱改动后请重新编译/安装 APP。进程被杀时本地通知仍可能收不到。
+
+**状态：** 已落地。
+
+### 第 51 轮：计划改删 + 资料弹层 + 账单底栏 + 启动协议（2026-08-20）
+
+> 审查剩余体验 P1：计划详情无 content、不能改删；资料仍用微信原生弹层；账单操作条在文档流底部；启动页隐私弹窗无法打开协议全文。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 后端 | 计划 APP 改删 | `GET/PUT/DELETE /plan/instance/{id}` 校验 master 归属；软删主计划；`fillMasterInfo` 补 content | `PlanController`、`PlanServiceImpl`、`PlanInstance.content` |
+| APP | 计划详情 | 展示内容/开始时间/提醒；编辑复用 add 页；删除需确认（重复计划提示整条消失） | `plan/detail.vue`、`plan/add.vue`、`plan.ts` |
+| APP | 资料弹层 | 新建/重命名/删除/管理改为 wot popup 与 action-sheet | `useStorageBrowser.ts`、`StorageBrowser.vue`、`storage/search.vue` |
+| APP | 账单底栏 | `.hai-bottom-bar` 改为 fixed，列表加底留白 | `homeai-theme.scss`、`bill/index.vue` |
+| APP | 启动协议 | 自定义弹窗可点开《用户协议》《隐私政策》 | `pages/launch/index.vue` |
+
+**无新增 SQL。** 计划改删需重启后端；APP 需重新编译/安装。删除计划是软删整条主计划（含重复实例），编辑不改日期与重复规则。
+
+**状态：** 已落地。
+
+### 第 52 轮：后台家庭删除后仍出现在列表（2026-08-20）
+
+> 管理端家庭点「移入回收站」后记录仍在列表，状态仍显示「正常」。根因是 `homeai_family.del_flag` 与业务 `status`（normal/disbanded）语义不同：删除只置 `del_flag=1`，实体未加 `@TableLogic`，列表/导出也未排除已删除行。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 后端 | 逻辑删除 | `Family.delFlag` 补 `@TableLogic`；列表/导出加 `del_flag=0` | `Family.java`、`FamilyController` |
+| 后端 | 关联查询 | 存储可分配家庭/配额看板去掉手动 `eq(DelFlag)`，避免 MP 3.5 逻辑删除字段入条件 | `StorageController`、`StorageFileServiceImpl` |
+| 管理端 | 详情状态 | 抽屉「状态」改读 `status`，不再把 `delFlag` 当成已解散 | `FamilyDrawer.vue` |
+
+**状态：** 已落地。
+
+### 第 53 轮：邀请分享 + 内测 API + 单测与 P2 抛光（2026-08-20）
+
+> 审查剩余：邀请只能复制；内测换网段无改 API 入口；homeai 单测默认不跑；表单按钮、账单箭头、学习链接、协议文案不一致；计划 byDate N+1。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| APP | 邀请 | 生成后可选复制或系统分享 | `family.vue` `shareWithSystem` |
+| APP | 内测 API | 个人中心「服务器地址」写入 `homeai_api_base` | `profile.vue`、`platform/env.ts` |
+| APP | UI/文案 | 保存按钮 round；统计箭头与列表一致；APP 打开链接走浏览器；菜单「隐私政策」；协议去掉微信账号 | add 页、`bill/statistics`、`learn/detail`、`agreement` |
+| APP | 忘记密码 | 登录页提示联系管理员后台重置（无短信） | `login.vue` |
+| 后端 | 计划列表 | `fillMasterInfo` 批量查 master/recipe | `PlanServiceImpl` |
+| 测试 | homeai | 模块 `skipTests=false`；结束学习 `study_date`/`duration` 纯逻辑单测 | `jeecg-boot-module-homeai/pom.xml`、`LearnRecordAssemblerTest` |
+
+**无新增 SQL。** 计划列表与结束学习改动需重启后端；APP 需重新编译/安装。全仓其它模块仍 skipTests。只跑 homeai：`mvn test -pl jeecg-boot-module/jeecg-boot-module-homeai`（surefire 已设 UTF-8，避免中文密码用例乱码）。
+
+**状态：** 已落地。
+
+### 第 54 轮：Android 本地签名 APK 打包（2026-08-21）
+
+> HBuilderX 不再支持本机编 APK。`pnpm build:app-android` 只出资源包。本轮落地 CLI 资源 + DCloud 离线 SDK + Gradle 的可重复出包流程。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| APP | 模块/权限 | `modules` 补 Gallery + Push；`POST_NOTIFICATIONS`；Android 13+ 运行时申请通知权限 | `manifest.config.ts`、`push.ts` |
+| 脚本 | 初始化 | overlay：`dcloud_control.xml`、明文 HTTP、签名 gradle、Manifest 权限/AppKey | `scripts/android-offline/init-offline-project.ps1` |
+| 脚本 | 出包 | `pnpm pack:apk` → `dist/apk/homeai-release.apk`，可选 `-Upload` | `pack-apk.ps1`、`android-pack.local.json.example` |
+| 文档 | 指南 | 版本对齐、AppKey、模块裁剪、发版与排障 | `docs/guide/android-local-apk.md` |
+
+**无新增 SQL。** 离线 SDK / keystore / AppKey 在开发机，不入库。第一次需 Android Studio + 对齐版本的离线 SDK，见指南。
+
+**状态：** 脚本与清单已落地；本机装 SDK / 申请 AppKey / 打出第一包需在开发机执行。
+
+### 第 55 轮：后台新增用户漏写 salt，App 登录 NPE（2026-08-21）
+
+> 管理端新增/导入 `homeai_wx_user` 未写 `salt`/`password`。App 密码登录调用 `PasswordUtil.encrypt(..., user.getSalt())`，盐为空即 NPE。控制台 `SysUser` 新增已正确加盐，问题仅在 HomeAI。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 后端 | 新增/导入 | 默认密码 123456 + per-user 盐；手机号校验与占位 openid | `WxUserServiceImpl.prepareAdminCreatedUser`、`WxUserController.add/importExcel` |
+| 后端 | 登录 | salt/密码为空返回明确错误；禁用账号拒绝登录 | `HomeaiAuthController.loginByPassword` |
+| 后端 | 重置密码 | `PUT /homeai/user/{id}/resetPassword`，作废 Redis token | `WxUserController.resetPassword` |
+| 管理端 | 提示/操作 | 新增提示默认密码；列表「重置密码」；补 `handleSuccess` 刷新 | `UserDrawer.vue`、`user/index.vue` |
+| 测试 | 纯逻辑 | 默认密码可校验；缺盐不得加密 | `HomeaiAuthServiceTest` |
+
+**无新增 SQL。** 已用后台加过、尚不能登录的用户：在用户列表点「重置密码」，再用 `123456` 登录。需重启后端；管理端刷新即可。
+
+**状态：** 已落地。
+
+### 第 56 轮：云打包缺 Push 模块导致启动红屏（2026-08-21）
+
+> 云打包未打入原生 Push 时，启动即访问 `plus.push` 会抛「缺少push模块」。`typeof plus.push` 同样会抛，必须 try-catch。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| APP | 缺模块不崩 | `push.ts` `getPush()` 兜底；`App.vue` 初始化包 try |
+| 清单 | 云打包带上 aps | `modules.Push` + `distribute.sdkConfigs.push`（不要 UniPush） |
+| 文档 | 排障 | `android-local-apk.md` 红屏一行 |
+
+**无新增 SQL。** 已装的包仍缺原生模块，需按新清单 **重新云打包并勾选 Push** 后重装；代码兜底后至少能进应用。
+
+**状态：** 已落地。
+
+### 第 57 轮：长久本机出包改为 H5 + Capacitor（2026-08-21）
+
+> 云打包继续撑内测。长久路径脱离 DCloud 原生 SDK：uni-app 编 H5，Capacitor 官方 Android + Gradle 签名（同一 keystore 可覆盖安装）。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 方案 | 目标架构 | 现云打包 / 后 `pnpm pack:apk:local` | `docs/plan/android-capacitor-local-pack.md` |
+| APP | 运行时抽象 | 独立 App 判断、退出、外链 | `platform/runtime.ts`；启动页/学习链接改调 platform |
+| APP | H5 能力 | 文件选择 / 下载打开走 H5，供 Capacitor WebView | `filePicker.ts`、`download.ts`、`env.ts` |
+| 脚本 | 出包 | build:h5 → cap sync → assembleRelease | `scripts/capacitor/pack-apk-local.ps1` |
+
+**无新增 SQL。** 第一次本机出包还需 `pnpm add @capacitor/*` 与 `pnpm pack:apk:local -- -InitAndroid`。
+
+**状态：** 管道与 platform 适配已落地；`android/` 原生工程首次 `cap add` 后提交。
+
+### 第 58 轮：本机打出 Capacitor 签名 APK（2026-08-21）
+
+> 脱离 DCloud SDK 的长久出包已跑通：`pnpm pack:apk:local` → `JeecgUniapp/dist/apk/homeai-release.apk`（约 4.5MB）。包名 `com.homeai.app`，证书与云打包相同。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 原生 | `cap add android` | `JeecgUniapp/android/`，Gradle 8.2.1 + 阿里云 Maven |
+| 脚本 | 出包 | H5 → cap sync → 本机 Gradle zip（避开 Java PKIX）→ assembleRelease |
+| APP | 本地通知 | H5 壳走 `@capacitor/local-notifications`；云打包仍走 plus.push |
+
+**无新增 SQL。** 内测可先侧载该 APK 对照云打包。发版在真机回归前可继续云打包。
+
+**状态：** 已落地。
+
+### 第 59 轮：Capacitor 相册/分享/返回键（2026-08-21）
+
+> 长久壳对齐云打包常用原生能力：相册保存、文档系统分享、外链浏览器、返回键再按一次退出、状态栏不遮挡。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| APP | 相册 | `@capacitor-community/media`；H5 浏览器仍走 `<a download>` |
+| APP | 文档 | Filesystem 缓存 + Share 系统面板 |
+| APP | 壳 | StatusBar、`backButton`、Browser.open |
+| 清单 | 权限 | READ_MEDIA_* / READ_EXTERNAL_STORAGE |
+
+**无新增 SQL。** 请侧载新的 `dist/apk/homeai-release.apk` 验证保存到相册与返回键。
+
+**状态：** 已落地。
+
+### 第 60 轮：管理端菜谱封面批量导入（2026-08-21）
+
+> 菜谱 Excel 导入不含本地图片文件。管理端「批量导入封面」支持单张/多选、选择整个菜谱文件夹，以及小体积 zip。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 管理端 | 入口 | 单张/多选 + 选择文件夹；列表增加封面缩略图 |
+| 后端 | 匹配 | 文件名或父目录名对齐菜谱名；同菜多图择优；zip 展开（防 zip-slip） |
+| 校验 | 上传 | 扩展名白名单 + 魔数；单张 ≤10MB |
+
+**无新增 SQL。** 接口仍为 `POST /homeai/recipe/import-covers`。
+
+**状态：** 已落地。
+
+### 第 61 轮：菜谱导入去重 / 分类纠正 / 封面入口（2026-08-21）
+
+> 同名 Excel 重复导入会翻倍；文件夹分类把粥/面误标成汤羹；封面按钮挤在表头不易发现。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 导入 | 同名去重 | 已存在同名菜谱则覆盖更新，不再新增 |
+| 导入 | 分类 | 支持 ID 或中文名；按菜名纠正（粥/饭/面→主食，××汤→汤羹） |
+| 管理端 | 封面入口 | 列表上方提示条 + 工具栏「导入封面」 |
+
+**无新增 SQL。**
+
+**状态：** 已落地。
+
+### 第 63 轮：资料与学习多类型上传、预览与播放（2026-08-21）
+
+> 资料/学习几乎只能下载或系统打开；无音频；Spring multipart 10MB 卡住视频。本轮按设计做页内预览：图片/音视频/文本直出，PDF 页内看，Office 转 PDF 后缓存再看。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 上传 | 上限 | Spring multipart 200MB；Nginx `client_max_body_size 200m`；业务分类上限（视频 200MB / 压缩包 100MB / 音频与文档 50MB / 图片 20MB / 文本 10MB） |
+| 白名单 | 类型 | 补 webp、webm、mp3/wav/m4a/aac；魔数校验同步；学习 `type=audio` |
+| 后端 | 预览 API | `GET/POST .../files/{id}/preview[-pdf]`、`GET/POST .../materials/{id}/preview[-pdf]`；LibreOffice 结果回写 `preview_pdf_url` |
+| 管理端 | 预览弹窗 | `HomeaiFilePreviewModal`；资料列表/学习列表/抽屉可预览；按类型切换上传 mode |
+| APP | 预览页 | `storage/preview` 补音频、PDF.js、Office 轮询转 PDF；打开文档走 `openLocalDocument`；学习详情页内音频；添加页补齐类型与链接 |
+
+**迁移 SQL：**
+
+```text
+alter_homeai_file_whitelist_audio_webp.sql
+alter_homeai_preview_pdf_url.sql
+```
+
+**状态：** 已落地。须重启后端；已有库执行上述 SQL；本机 Nginx/frp 需 reload 使 200m 生效。Office 预览依赖本机 LibreOffice / MS Office。
+
+### 第 64 轮：APP 改删闭环 + 学习归属校验（2026-08-21）
+
+> 计划/账单/资料存储第 51 轮已能改删，菜谱只能编辑、学习资料只能新增。`POST /learn/start|stop|record` 不校验归属，猜到 ID 即可刷时长。本轮补齐 APP 入口，并堵住计时越权。
+
+| 端 | 项 | 落地 | 关键路径 |
+|----|----|------|----------|
+| 后端 | 学习计时归属 | start/stop/record 先校验资料存在且 APP 为创建者；Service 层再次拒绝他人/无主资料 | `LearnMaterialAccess`、`LearnController`、`LearnServiceImpl` |
+| APP | 菜谱删除 | 详情 `canModify` 时显示删除；家庭共享额外提示；确认后 `DELETE /recipe/{id}` | `recipe.ts`、`recipe/detail.vue` |
+| APP | 学习改删 | 详情底栏编辑/删除；`add.vue?id=` 编辑后 PUT | `learn.ts`、`learn/detail.vue`、`learn/add.vue` |
+| 原生 | 相机权限 | Capacitor `AndroidManifest` 补 `CAMERA`（不接新插件） | `JeecgUniapp/android/app/src/main/AndroidManifest.xml` |
+| 测试 | 纯逻辑 | 本人可用、他人/无主/资料不存在拒绝 | `LearnMaterialAccessTest` |
+
+**无新增 SQL。** 需重启后端；APP 需重新编译/安装。忘记密码短信、控制台预览鉴权收紧未纳入本轮。
+
+**状态：** 已落地。
+
+### 第 66 轮：管理端菜谱列表间距与封面导入弹窗（2026-08-21）
+
+> 「未选中任何数据」与工具栏按钮重叠；封面导入弹窗选完文件后有时被点穿关闭，窗口偏小且不能拉宽拉高，导入过程看不到进度。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 管理端 | 列表间距 | 工具栏与选择提示条拉开距离 |
+| 管理端 | 导入弹窗 | 默认约 70% 宽 / 72% 高；禁用点遮罩关闭；导入中禁止关闭；右下角拖动改宽高 |
+| 管理端 | 导入进度 | 进度条 + 当前文件/上传百分比 + 每条成功/失败状态 |
+
+**无新增 SQL。**
+
+**状态：** 已落地。
+
+### 第 67 轮：APP 文件上传格式支持（2026-08-21）
+
+> Capacitor/H5 选文件时 `accept` 只有扩展名或为空，Android WebView 常变成只选图片；`type=file` 选不到音频；本地白名单缺 webp/音频，相册 blob 无扩展名会被「不支持该文件格式」拦掉。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| APP | 选择器 | `fileAccept.ts`：MIME+扩展名；`type=all` 显式 `*/*`；音频走 `audio/*`；APP-PLUS 音频改 `type=all` |
+| APP | 白名单 | 离线默认补 webp/webm/mp3/wav/m4a/aac；无扩展名时用 MIME/场景兜底 |
+| APP | 权限 | Capacitor / 云打包补 `READ_MEDIA_AUDIO` |
+| 后端 | init | `init_homeai_tables.sql` 默认白名单与第 63 轮 alter 对齐（已有库仍跑 alter） |
+
+**无新增 SQL**（已有库继续用 `alter_homeai_file_whitelist_audio_webp.sql`）。需重装/侧载 APK。
+
+**状态：** 已落地。
+
+### 第 68 轮：OSS 封面文件名丢失扩展名（2026-08-21）
+
+> 私有上传把完整 objectKey 丢进 `StrAttackFilter`，`.` 和 `_` 被清掉，OSS 上变成 `1787294773016d0a054c2png`。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 后端 | objectKey | 只过滤目录段，文件名保留扩展名与下划线（与官方 `upload(file, fileDir)` 一致） |
+
+**无新增 SQL。** 须重启后端。已上传的无后缀对象不会自动改名，需重新导入封面。
+
+**状态：** 已落地。
+
+### 第 69 轮：APP 系统控制更新（覆盖安装 + 热更新）（2026-08-21）
+
+> 版本号存库，管理端指定更新方式；APP 启动发现本地 `versionCode` **小于** 服务端才更新。不用 Jeecg 自带 `/sys/version`（Redis + classpath JSON，要控制台 JWT）。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 库 | `homeai_app_version` | 单行 `id=current`；种子 `1.0.0` / `100`，`enabled=0` |
+| 后端 | 公开 GET | `GET /homeai/app/version` 加入 `PUBLIC_PATHS` |
+| 后端 | 管理端 | `GET/PUT /homeai/app/version/admin`、`POST .../upload`（apk/zip 魔数 + 大小；APK≤200MB，zip≤80MB） |
+| 管理端 | APP版本 | 方式（apk/resource）、强制、上传 APK / H5 zip |
+| APP | 启动页 | 隐私同意后探测；可选「稍后」；强制不可跳过 |
+| Native | Capacitor | `HomeaiUpdate` 插件下载/校验/解压（防 zip-slip）/安装 APK；`REQUEST_INSTALL_PACKAGES` |
+| 出包 | H5 zip | `pack-apk-local.ps1` 额外打 `dist/apk/homeai-h5-{version}.zip`（根目录含 `index.html`） |
+
+比较用整数 `versionCode`，热更新另存 `homeai_web_version`。壳 `versionCode` 低于 `min_shell_code` 时热更新改走 APK。覆盖安装新 APK 时 Capacitor 会清掉已持久化的 Web 根路径。发版只打 Capacitor 包；不要再走 HBuilderX 云打包。
+
+**须执行 SQL。** 重启后端；管理端刷新菜单缓存；侧载新 APK 后启动页才会检测。
+
+**状态：** 已落地。
+
+### 第 70 轮：弃用云打包，发版统一本机 Capacitor（2026-08-21）
+
+> 不再用 HBuilderX 云打包内测/发版；DCloud 离线 `pnpm pack:apk` 入口改为直接报错。唯一出包：`pnpm pack:apk:local`。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 约定 | AGENTS.md | 发版命令改为 `pack:apk:local`；云打包与离线 SDK 标已弃用 |
+| 文档 | 发布/出包/FRP | 去掉「现在用云打包」；热更新只针对 Capacitor 壳 |
+| 脚本 | `pack-apk.ps1` | 调用即抛错，提示改用 `pack:apk:local` |
+
+已装的旧云打包 APK 仍可被同一证书覆盖安装；`plus.*` 分支仅作旧壳兼容，不要再出那种包。
+
+**无新增 SQL。**
+
+**状态：** 已落地。
+
+### 第 71 轮：本机出包同步 HA 品牌资源（2026-08-21）
+
+> Capacitor `android/` 仍是 `cap add` 默认图标/启动图/Material 色。打包时从 `src/static/app/icons/1024x1024.png` 生成自适应图标、启动图、通知小白标和 favicon，并补齐 minSdk / 权限 / 主题色。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 脚本 | 品牌资源 | `sync-android-branding.ps1`：mipmap 自适应图标 + splash + `ic_stat_homeai` + favicon |
+| 出包 | 接入 | `pack-apk-local.ps1` 在 H5 前写 favicon；`patch-android.ps1` 写 Android 资源 |
+| 清单 | 对齐 uni-app | minSdk 26；`ACCESS_WIFI_STATE` / `ACCESS_NETWORK_STATE` / `WAKE_LOCK`；相机 autofocus |
+| 壳 | 观感 | WebView `#F3F2EE`；通知小图标与主色 `#1B4F8A` |
+
+**无新增 SQL。** 需重新 `pnpm pack:apk:local` 后覆盖安装，桌面图标才会变。
+
+**状态：** 已落地。
+
+### 第 72 轮：栈底系统返回退出 APP（2026-08-21）
+
+> 真机侧载后，系统返回键 / 全面屏返回手势在无可返回时不退出。Capacitor 挂了 `backButton` 监听后不再走系统默认 finish；原先「再按一次退出」在 Tab/启动页栈上等于没退出，且 `navigateBack` 可能闪回启动页再被 `switchTab` 拉回首页。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| APP | 返回键 | 有业务页栈则 `navigateBack`；Tab / 登录 / 启动页直接 `App.exitApp()` |
+
+**无新增 SQL。** 请重新 `pnpm pack:apk:local` 后覆盖安装验证。
+
+**状态：** 已落地。
+
+### 第 73 轮：管理端菜谱封面导入入口与选文件（2026-08-21）
+
+> 菜谱列表有两个「导入封面」按钮；弹窗里「选择图片 / 选择文件夹」点击无反应。根因是第 66 轮把 `.scroll-container > div` 设成 `height:100%`，把横向滚动条轨道拉成整层遮罩，挡住了按钮。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 管理端 | 入口 | 只留工具栏「导入封面」；提示条改为说明；Excel 单独成按钮 |
+| 管理端 | 选文件 | 原生 `input[type=file]` 触发选择；滚动条样式不再盖住内容 |
+
+**无新增 SQL。** 刷新管理端菜谱列表即可验证。
+
+**状态：** 已落地。
+
+### 第 74 轮：本机 Gradle 不再直连 Google Maven（2026-08-21）
+
+> `pnpm pack:apk:local` 在 `assembleRelease` 配置 `:capacitor-android` 时失败：子工程 `buildscript` 直连 `dl.google.com`，本机 JDK TLS 握手被断开。根 `allprojects` 阿里云镜像覆盖不到插件 classpath。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 出包 | 镜像 | `init-aliyun.gradle` + `patch-android.ps1` 给 Capacitor 子工程 `buildscript` 插入阿里云 |
+
+**无新增 SQL。** 重新 `pnpm pack:apk:local`（H5 已编过可用 `-- -SkipBuild`）。
+
+**状态：** 已落地。
+
+### 第 75 轮：前端页面功能检查与修复（2026-08-21）
+
+> 现行发版是 H5 + Capacitor，不是 `APP-PLUS`。鉴权/个人中心/401/路由白名单仍用编译宏，侧载后退出登录、Token 过期、点「登录」会走微信小程序分支，回不到手机号登录页；API 地址覆盖也不生效。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| APP | 鉴权 | `usesPhoneLogin()`（非微信小程序）替代 `#ifdef APP-PLUS`：登录/退出/401/路由白名单 |
+| APP | 个人中心 | 注册、改密、服务器地址对 Capacitor 可见；登录进手机号页 |
+| APP | 其它 | 账单编辑切换收支重置分类；学习切换类型清空文件；首页今日计划走 `localDateStr` |
+| 管理端 | 学习 | 新增必填归属用户；非 link/note 必须上传文件；切换类型清空文件 |
+| 管理端 | 家庭下拉 | 排除已解散/回收站；资料「家庭可见」未选家庭不可提交 |
+
+**无新增 SQL。** APP 鉴权改动需重新 `pnpm pack:apk:local`（或热更新 zip）后验证：退出登录应回到手机号登录页。
+
+**状态：** 已落地。
+
+### 第 76 轮：菜谱封面 OSS 上传 Connection reset（2026-08-21）
+
+> 管理端上传封面时 Aliyun OSS 报 `SocketException / Connection reset by peer`，`RequestId: Unknown`（请求未到达 OSS 业务层）。根因是私有上传未带 Content-Length（Multipart 流走 chunked 易被 RST），且每次上传先 `doesBucketExist`；空闲连接池也会被对端掐掉。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 后端 | OSS 客户端 | HTTPS、超时/重试、空闲连接 30s；连接重置时 `resetClient` |
+| 后端 | 私有上传 | 带 Content-Length/Content-Type；去掉每次探测 Bucket；瞬时失败重试 3 次 |
+| 管理端 | 封面导入 | 单张失败不中断整批；失败自动再试一次 |
+
+**无新增 SQL。** 需**重启后端**后再试封面上传。
+
+**状态：** 已落地。
+
+### 第 77 轮：一键发布 / 停止脚本（2026-08-21）
+
+> 日常发版要分别跑 APP 出包、管理端 `build:docker:prod`、后端重启，停服务时 `stop-local.ps1` 又不动 Java。需要仓库总入口。
+
+| 入口 | 作用 |
+|------|------|
+| `docs/deploy/publish-all.ps1` | 后端编译并重启 → 管理端构建发布到本机 Nginx → `pack:apk:local`。可跳过任一段；可选 `-UploadApk` |
+| `docs/deploy/start-all.ps1` | 只启动前后端（新窗口 `mvn spring-boot:run` + nginx/frpc） |
+| `docs/deploy/stop-all.ps1` | 停止 JeecgBoot（:8080）与本机 Nginx/frpc。不停 MySQL/Redis |
+
+复用现有管道，不另造出包流程。双击同目录 `.cmd` 亦可。
+
+**无新增 SQL。**
+
+**状态：** 已落地。
+
+### 第 78 轮：一键脚本支持分别发布/停止（2026-08-21）
+
+> 发布后 `:8080` 未拉起导致 Nginx 反代 502；且不能单独发/停某一端。
+
+| 项 | 落地 |
+|----|------|
+| 目标开关 | `-Backend` / `-Frontend` / `-App` 可组合；双击 `.cmd` 出菜单 |
+| 后端启动 | `-am spring-boot:run` 写 `C:\homeai\logs\backend.log`；端口未起来视为失败 |
+| 停止 | 可只停 Java 或只停 Nginx/frpc；APP 无本机常驻进程 |
 
 **无新增 SQL。**
 
@@ -820,6 +1314,33 @@ alter_homeai_menus_iteration22.sql      # 审计独立权限 + 资料回收站�
 ```text
 alter_homeai_storage_folder_recycle.sql # 文件夹 deleted_at
 alter_homeai_plan_recipe_iteration23.sql # 计划关联 recipe_id
+```
+
+### 第 47 轮补记（已有库，按缺列执行）
+
+```text
+alter_homeai_wx_user_android_login.sql     # password/salt/login_type（若未跑过）
+alter_homeai_deleted_at_schema_gap.sql     # 旧表补 deleted_at（可重复执行）
+```
+
+### 第 48 轮（已有库）
+
+```text
+alter_homeai_learn_record_study_date.sql   # 学习记录 study_date 可空并对齐回填
+```
+
+### 第 63 轮（已有库）
+
+```text
+alter_homeai_file_whitelist_audio_webp.sql # 白名单补 webp/webm/音频
+alter_homeai_preview_pdf_url.sql           # storage/learn 的 preview_pdf_url；convert_type 扩至 32
+```
+
+### 第 69 轮（已有库）
+
+```text
+alter_homeai_app_version.sql           # APP 版本表 + 白名单 apk
+alter_homeai_menus_iteration69.sql     # 管理端「APP版本」菜单
 ```
 
 ### 第 26 轮（已有库）
@@ -891,6 +1412,10 @@ alter_homeai_menus_iteration8.sql
 | P2 | CI 增加 UniApp `build:mp-weixin`（可选） | 耗时长，可 nightly；先填实生产 API | ⬜ 待做 |
 | P2 | 微信 urlCheck / targetSdk 34 / 隐私合规 | 上架前必做 | ⬜ 待做 |
 | P2 | 首页冷启动闪屏（entry=index） | 首次进入骨架屏（家庭+今日计划就绪后） | ✅ 第 20 轮 |
+| P1 | APP 启动先进登录 | launch 中转页，去掉未登录闪首页 | ✅ 第 46 轮 |
+| P1 | 账号闭环（改密/改资料/建家引导/401 回跳） | 登录后可改密码与昵称头像；注册引导家庭 | ✅ 第 46 轮 |
+| P0 | 手机号 JWT 身份解析 | 业务接口统一 `getWxUser` / `getWxUserId`，禁止只按 openid 查库 | ✅ 第 47 轮 |
+| P0 | 退出登录作废 Redis token | `/auth/logout` 删 userId + openid 两把钥匙 | ✅ 第 47 轮 |
 
 ### 3.0b 视觉与体验（第 16 轮）
 
@@ -917,7 +1442,9 @@ alter_homeai_menus_iteration8.sql
 | P1 | 食材模型对齐 | 前端 `amount` 与 DB `quantity/unit` 统一 | ✅ 第 14 轮 |
 | P1 | 收藏列表入口 | 小程序「我的收藏」Tab | ✅ 已有（第 12/复查确认） |
 | P1 | 创建时 categoryId | 小程序 submit 前必填校验 | ✅ 第 14 轮 |
-| P1 | Excel 导入 | 主表 + 食材/步骤文本列（子表） | ✅ 第 24 轮 |
+| P1 | Excel 导入 | 主表 + 食材/步骤文本列（子表）；同名覆盖；分类按菜名纠正 | ✅ 第 24 / 61 轮 |
+| P1 | 封面批量导入 | 单张/文件夹/zip，按文件名或父目录匹配 | ✅ 第 60 轮 |
+| P1 | APP 详情删除 | 对齐计划详情：确认弹层 + `canModify` | ✅ 第 64 轮 |
 | P2 | 浏览计数 | `viewCount` 递增 + 热门排行 | ✅ 第 26 轮 |
 | P2 | 与计划联动 | Master 关联 `recipeId`；首页「今日下厨」 | ✅ 第 23 轮 |
 | P2 | 智能推荐 | 按季节、家庭口味、历史做过次数推荐 | ✅ 第 28 轮轻量版（计划/收藏/季节加权热门）；✅ 第 30 轮「新菜尝鲜」独立区块；✅ 第 32 轮做过次数加权 |
@@ -936,6 +1463,7 @@ alter_homeai_menus_iteration8.sql
 | P1 | 回收站 | 文件 + 文件夹；管理端 + 小程序自助恢复 | ✅ 文件第 22 / 文件夹第 23 / 小程序第 24 轮 |
 | P2 | 用户空间配额 | 默认用户上限（Redis）+ 上传校验 + 告警展示；家庭维度表另排期 | ✅ 用户默认第 23 轮 / ✅ 家庭默认第 28 轮 / ✅ 家庭级覆盖第 30 轮（Redis，无独立表） / ✅ 运营看板第 32 轮 |
 | P2 | 小程序上传统一 | 白名单 + `chooseMessageFile` composable，支持非图片 | ✅ 第 25 轮 |
+| P1 | 多类型预览播放 | 页内图片/音视频/PDF；Office 转 PDF 缓存 | ✅ 第 63 轮 |
 
 ### 3.3 学习管理
 
@@ -951,12 +1479,18 @@ alter_homeai_menus_iteration8.sql
 | P2 | 学习提醒 | 每日目标 + 微信订阅消息 | ✅ 第 29 轮（模板未配时 stub）；✅ 第 31 轮字段可配置对齐 |
 | P2 | 管理端多维图表 | 按用户、按分类、7 日/30 日切换 | ✅ 第 29 轮；✅ 第 31 轮 Excel 导出 |
 | P2 | 列表分页 | 小程序 pageSize=20 + 加载更多 | ✅ 第 13 轮 |
+| P1 | 多类型预览播放 | 音频类型；页内 PDF/音视频；Office 转 PDF | ✅ 第 63 轮 |
+| P1 | APP 资料改删 | 详情编辑/删除；`add.vue?id=` 复用表单 | ✅ 第 64 轮 |
+| P0 | 计时归属校验 | start/stop/record 拒绝他人/无主资料 | ✅ 第 64 轮 |
 
 ### 3.4 计划 / AI / 审计（简要）
 
 | 模块 | 建议 | 优先级 | 状态 |
 |------|------|--------|------|
 | 计划 | 完成率按 `yearMonth` 筛选 UI；实例清理定时任务 | P1 | ✅ 筛选 UI 第 20 轮 / ✅ 清理任务验收第 21 轮 |
+| 计划 | APP 详情展示内容并支持编辑/软删 | P1 | ✅ 第 51 轮 |
+| 菜谱 | APP 详情删除（`canModify`） | P1 | ✅ 第 64 轮 |
+| 学习 | APP 资料编辑/删除 + 计时归属 | P0/P1 | ✅ 第 64 轮 |
 | 计划 | 与菜谱/学习交叉统计（「计划完成 + 学习时长」仪表盘） | P2 | ✅ 第 26 轮 |
 | AI | 更多场景配额（chat、office、recipe 生成）统一预检 | P1 | ✅ 第 25 轮（recipe 场景预留） |
 | AI | SSE `enableChunked` 降级 | P2 | ✅ 第 13 轮 |
@@ -967,7 +1501,125 @@ alter_homeai_menus_iteration8.sql
 
 ## 四、建议下一轮执行顺序
 
-### 第 39 轮（推荐）
+### 第 78 轮（已落地）
+
+一键脚本可分别发布/停止前端、后端、APP；后端启动失败不再假装成功。
+
+### 第 77 轮（已落地）
+
+`docs/deploy/` 一键发布（APP + 管理端 + 后端）与一键停止前后端。
+
+### 第 76 轮（已落地）
+
+菜谱封面走 OSS 时带 Content-Length 并重试，避免 Connection reset 导致上传失败。需重启后端。
+
+### 第 75 轮（已落地）
+
+H5 + Capacitor 走手机号登录（不再误走小程序微信登录）；管理端学习资料必填归属用户，家庭下拉排除已解散。
+
+### 第 74 轮（已落地）
+
+本机出包给 Capacitor 子工程补阿里云 Maven，避免 JDK 直连 Google TLS 失败。
+
+### 第 73 轮（已落地）
+
+管理端菜谱列表只保留一个「导入封面」入口；弹窗选图/选文件夹改为原生文件选择，并去掉会挡住按钮的滚动条遮罩。
+
+### 第 72 轮（已落地）
+
+系统返回键/手势在 Tab、登录、启动页直接退出 APP，不再「再按一次」。须重新出包覆盖安装。
+
+### 第 71 轮（已落地）
+
+本机 Capacitor 出包写入 HA 自适应图标、启动图、通知小标；minSdk/权限/主题色与 uni-app 对齐。覆盖安装后桌面图标才会更新。
+
+### 第 70 轮（已落地）
+
+发版只走 `pnpm pack:apk:local`。HBuilderX 云打包与 `pnpm pack:apk`（DCloud 离线 SDK）已弃用。
+
+### 第 69 轮（已落地）
+
+管理端「APP版本」控制更新方式与安装包；APP 启动页按 `versionCode` 比较后覆盖安装 APK 或热更新 H5 zip。种子记录默认关闭。须跑 SQL 并侧载新包。
+
+### 第 65 轮（建议）
+
+1. 真机侧载 Capacitor APK：登录、HTTP、计划通知、相册、返回键、拍照选图、菜谱/学习改删、**资料/学习多格式上传**  
+2. 忘记密码短信验证码（需阿里云模板；当前仍走管理员后台重置）  
+3. （可选）`isStorageAdmin` 按权限码收紧，避免任意控制台 JWT 预览全部资料  
+
+### 第 68 轮（已落地）
+
+OSS 私有上传不再把文件名里的 `.` `_` 清掉；新封面会带 `.png` 等后缀。旧文件需重新导入。
+
+### 第 67 轮（已落地）
+
+APP 文件选择按 MIME 过滤（含音频/文档）；白名单对齐 webp/音频；Android 13+ `READ_MEDIA_AUDIO`。
+
+### 第 68 轮（已落地）
+
+OSS 私有上传 objectKey 保留扩展名与下划线（`StrAttackFilter` 只过滤目录段）。
+
+### 第 66 轮（已落地）
+
+管理端菜谱列表：选择提示条与工具栏拉开间距；封面导入弹窗加大、可拖动改尺寸、显示导入进度，并避免选文件后误关。
+
+### 第 64 轮（已落地）
+
+APP 菜谱删除、学习资料改删；学习 start/stop/record 归属校验；Capacitor `CAMERA` 权限。
+
+### 第 62 轮（部分并入第 64 轮）
+
+1. 真机侧载新 Capacitor APK：登录、HTTP API、计划通知、保存相册、返回键 — **仍待验收**  
+2. 忘记密码短信验证码 — **仍待做**（无短信模板）  
+3. APP 学习资料 / 菜谱删除与编辑 — **【第 64 轮已落地】**  
+
+### 第 63 轮（已落地）
+
+资料与学习多类型上传、管理端/APP 页内预览与播放；Office 转 PDF 缓存。
+
+### 第 61 轮（已落地）
+
+菜谱 Excel 同名覆盖、分类按菜名纠正、封面导入入口前置。
+
+### 第 60 轮（已落地）
+
+管理端菜谱封面支持单张/多选与整文件夹导入，按文件名或父目录匹配。
+
+Capacitor 相册 Media、文档 Share、外链 Browser、返回键与状态栏。
+
+### 第 58 轮（已落地）
+
+本机 `pnpm pack:apk:local` 打出签名 APK；H5 + Capacitor 6，通知插件已接。
+
+### 第 57 轮（已落地）
+
+长久本机出包改为 H5 + Capacitor；云打包仍用于当前内测。
+
+### 第 56 轮（已落地）
+
+云打包缺 Push 时启动不再红屏；清单补 `sdkConfigs.push`，须重新云打包并勾选 Push。
+
+### 第 55 轮（已落地）
+
+后台新增/导入 App 用户写入默认密码 123456 与 salt；登录缺盐不再 NPE；管理端可重置密码。
+
+### 第 54 轮（已落地）
+
+Android 离线 SDK 脚本（第 54 轮）已归档；发版已改为 `pnpm pack:apk:local`（第 70 轮）。
+
+### 第 53 轮（已落地）
+
+邀请系统分享、内测改 API、homeai 模块跑单测、表单/协议/学习链接抛光、计划 byDate 批量填充。
+
+### 第 52 轮（已落地）
+
+后台家庭移入回收站后从主列表消失；`status`（已解散）与 `delFlag`（回收站）不再混用。
+
+### 第 51 轮（已落地）
+
+计划详情编辑删除、资料 wot 弹层、账单底栏 fixed、启动页隐私协议可点开。
+
+### 第 39 轮（历史建议，部分仍待做）
 
 1. 学习提醒真机订阅联调验收  
 2. AI 场景配额运营报表  
@@ -1006,8 +1658,18 @@ homeai:
     learn-remind-title-text: 每日学习目标
   office:
     soffice-path: soffice
+  upload:
+    limits:
+      video: 209715200      # 200MB
+      audio: 52428800       # 50MB
+      image: 20971520       # 20MB
+      document: 52428800    # 50MB
+      archive: 104857600    # 100MB
+      text: 10485760        # 10MB
 homeai.ai.key-encryption-key: xxx
 ```
+
+**上传体积（第 63 轮）：** Spring `multipart.max-file-size/max-request-size` 已改为 **200MB**。反向代理须同步：`deploy/frp/nginx-home.conf`、`nginx-server.conf`、`deploy/frontend-nginx/nginx/homeai-admin.*.conf` 的 `client_max_body_size 200m`，改完后 **nginx reload**。
 
 **管理端生产前端：**
 
@@ -1075,4 +1737,4 @@ SOURCE /path/to/init_homeai_menus.sql;
 
 ---
 
-*最后更新：2026-08-18 · 第 1～40 轮已归档 · ComfyUI 专项（第 41～42 轮）已拆分至 `comfyui-roadmap.md`*
+*最后更新：2026-08-21 · 第 1～76 轮已归档 · ComfyUI 专项（第 41～43 轮）已拆至 `ComfyUI/`*

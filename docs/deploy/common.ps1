@@ -238,8 +238,8 @@ function Start-HomeaiBackendWindow {
     $cmd += "set `"JAVA_HOME=$javaHome`"" + $nl
     $cmd += 'set "PATH=%JAVA_HOME%\bin;%PATH%"' + $nl
     $cmd += "cd /d `"$bootDir`"" + $nl
-    $cmd += "echo JAVA_HOME=%JAVA_HOME%> `"$log`"" + $nl
-    $cmd += "echo WD=%CD%>> `"$log`"" + $nl
+    $cmd += ">>`"$log`" echo JAVA_HOME=%JAVA_HOME%" + $nl
+    $cmd += ">>`"$log`" echo WD=%CD%" + $nl
     $cmd += "call `"$mvn`" -f pom.xml -pl $pl -am spring-boot:run -DskipTests -Dspring-boot.run.profiles=dev >> `"$log`" 2>&1" + $nl
     $cmd += "echo mvn_exit=%ERRORLEVEL% >> `"$log`"" + $nl
     $cmd += 'exit /b %ERRORLEVEL%' + $nl

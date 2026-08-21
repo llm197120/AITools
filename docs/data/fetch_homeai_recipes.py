@@ -194,20 +194,29 @@ def infer_category(name: str, extra: str = "") -> str:
     text = f"{name} {extra}"
     if any(k in text for k in ("凉拌", "拍黄", "白切", "口水鸡", "凉皮", "沙拉", "冷盘", "皮蛋豆腐")):
         return "rc_cold"
-    if any(k in text for k in ("蛋糕", "饼干", "面包", "烘焙", "马芬", "曲奇", "泡芙", "蛋挞", "司康")):
+    if any(k in text for k in ("蛋糕", "饼干", "面包", "烘焙", "马芬", "曲奇", "泡芙", "蛋挞", "司康", "发糕", "蛋黄酥")):
         return "rc_bake"
     if any(k in text for k in ("奶茶", "豆浆", "咖啡", "果汁", "柠檬水", "酸梅汤", "饮品")):
         return "rc_drink"
-    if "汤圆" not in text and any(k in text for k in ("汤", "羹", "煲")):
-        return "rc_soup"
-    if any(k in text for k in ("粥", "炒饭", "盖饭", "面条", "拌面", "炒面", "饼", "包子", "饺子", "馒头", "花卷", "馄饨", "米线", "米粉", "凉粉")):
-        return "rc_staple"
     if any(k in text for k in ("小吃", "零食", "薯条", "炸鸡")):
         return "rc_snack"
+    if any(k in text for k in ("粥", "炒饭", "盖饭", "卤肉饭", "面条", "拌面", "炒面", "挂面", "拉面", "饼", "包子", "灌汤包", "饺子", "馒头", "花卷", "馄饨", "米线", "米粉", "烧麦", "小笼", "肉夹馍")):
+        return "rc_staple"
+    if name.endswith(("面", "饭", "粥")) or (name.endswith("包") and "荷包" not in name):
+        return "rc_staple"
+    if "汤圆" in text:
+        return "rc_staple"
+    if any(k in text for k in ("上汤", "酸汤")):
+        return "rc_hot"
+    if "汤圆" not in text and any(k in text for k in ("汤", "羹", "煲")):
+        return "rc_soup"
     return "rc_hot"
 
 
 def category_id(folder: str, name: str) -> str:
+    inferred = infer_category(name)
+    if inferred != "rc_hot":
+        return inferred
     if any(k in name for k in COLD_KEYWORDS):
         return "rc_cold"
     return CATEGORY_MAP.get(folder, "rc_other")
@@ -552,7 +561,10 @@ def parse_hoc_recipe(path: Path, folder: str) -> Optional[dict]:
     cat = HOC_CATEGORY_MAP.get(folder, "rc_hot")
     if cat is None:
         return None
-    if any(k in name for k in COLD_KEYWORDS):
+    inferred = infer_category(name)
+    if inferred != "rc_hot":
+        cat = inferred
+    elif any(k in name for k in COLD_KEYWORDS):
         cat = "rc_cold"
 
     ing_block = extract_section(text, "配料") or extract_section(text, "原料")

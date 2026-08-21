@@ -6,7 +6,10 @@
 
 | 文件名 | 内容 | 日期 | 版本 |
 |--------|------|------|------|
-| -      | -    | -    | -    |
+| [app-release.md](./app-release.md) | APP 发布：versionCode、APK 覆盖 / 热更新 zip、管理端登记 | 2026-08-21 | 第 69 轮 |
+| [android-local-apk.md](./android-local-apk.md) | 本机打签名 APK 与 H5 zip | 2026-08-21 | — |
+| [recipe-excel-import.md](./recipe-excel-import.md) | 菜谱 Excel 导入 | — | — |
+| [已迁移](../../ComfyUI/docs/comfyui-retouch-manual.md) | ComfyUI 修图手册已迁至独立目录 `ComfyUI/` | 2026-08-18 | — |
 
 ## 文档分类
 

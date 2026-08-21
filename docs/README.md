@@ -28,7 +28,7 @@ docs/                          # 文档根目录
 │   ├── implementation-plan.md   # 8阶段实现计划
 │   ├── phase-progress.md        # 各阶段完成情况记录
 │   ├── homeai-optimization-roadmap.md  # 迭代优化路线图（第 1～40 轮）
-│   ├── comfyui-roadmap.md             # ComfyUI 本地路线（第 41～42 轮，独立）
+│   ├── comfyui-roadmap.md             # 跳转 stub → ComfyUI/docs/
 │   └── android-migration-design.md     # 小程序→Android 迁移方案（暂不执行）
 │
 ├── review/                    # 审查记录
@@ -40,12 +40,23 @@ docs/                          # 文档根目录
 ├── meeting/                   # 会议纪要
 │   └── README.md              # 会议纪要索引
 │
-├── deploy/                    # 部署文档
-│   ├── README.md              # 部署文档索引
+├── deploy/                    # 部署文档 + 一键发布/启停
+│   ├── README.md              # 部署文档索引（含 publish-all / start-all / stop-all）
+│   ├── publish-all.ps1        # 一键发布：后端 + 管理端 + APP
+│   ├── start-all.ps1 / stop-all.ps1
 │   └── github-actions-acr-cicd-design.md  # GitHub Actions + ACR CI/CD（待实施）
 │
 └── guide/                     # 使用指南
-    └── README.md              # 使用指南索引
+    ├── README.md              # 使用指南索引
+    ├── app-release.md         # APP 发布（APK 覆盖 / 热更新）
+    ├── android-local-apk.md   # 本机打签名 APK
+    └── comfyui-retouch-manual.md  # 跳转 stub → ComfyUI/docs/
+
+ComfyUI/                       # 与 docs/ 同级；本机 ComfyUI，后续可单独成仓
+├── README.md
+├── docs/                      # 安装 / 手册 / 路线图
+├── scripts/                   # 启停与验证脚本备份
+└── workflows/                 # 工作流 JSON
 ```
 
 ## 根目录文档（AI 能力调研，2026-08）
@@ -55,8 +66,8 @@ docs/                          # 文档根目录
 | LLM API 价格对比 | `docs/llm-pricing-comparison.md` | 国际/国内主流模型能力×价格对比（含接入注意事项） |
 | AI 图片精修开源工具 | `docs/ai-image-editing-tools.md` | GitHub 精修工具调研（GFPGAN/CodeFormer/Upscayl 等） |
 | 本机本地 AI 方案 | `docs/local-photo-video-ai.md` | RTX 4060 8G + 16G 照片精修/视频剪辑/AI 视频生成方案 |
-| ComfyUI 安装指南 | `docs/comfyui-local-setup.md` | 针对 8GB 显存的 ComfyUI 安装 + 落地工作流 |
 | 百炼图片编辑 API | `docs/qwen-image-edit-api.md` | Qwen-Image-Edit 接入指南（含 JeecgBoot/Java 示例） |
+| **ComfyUI（独立目录）** | [`ComfyUI/README.md`](../ComfyUI/README.md) | 本机修图/生图：安装、手册、路线、工作流 JSON |
 
 ## 核心设计文档
 
@@ -78,6 +89,8 @@ docs/                          # 文档根目录
 
 ## 快速导航
 
+- [一键发布 / 启停](./deploy/README.md) - APP + 管理端 + 后端
+- [APP 发布流程](./guide/app-release.md) - versionCode、覆盖安装与热更新
 - [架构总览与路线图](./design/architecture-overview.md) - 阅读架构总览
 - [模块功能详细设计](./design/module-details.md) - 查看模块功能说明
 - [AI能力与安全设计](./design/ai-security.md) - 查看AI与安全设计

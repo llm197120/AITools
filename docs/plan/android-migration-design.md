@@ -315,9 +315,9 @@ Android App → HTTPS → Nginx → JeecgBoot → MySQL / Redis / 阿里云 OSS
 
 **签名 APK**
 
-- `keytool` 生成 keystore，`manifest.config.ts` 配置签名信息
-- 签名文档：`docs/guide/android-signing.md`（keystore 生成、签名配置、构建签名 APK 步骤）
-- `.gitignore` 排除 keystore 与签名相关敏感文件，避免密钥入库
+- **现行出包**：`pnpm pack:apk:local`（uni-app H5 + Capacitor），指南见 `docs/guide/android-local-apk.md`、发布见 `docs/guide/app-release.md`
+- 已弃用：HBuilderX 云打包；`pnpm pack:apk`（DCloud 离线 SDK）
+- keystore 与 `android-pack.local.json` 不入库
 
 **隐私合规**
 

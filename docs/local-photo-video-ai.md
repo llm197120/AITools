@@ -2,7 +2,7 @@
 
 > 调研时间：2026-08-17，针对笔记本 **CPU i7-14650HX / GPU RTX 4060 Laptop 8GB VRAM / 内存 16GB**。
 > 结论先行：这台机器是"高性价比本地 AI 入门平台"——**照片精修完全胜任，常规视频剪辑流畅，AI 视频生成可尝鲜（480p 短片）**。
-> 相关文档：图片精修工具总览见 [ai-image-editing-tools.md](./ai-image-editing-tools.md)；LLM API 价格对比见 [llm-pricing-comparison.md](./llm-pricing-comparison.md)；ComfyUI 安装见 [comfyui-local-setup.md](./comfyui-local-setup.md)；百炼 API 接入见 [qwen-image-edit-api.md](./qwen-image-edit-api.md)。
+> 相关文档：图片精修工具总览见 [ai-image-editing-tools.md](./ai-image-editing-tools.md)；LLM API 价格对比见 [llm-pricing-comparison.md](./llm-pricing-comparison.md)；ComfyUI 见 [../ComfyUI/README.md](../ComfyUI/README.md)；百炼 API 接入见 [qwen-image-edit-api.md](./qwen-image-edit-api.md)。
 
 ---
 

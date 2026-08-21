@@ -2,7 +2,7 @@
 
 > 调研时间：2026-08-17，数据来自 GitHub 实测（star 数为当天值）。
 > 背景：为"家庭AI小工具"项目选型——寻找可结合 AI 进行图片精修的开源工具，兼顾个人/家庭部署与现有技术栈（JeecgBoot 管理端 + UniApp 小程序）的集成可能性。
-> 相关文档：LLM API 价格对比见 [llm-pricing-comparison.md](./llm-pricing-comparison.md)；本机（RTX 4060）落地方案见 [local-photo-video-ai.md](./local-photo-video-ai.md)；ComfyUI 安装见 [comfyui-local-setup.md](./comfyui-local-setup.md)；百炼 API 接入见 [qwen-image-edit-api.md](./qwen-image-edit-api.md)。
+> 相关文档：LLM API 价格对比见 [llm-pricing-comparison.md](./llm-pricing-comparison.md)；本机（RTX 4060）落地方案见 [local-photo-video-ai.md](./local-photo-video-ai.md)；ComfyUI 见 [../ComfyUI/README.md](../ComfyUI/README.md)；百炼 API 接入见 [qwen-image-edit-api.md](./qwen-image-edit-api.md)。
 
 ---
 
