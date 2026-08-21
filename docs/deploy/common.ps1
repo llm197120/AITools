@@ -9,6 +9,7 @@ $script:BootDir = Join-Path $script:RepoRoot 'JeecgBoot\jeecg-boot'
 $script:VueDir = Join-Path $script:RepoRoot 'JeecgBoot\jeecgboot-vue3'
 $script:UniDir = Join-Path $script:RepoRoot 'JeecgUniapp'
 $script:StartModule = 'jeecg-module-system/jeecg-system-start'
+$script:StartDir = Join-Path $script:BootDir ($script:StartModule -replace '/', '\')
 $script:DefaultJavaHome = 'C:\Program Files\Java\jdk-17'
 
 function Get-HomeaiDeployRepoRoot { return $script:RepoRoot }
@@ -228,26 +229,28 @@ function Start-HomeaiBackendWindow {
     $log = Get-HomeaiBackendLogPath
     $wrapper = Join-Path $logDir 'run-backend.cmd'
     $javaHome = $env:JAVA_HOME
-    $bootDir = $script:BootDir
-    $pl = $script:StartModule
+    $startDir = $script:StartDir
+    if (-not (Test-Path -LiteralPath (Join-Path $startDir 'pom.xml'))) {
+        throw "找不到启动模块：$startDir"
+    }
 
-    # 仓库路径含空格。Start-Process 的 ArgumentList 数组不会自动加引号，
-    # 不能再 powershell -File 未加引号的路径，否则会变成 -File C:\Users\...\Desktop\AI 然后立刻退出。
+    # 必须在 jeecg-system-start 目录执行 spring-boot:run。
+    # 在父工程加 -pl -am 会把 run 打到 jeecg-boot-parent 上，报找不到 main class，启动模块被 SKIPPED。
     $nl = "`r`n"
     $cmd = '@echo off' + $nl
     $cmd += "set `"JAVA_HOME=$javaHome`"" + $nl
     $cmd += 'set "PATH=%JAVA_HOME%\bin;%PATH%"' + $nl
-    $cmd += "cd /d `"$bootDir`"" + $nl
+    $cmd += "cd /d `"$startDir`"" + $nl
     $cmd += ">>`"$log`" echo JAVA_HOME=%JAVA_HOME%" + $nl
     $cmd += ">>`"$log`" echo WD=%CD%" + $nl
-    $cmd += "call `"$mvn`" -f pom.xml -pl $pl -am spring-boot:run -DskipTests -Dspring-boot.run.profiles=dev >> `"$log`" 2>&1" + $nl
+    $cmd += "call `"$mvn`" spring-boot:run -DskipTests -Dspring-boot.run.profiles=dev >> `"$log`" 2>&1" + $nl
     $cmd += "echo mvn_exit=%ERRORLEVEL% >> `"$log`"" + $nl
     $cmd += 'exit /b %ERRORLEVEL%' + $nl
     $utf8 = New-Object System.Text.UTF8Encoding $false
     [System.IO.File]::WriteAllText($wrapper, $cmd, $utf8)
 
     Write-Host ("[后端] 后台启动 JeecgBoot，日志 {0}" -f $log)
-    $p = Start-Process -FilePath $wrapper -WorkingDirectory $bootDir -WindowStyle Hidden -PassThru
+    $p = Start-Process -FilePath $wrapper -WorkingDirectory $startDir -WindowStyle Hidden -PassThru
     if (-not $p) { throw '无法启动后端进程（Start-Process 返回空）' }
     $pidFile = Join-Path $logDir 'backend.pid'
     [System.IO.File]::WriteAllText($pidFile, "$($p.Id)", $utf8)

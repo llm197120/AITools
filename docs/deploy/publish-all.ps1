@@ -29,14 +29,14 @@ $want = Resolve-HomeaiTargets -Target $Target -Frontend:$Frontend -Backend:$Back
 function Invoke-HomeaiBackendCompile {
     Ensure-HomeaiJavaHome
     $mvn = Get-HomeaiMavenCmd
-    Write-Host '[后端] 编译 jeecg-system-start（含依赖）...'
+    Write-Host '[后端] 安装 jeecg-system-start（含依赖，写入本地仓库）...'
     Push-Location $script:BootDir
     try {
         $mvnArgs = @(
             '-f', 'pom.xml',
             '-pl', $script:StartModule,
             '-am',
-            'compile',
+            'install',
             '-DskipTests'
         )
         if ($Offline) { $mvnArgs = @('-o') + $mvnArgs }
@@ -45,7 +45,7 @@ function Invoke-HomeaiBackendCompile {
     } finally {
         Pop-Location
     }
-    Write-Host '[后端] 编译完成'
+    Write-Host '[后端] 已写入本地仓库'
 }
 
 function Invoke-HomeaiFrontendPublish {

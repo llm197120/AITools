@@ -34,7 +34,7 @@ cd "C:\Users\57089\Desktop\AI project\AITools\docs\deploy"
 
 顺序与复用：
 
-1. **后端**：先 `mvn compile`（失败则不停正在跑的 Java）→ 停旧进程 → 后台 `mvn -am spring-boot:run`，日志 `C:\homeai\logs\backend.log`。端口未起来会报失败，不再假装成功。
+1. **后端**：先 `mvn -pl jeecg-system-start -am install`（失败则不停正在跑的 Java）→ 停旧进程 → 在 **启动模块目录** 执行 `mvn spring-boot:run`（不要在父工程加 `-am`，否则会跑到 `jeecg-boot-parent` 上找不到 main class）。日志 `C:\homeai\logs\backend.log`。
 2. **管理端**：调用 `JeecgBoot/deploy/frp/setup-local.ps1 -BuildAdmin`（`pnpm run build:docker:prod`，复制到 `C:\homeai\admin`，拉起 nginx/frpc）
 3. **APP**：调用 `JeecgUniapp` 的 `pnpm pack:apk:local`。默认不上传播放页；需要时加 `-UploadApk`
 
