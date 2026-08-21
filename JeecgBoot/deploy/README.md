@@ -1,6 +1,11 @@
 # HomeAI 部署总览
 
-# GitHub Actions **仅 CI + 推后端 ACR**；管理端在 ECS 本机构建并 Nginx 部署。
+当前准备落地的路径是 **FRP 穿透**（服务器只跑 frps + Nginx，前后端在本机，APK 放服务器供下载）：
+
+- 手册：[docs/deploy/frp-home-deployment.md](../../docs/deploy/frp-home-deployment.md)
+- 配置模板：[frp/](./frp/)
+
+以下为备选：**ECS 全托管**。GitHub Actions **仅 CI + 推后端 ACR**；管理端在 ECS 本机构建并 Nginx 部署。
 
 ## 当前方案：frontend-nginx
 

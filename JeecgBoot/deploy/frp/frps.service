@@ -1,0 +1,13 @@
+[Unit]
+Description=HomeAI frps
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/homeai-frp/frps -c /opt/homeai-frp/frps.toml
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

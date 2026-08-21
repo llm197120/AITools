@@ -1,0 +1,20 @@
+# 服务器 frps。复制到 /opt/homeai-frp/frps.toml 后务必改 token。
+# 文档：docs/deploy/frp-home-deployment.md
+
+bindAddr = "0.0.0.0"
+bindPort = 7000
+
+# 映射出来的业务端口只给本机 Nginx，禁止对公网监听
+proxyBindAddr = "127.0.0.1"
+
+auth.method = "token"
+auth.token = "CHANGE_ME_TO_A_LONG_RANDOM_TOKEN"
+
+webServer.addr = "127.0.0.1"
+webServer.port = 7500
+webServer.user = "admin"
+webServer.password = "CHANGE_ME_DASHBOARD_PASSWORD"
+
+log.to = "/var/log/frps.log"
+log.level = "info"
+log.maxDays = 7

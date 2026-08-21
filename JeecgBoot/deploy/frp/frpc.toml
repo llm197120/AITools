@@ -1,0 +1,22 @@
+# 本机 frpc。放到 C:\homeai\frp\frpc.toml，与服务器 frps 版本、token 一致。
+# 文档：docs/deploy/frp-home-deployment.md
+
+serverAddr = "116.62.115.226"
+serverPort = 7000
+
+auth.method = "token"
+auth.token = "CHANGE_ME_TO_A_LONG_RANDOM_TOKEN"
+
+log.to = "./frpc.log"
+log.level = "info"
+log.maxDays = 7
+
+transport.heartbeatInterval = 30
+transport.heartbeatTimeout = 90
+
+[[proxies]]
+name = "homeai-web"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 8088
+remotePort = 18080

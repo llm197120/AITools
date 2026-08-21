@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>家庭AI小工具 · 下载</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 28rem; margin: 3rem auto; padding: 0 1.25rem; color: #1f2937; }
+    h1 { font-size: 1.4rem; }
+    p { line-height: 1.6; color: #4b5563; }
+    a.btn { display: inline-block; margin-top: 1rem; padding: 0.75rem 1.25rem; background: #2563eb; color: #fff; text-decoration: none; border-radius: 8px; }
+    a.btn.disabled { background: #9ca3af; pointer-events: none; }
+    ol { padding-left: 1.25rem; color: #4b5563; }
+    .hint { font-size: 0.85rem; color: #6b7280; margin-top: 2rem; }
+    .warn { font-size: 0.9rem; color: #b45309; margin-top: 0.75rem; display: none; }
+  </style>
+</head>
+<body>
+  <h1>家庭AI小工具</h1>
+  <p>Android 内测版。仅供家庭成员侧载安装，不上架应用商店。</p>
+  <p><a class="btn" id="apkBtn" href="./homeai-latest.apk">下载 APK</a></p>
+  <p class="warn" id="apkMissing">安装包还未上传到服务器。请在电脑上打好签名 APK 后执行：<br><code>.\upload-apk.ps1 -ApkPath 你的签名包.apk</code></p>
+  <ol>
+    <li>若微信/QQ 无法下载，请用系统浏览器打开本页。</li>
+    <li>允许该浏览器「安装未知应用」。</li>
+    <li>安装后用手机号和密码登录。</li>
+    <li>连不上时请确认家里电脑已开机。</li>
+  </ol>
+  <p class="hint">版本见同目录 <code>version.txt</code>（若有）。覆盖安装请勿更换签名证书。</p>
+  <script>
+    (function () {
+      var btn = document.getElementById('apkBtn');
+      var warn = document.getElementById('apkMissing');
+      fetch('./homeai-latest.apk', { method: 'HEAD', cache: 'no-store' }).then(function (r) {
+        if (r.ok) return;
+        btn.className = 'btn disabled';
+        btn.removeAttribute('href');
+        btn.textContent = 'APK 尚未上传';
+        warn.style.display = 'block';
+      }).catch(function () {});
+    })();
+  </script>
+</body>
+</html>
