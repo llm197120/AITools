@@ -8,12 +8,19 @@
         <HomeaiMediaUpload
           v-else
           v-model:value="model[field]"
-          mode="file"
+          :mode="learnUploadMode(model.type)"
           :upload-url="isUpdate && recordId ? learnApi.uploadFile(recordId) : learnApi.uploadTemp()"
           :extra-data="() => ({ type: model.type })"
           :accept="getLearnAccept(model.type)"
+          :max-size="learnMaxSize(model.type)"
           tip="点击或拖拽文件到此处上传，格式需与资料类型匹配"
         />
+        <a-button
+          v-if="isUpdate && recordId && model.type !== 'link'"
+          type="link"
+          style="padding-left: 0"
+          @click="openPreview"
+        >预览资料</a-button>
       </template>
     </BasicForm>
     <template #footer>
@@ -21,6 +28,7 @@
       <a-button style="margin-left: 8px" @click="closeDrawer()">取消</a-button>
     </template>
   </BasicDrawer>
+  <HomeaiFilePreviewModal ref="previewModalRef" />
 </template>
 
 <script lang="ts" name="homeai-learn-drawer" setup>
@@ -31,19 +39,25 @@
   import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';
   import HomeaiMediaUpload from '/@/views/homeai/components/HomeaiMediaUpload.vue';
+  import HomeaiFilePreviewModal from '/@/views/homeai/components/HomeaiFilePreviewModal.vue';
+  import { useUserLabel } from '../hooks/useUserLabel';
 
   const emit = defineEmits(['success']);
   const { createMessage } = useMessage();
   const isUpdate = ref(false);
   const recordId = ref('');
+  const originalUserId = ref('');
   const saving = ref(false);
   const categoryOptions = ref<{ label: string; value: string }[]>([]);
+  const { userOptions, loadUserOptions } = useUserLabel();
+  const formActions = { setFieldsValue: (_values: Record<string, any>) => {} };
 
   /** 资料类型 → 允许上传的文件类型 */
   function getLearnAccept(type?: string): string {
     const map: Record<string, string> = {
-      video: 'video/*',
-      image: 'image/*',
+      video: 'video/*,.mp4,.mov,.webm,.mkv,.avi',
+      audio: 'audio/*,.mp3,.wav,.m4a,.aac',
+      image: 'image/*,.jpg,.jpeg,.png,.gif,.webp,.bmp',
       pdf: '.pdf',
       doc: '.doc,.docx',
       xls: '.xls,.xlsx',
@@ -51,6 +65,26 @@
       note: '.txt,.md',
     };
     return (type && map[type]) || '';
+  }
+
+  function learnUploadMode(type?: string): 'image' | 'video' | 'audio' | 'file' {
+    if (type === 'image') return 'image';
+    if (type === 'video') return 'video';
+    if (type === 'audio') return 'audio';
+    return 'file';
+  }
+
+  function learnMaxSize(type?: string): number {
+    if (type === 'video') return 200;
+    if (type === 'audio' || type === 'pdf' || type === 'doc' || type === 'xls' || type === 'ppt') return 50;
+    if (type === 'image') return 20;
+    return 10;
+  }
+
+  const previewModalRef = ref<{ open: (src: { module: 'learn'; id: string }) => void } | null>(null);
+  function openPreview() {
+    if (!recordId.value) return;
+    previewModalRef.value?.open({ module: 'learn', id: recordId.value });
   }
 
   async function loadCategoryOptions() {
@@ -62,13 +96,23 @@
     }
   }
 
-  onMounted(loadCategoryOptions);
+  onMounted(async () => {
+    await Promise.all([loadCategoryOptions(), loadUserOptions()]);
+  });
 
   const [registerDrawer, { closeDrawer }] = useDrawerInner((data) => {
     isUpdate.value = data.isUpdate || false;
     recordId.value = data.record?.id || '';
+    originalUserId.value = data.record?.userId || '';
     if (isUpdate.value && data.record) {
-      setFieldsValue({ ...data.record });
+      setFieldsValue({
+        title: data.record.title,
+        type: data.record.type,
+        categoryId: data.record.categoryId,
+        tags: data.record.tags,
+        fileUrl: data.record.fileUrl,
+        userId: data.record.userId,
+      });
     } else {
       resetFields();
     }
@@ -86,6 +130,7 @@
         componentProps: {
           options: [
             { label: '视频', value: 'video' },
+            { label: '音频', value: 'audio' },
             { label: '图片', value: 'image' },
             { label: 'PDF', value: 'pdf' },
             { label: '文档', value: 'doc' },
@@ -94,8 +139,21 @@
             { label: '链接', value: 'link' },
             { label: '笔记', value: 'note' },
           ],
+          onChange: () => formActions.setFieldsValue({ fileUrl: '' }),
         },
         defaultValue: 'video',
+      },
+      {
+        field: 'userId',
+        label: '所属用户',
+        component: 'Select',
+        required: true,
+        dynamicDisabled: () => isUpdate.value && !!originalUserId.value,
+        componentProps: {
+          options: userOptions,
+          showSearch: true,
+          placeholder: '请选择归属用户',
+        },
       },
       {
         field: 'categoryId',
@@ -109,8 +167,23 @@
     showSubmitButton: false,
     showResetButton: false,
   });
+  formActions.setFieldsValue = setFieldsValue;
 
   async function handleSubmit(values: HomeaiPayload) {
+    const type = String(values.type || '');
+    const fileUrl = String(values.fileUrl || '').trim();
+    if (!values.userId) {
+      createMessage.warning('请选择归属用户');
+      return false;
+    }
+    if (type === 'link' && !fileUrl) {
+      createMessage.warning('请填写链接地址');
+      return false;
+    }
+    if (type && !['link', 'note'].includes(type) && !fileUrl) {
+      createMessage.warning('请上传与类型匹配的资料文件');
+      return false;
+    }
     saving.value = true;
     try {
       if (isUpdate.value) {

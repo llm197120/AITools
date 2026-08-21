@@ -114,6 +114,10 @@ export function configPwaPlugin(isBuild: boolean): PluginOption | PluginOption[]
           urlPattern: /\/jeecgboot\/.*/i,
           handler: 'NetworkOnly',
         },
+        {
+          urlPattern: /\/jeecg-boot\/.*/i,
+          handler: 'NetworkOnly',
+        },
         //update-end---author:scott ---date:20260417  for：[issues/9564]PWA图片规则过宽导致/filereview/等业务接口走缓存-----------
       ],
       // 启用立即更新：新 SW 立即激活并接管页面

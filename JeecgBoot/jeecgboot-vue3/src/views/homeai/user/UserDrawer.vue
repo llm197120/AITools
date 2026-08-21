@@ -4,8 +4,17 @@
     <template v-if="!isUpdate">
       <Description :column="1" :data="record" :schema="viewSchema" />
     </template>
-    <!-- 编辑模式 -->
-    <BasicForm v-else @register="registerForm" @submit="handleSubmit" />
+    <!-- 编辑/新增模式 -->
+    <template v-else>
+      <a-alert
+        v-if="!record.id"
+        type="info"
+        show-icon
+        style="margin-bottom: 16px"
+        message="新增用户默认登录密码为 123456，请告知用户首次登录后尽快修改。"
+      />
+      <BasicForm @register="registerForm" @submit="handleSubmit" />
+    </template>
     <!-- 底部按钮 -->
     <template #footer>
       <template v-if="isUpdate">
@@ -24,6 +33,7 @@ import { Description } from '/@/components/Description';
 import { BasicForm, useForm } from '/@/components/Form';
 import { userApi, familyApi } from '/@/api/homeai';
 import { useMessage } from '/@/hooks/web/useMessage';
+import { toFamilySelectOptions } from '../utils/activeFamily';
 
 const emit = defineEmits(['success']);
 const { createMessage } = useMessage();
@@ -40,10 +50,7 @@ const drawerTitle = computed(() => {
 async function loadFamilyOptions() {
   try {
     const res: any = await familyApi.list({ pageNo: 1, pageSize: 1000 });
-    const list = res?.records || res || [];
-    familyOptions.value = list
-      .filter((item: any) => item.delFlag === 0)
-      .map((item: any) => ({ label: item.name, value: item.id }));
+    familyOptions.value = toFamilySelectOptions(res);
   } catch {
     familyOptions.value = [];
   }
@@ -140,7 +147,7 @@ const [registerDrawer, { closeDrawer }] = useDrawerInner((data) => {
       } else {
         // 新增：后端 add 会根据 familyId 自动同步家庭关联
         await userApi.add(values);
-        createMessage.success('新增成功');
+        createMessage.success('新增成功，默认密码 123456');
       }
       closeDrawer();
       emit('success');

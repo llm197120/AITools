@@ -122,7 +122,8 @@
                 v-if="record.thumbnailUrl"
                 :src="record.thumbnailUrl"
                 alt=""
-                style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px"
+                style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; cursor: pointer"
+                @click="openPreview(record)"
               />
               <span v-else>{{ record.extension || '-' }}</span>
             </template>
@@ -138,6 +139,7 @@
               {{ formatSize(record.fileSize) }}
             </template>
             <template v-else-if="column.key === 'action'">
+              <a-button type="link" size="small" @click="openPreview(record)">预览</a-button>
               <a-button type="link" size="small" @click="handleDownload(record)">下载</a-button>
               <a-button type="link" size="small" @click="openConvertModal(record)">格式转换</a-button>
               <a-button v-if="canConvertToPdf(record)" type="link" size="small" @click="handleConvertToPdf(record)">转PDF</a-button>
@@ -209,7 +211,12 @@
     <BasicModal @register="registerUploadModal" title="上传文件" @ok="handleUpload" width="500px">
       <div class="upload-form">
         <a-form-item label="选择文件" required>
-          <input type="file" ref="fileInputRef" @change="onFileChange" />
+          <input
+            type="file"
+            ref="fileInputRef"
+            accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.mp4,.avi,.mov,.mkv,.webm,.mp3,.wav,.m4a,.aac,.zip,.rar,.7z,.txt,.csv,.md"
+            @change="onFileChange"
+          />
         </a-form-item>
         <a-form-item label="所属文件夹">
           <a-tree-select
@@ -299,6 +306,8 @@
         <a-button type="primary" @click="saveFamilyQuota">保存</a-button>
       </template>
     </BasicModal>
+
+    <HomeaiFilePreviewModal ref="previewModalRef" />
   </PageWrapper>
 </template>
 
@@ -313,6 +322,8 @@ import { ref, computed, onMounted } from 'vue';
   import type { HomeaiStorageFile, HomeaiStorageFolder } from '/@/api/homeai';
   import { useUserLabel } from '../hooks/useUserLabel';
   import { useGo } from '/@/hooks/web/usePage';
+  import HomeaiFilePreviewModal from '../components/HomeaiFilePreviewModal.vue';
+  import { toFamilyIdNameOptions } from '../utils/activeFamily';
 
   const { createMessage, createConfirm } = useMessage();
   const { resolveUserLabel, loadUserOptions } = useUserLabel();
@@ -540,8 +551,7 @@ import { ref, computed, onMounted } from 'vue';
   async function loadFamilyOptions() {
     try {
       const res = await familyApi.list({ pageNo: 1, pageSize: 500 });
-      const records = (res as any)?.records || (res as any)?.result?.records || [];
-      familyOptions.value = records.map((f: any) => ({ id: f.id, name: f.name }));
+      familyOptions.value = toFamilyIdNameOptions(res);
     } catch {
       familyOptions.value = [];
     }
@@ -556,7 +566,7 @@ import { ref, computed, onMounted } from 'vue';
     { title: '上传者', dataIndex: 'userId', width: 120, customRender: ({ text }: any) => resolveUserLabel(text) },
     { title: '文件大小', dataIndex: 'fileSize', key: 'fileSize', width: 100 },
     { title: '上传时间', dataIndex: 'createTime', width: 160 },
-    { title: '操作', key: 'action', width: 220 },
+    { title: '操作', key: 'action', width: 280 },
   ];
 
   async function loadFolderTree() {
@@ -660,6 +670,10 @@ import { ref, computed, onMounted } from 'vue';
       createMessage.warning('请输入文件夹名称');
       return;
     }
+    if (folderForm.value.visibility === 'family' && !folderForm.value.familyIds.length) {
+      createMessage.warning('家庭可见请至少选择一个家庭');
+      return;
+    }
     const params: any = { name: folderForm.value.name.trim(), visibility: folderForm.value.visibility };
     if (folderForm.value.parentId) {
       params.parentId = folderForm.value.parentId;
@@ -741,6 +755,10 @@ import { ref, computed, onMounted } from 'vue';
       createMessage.warning('请选择文件');
       return;
     }
+    if (uploadForm.value.visibility === 'family' && !uploadForm.value.familyIds.length) {
+      createMessage.warning('家庭可见请至少选择一个家庭');
+      return;
+    }
     const extra: any = { visibility: uploadForm.value.visibility };
     if (uploadForm.value.folderId) {
       extra.folderId = uploadForm.value.folderId;
@@ -775,6 +793,12 @@ import { ref, computed, onMounted } from 'vue';
     if (record.fileUrl) {
       window.open(record.fileUrl, '_blank');
     }
+  }
+
+  const previewModalRef = ref<{ open: (src: { module: 'storage'; id: string; title?: string }) => void } | null>(null);
+  function openPreview(record: HomeaiStorageFile) {
+    if (!record.id) return;
+    previewModalRef.value?.open({ module: 'storage', id: record.id, title: record.originalName });
   }
 
   async function handleDeleteFile(record: HomeaiStorageFile) {

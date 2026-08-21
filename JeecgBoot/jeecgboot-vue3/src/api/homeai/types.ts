@@ -148,6 +148,7 @@ export interface HomeaiRecipe {
   userId?: string;
   name?: string;
   categoryId?: string;
+  categoryName?: string;
   coverUrl?: string;
   videoUrl?: string;
   difficulty?: number;
@@ -191,6 +192,7 @@ export interface HomeaiLearnMaterial {
   type?: string;
   fileUrl?: string;
   coverUrl?: string;
+  previewPdfUrl?: string;
   category?: string;
   categoryId?: string;
   tags?: string;
@@ -198,6 +200,18 @@ export interface HomeaiLearnMaterial {
   totalDuration?: number;
   createTime?: string;
   [key: string]: unknown;
+}
+
+/** 文件预览描述 */
+export interface HomeaiFilePreview {
+  kind?: string;
+  fileUrl?: string;
+  previewPdfUrl?: string;
+  fileName?: string;
+  extension?: string;
+  convertTaskId?: string;
+  convertStatus?: string;
+  errorMessage?: string;
 }
 
 /** 存储文件 */
@@ -213,6 +227,7 @@ export interface HomeaiStorageFile {
   fileSize?: number;
   fileUrl?: string;
   thumbnailUrl?: string;
+  previewPdfUrl?: string;
   visibility?: string;
   isFavorite?: string;
   downloadCount?: number;
@@ -268,6 +283,24 @@ export interface HomeaiPlanConfig {
   instanceCleanupDays?: number;
   remindEnabled?: boolean;
   aiDocPolishEnabled?: boolean;
+  [key: string]: unknown;
+}
+
+/** APP 当前发布版本（homeai_app_version） */
+export interface HomeaiAppVersion {
+  id?: string;
+  versionName?: string;
+  versionCode?: number;
+  /** resource=热更新 H5 zip / apk=覆盖安装 */
+  updateMode?: string;
+  forceUpdate?: number;
+  apkUrl?: string;
+  resourceUrl?: string;
+  apkSha256?: string;
+  resourceSha256?: string;
+  minShellCode?: number;
+  changelog?: string;
+  enabled?: number;
   [key: string]: unknown;
 }
 

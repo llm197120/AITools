@@ -20,6 +20,15 @@
           <a-button size="small" danger :disabled="uploading" @click="clearValue">删除</a-button>
         </div>
       </div>
+      <div v-else-if="mode === 'audio'" class="hmu-audio-preview">
+        <audio :src="value" controls class="hmu-audio" />
+        <div class="hmu-actions">
+          <a-upload name="file" :accept="accept" :show-upload-list="false" :disabled="uploading || disabled" :custom-request="handleCustomRequest">
+            <a-button size="small" :loading="uploading">更换</a-button>
+          </a-upload>
+          <a-button size="small" danger :disabled="uploading" @click="clearValue">删除</a-button>
+        </div>
+      </div>
       <div v-else class="hmu-file-preview">
         <Icon icon="ant-design:file-outlined" :size="28" color="#52c41a" />
         <div class="hmu-file-info">
@@ -55,7 +64,9 @@
                 ? 'ant-design:picture-outlined'
                 : mode === 'video'
                   ? 'ant-design:video-camera-outlined'
-                  : 'ant-design:cloud-upload-outlined'
+                  : mode === 'audio'
+                    ? 'ant-design:audio-outlined'
+                    : 'ant-design:cloud-upload-outlined'
             "
             :size="36"
             color="#a6adb4"
@@ -83,8 +94,8 @@
   const props = defineProps({
     /** 当前媒体地址 */
     value: { type: String, default: '' },
-    /** 上传模式：图片 / 视频 / 普通文件 */
-    mode: { type: String as PropType<'image' | 'video' | 'file'>, default: 'file' },
+    /** 上传模式：图片 / 视频 / 音频 / 普通文件 */
+    mode: { type: String as PropType<'image' | 'video' | 'audio' | 'file'>, default: 'file' },
     /** 上传接口地址 */
     uploadUrl: { type: String, required: true },
     /** 上传表单字段名 */
@@ -109,12 +120,14 @@
     if (props.accept) return props.accept;
     if (props.mode === 'image') return 'image/*';
     if (props.mode === 'video') return 'video/*';
+    if (props.mode === 'audio') return 'audio/*,.mp3,.wav,.m4a,.aac';
     return '';
   });
 
   const dropText = computed(() => {
     if (props.mode === 'image') return '点击或拖拽图片到此处上传';
     if (props.mode === 'video') return '点击或拖拽视频到此处上传';
+    if (props.mode === 'audio') return '点击或拖拽音频到此处上传';
     return '点击或拖拽文件到此处上传';
   });
 
@@ -152,6 +165,7 @@
       const res: any = await defHttp.uploadFile(
         {
           url: props.uploadUrl,
+          timeout: 120 * 1000,
           onUploadProgress: (e: ProgressEvent) => {
             if (e.total) {
               progress.value = Math.round((e.loaded / e.total) * 100);
@@ -251,6 +265,20 @@
         max-height: 240px;
         border-radius: 8px;
         background: #000;
+      }
+    }
+
+    .hmu-audio-preview {
+      .hmu-audio {
+        width: 100%;
+        margin: 8px 0;
+      }
+    }
+
+    .hmu-audio-preview {
+      .hmu-audio {
+        width: 100%;
+        margin: 8px 0;
       }
     }
 

@@ -40,6 +40,12 @@ const homeai: AppRouteModule = {
       component: () => import('/@/views/homeai/dashboard/crossStats.vue'),
       meta: { title: '综合统计', icon: 'ant-design:dashboard-outlined' },
     },
+    {
+      path: 'config/appVersion',
+      name: 'HomeaiAppVersion',
+      component: () => import('/@/views/homeai/config/appVersion.vue'),
+      meta: { title: 'APP版本', icon: 'ant-design:mobile-outlined' },
+    },
     // AI 管理（与设计文档 / 菜单 SQL 路径一致：/homeai/ai/*）
     {
       path: 'ai',

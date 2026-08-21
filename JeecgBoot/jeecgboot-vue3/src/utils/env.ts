@@ -20,10 +20,10 @@ export function getAppEnvConfig() {
 
   const global = getGlobal();
 
-  const ENV = (import.meta.env.DEV
-    ? // Get the global configuration (the configuration will be extracted independently when packaging)
-      (import.meta.env as unknown as GlobEnvConfig)
-    : global[ENV_NAME as any]) as unknown as GlobEnvConfig;
+  // build:docker:prod 会设 NODE_ENV=docker，Vite 仍把 DEV 当成 true，从而忽略 _app.config.js。
+  // 有运行时配置时优先用它（公网同域 /jeecg-boot），开发态没有该文件再回退 import.meta.env。
+  const runtime = global[ENV_NAME as any] as GlobEnvConfig | undefined;
+  const ENV = (runtime || (import.meta.env as unknown as GlobEnvConfig)) as unknown as GlobEnvConfig;
 
   const {
     VITE_GLOB_APP_TITLE,

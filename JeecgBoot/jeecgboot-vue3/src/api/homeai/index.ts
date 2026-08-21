@@ -1,5 +1,6 @@
 import { defHttp } from '/@/utils/http/axios';
 import type {
+  HomeaiAppVersion,
   HomeaiAuditLog,
   HomeaiBill,
   HomeaiCategory,
@@ -9,6 +10,7 @@ import type {
   HomeaiFamilyMember,
   HomeaiFamilyQuotaItem,
   HomeaiFileWhitelistItem,
+  HomeaiFilePreview,
   HomeaiLearnMaterial,
   HomeaiOfficeTemplate,
   HomeaiPageParams,
@@ -43,6 +45,8 @@ export const userApi = {
   /** 启用/禁用 */
   updateStatus: (id: string, status: string) =>
     defHttp.put({ url: `${BASE}/user/${id}/status`, params: { status } }, { joinParamsToUrl: true }),
+  /** 重置 App 登录密码为默认 123456 */
+  resetPassword: (id: string) => defHttp.put({ url: `${BASE}/user/${id}/resetPassword` }),
   /** 设置用户所属家庭（familyId 为空表示解除关联） */
   setFamily: (id: string, data: { familyId?: string; role?: string }) =>
     defHttp.put({ url: `${BASE}/user/${id}/family`, data }),
@@ -188,6 +192,7 @@ export const recipeApi = {
   exportXls: `${BASE}/recipe/exportXls`,
   exportTemplate: `${BASE}/recipe/exportTemplate`,
   importExcel: `${BASE}/recipe/importExcel`,
+  importCovers: `${BASE}/recipe/import-covers`,
   recycleBin: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/recipe/recycleBin`, params }),
   moveToRecycleBin: (ids: string[]) => defHttp.put({ url: `${BASE}/recipe/moveToRecycleBin`, data: ids }),
   restore: (ids: string[]) => defHttp.put({ url: `${BASE}/recipe/restore`, data: ids }),
@@ -225,6 +230,9 @@ export const learnApi = {
   uploadFile: (id: string) => `${BASE}/learn/materials/${id}/upload`,
   /** 新增前预上传文件 */
   uploadTemp: () => `${BASE}/learn/upload`,
+  preview: (id: string): Promise<HomeaiFilePreview> => defHttp.get({ url: `${BASE}/learn/materials/${id}/preview` }),
+  previewPdf: (id: string): Promise<HomeaiFilePreview> =>
+    defHttp.post({ url: `${BASE}/learn/materials/${id}/preview-pdf` }),
   /** 启用的学习分类（下拉） */
   categories: () => defHttp.get({ url: `${BASE}/learn/category/all` }),
   categoryList: (params?: HomeaiPageParams) => defHttp.get({ url: `${BASE}/learn/category/list`, params }),
@@ -254,6 +262,10 @@ export const configApi = {
   getPlanConfig: (): Promise<HomeaiPlanConfig> => defHttp.get({ url: `${BASE}/config/plan` }),
   updatePlanConfig: (data: Partial<HomeaiPlanConfig> | HomeaiPayload) =>
     defHttp.put({ url: `${BASE}/config/plan`, data }),
+  getAppVersion: (): Promise<HomeaiAppVersion> => defHttp.get({ url: `${BASE}/app/version/admin` }),
+  updateAppVersion: (data: Partial<HomeaiAppVersion> | HomeaiPayload) =>
+    defHttp.put({ url: `${BASE}/app/version/admin`, data }),
+  uploadAppPackage: `${BASE}/app/version/upload`,
 };
 
 /** 资料存储管理 API */
@@ -319,6 +331,9 @@ export const storageApi = {
     items?: { familyId: string; limitBytes: number | null }[];
     resetIds?: string[];
   }) => defHttp.put({ url: `${BASE}/config/storage/families/batch`, data }),
+  preview: (id: string): Promise<HomeaiFilePreview> => defHttp.get({ url: `${BASE}/storage/files/${id}/preview` }),
+  previewPdf: (id: string): Promise<HomeaiFilePreview> =>
+    defHttp.post({ url: `${BASE}/storage/files/${id}/preview-pdf` }),
 };
 
 /** 资料存储 Office 处理 API（格式转换/处理记录） */

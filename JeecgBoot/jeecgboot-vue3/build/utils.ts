@@ -57,8 +57,12 @@ function getConfFiles() {
     return ['.env', '.env.prod_electron'];
   }
 
-  const script = process.env.npm_lifecycle_script;
-  // 代码逻辑说明: 【QQYUN-8690】修正获取当前环境下的文件名
+  const script = process.env.npm_lifecycle_script || '';
+  // 优先跟 vite --mode（如 docker.prod），不要只用 NODE_ENV=docker，否则会读到 .env.docker 的内网地址
+  const modeMatch = /--mode\s+([a-z_.\d]+)/i.exec(script);
+  if (modeMatch) {
+    return ['.env', `.env.${modeMatch[1]}`];
+  }
   const reg = new RegExp('NODE_ENV=([a-z_\\d]+)');
   const result = reg.exec(script as string) as any;
   if (result) {

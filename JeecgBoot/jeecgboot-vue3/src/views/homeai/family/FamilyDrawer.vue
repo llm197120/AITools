@@ -51,8 +51,8 @@
     { label: '成员数量', field: 'memberCount' },
     {
       label: '状态',
-      field: 'delFlag',
-      render: (val: number) => (val === 1 ? '已解散' : '正常'),
+      field: 'status',
+      render: (val: string) => (val === 'disbanded' ? '已解散' : '正常'),
     },
     { label: '创建时间', field: 'createTime' },
     { label: '更新时间', field: 'updateTime' },

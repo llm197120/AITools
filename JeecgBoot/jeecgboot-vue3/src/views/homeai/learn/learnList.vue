@@ -32,6 +32,7 @@
       </template>
     </BasicTable>
     <LearnDrawer @register="registerDrawer" @success="handleSuccess" />
+    <HomeaiFilePreviewModal ref="previewModalRef" />
   </PageWrapper>
 </template>
 
@@ -44,6 +45,7 @@
   import { learnApi } from '/@/api/homeai';
   import type { HomeaiCategory, HomeaiLearnMaterial, HomeaiPageParams } from '/@/api/homeai';
   import LearnDrawer from './LearnDrawer.vue';
+  import HomeaiFilePreviewModal from '../components/HomeaiFilePreviewModal.vue';
   import { useUserLabel } from '../hooks/useUserLabel';
   import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
   import { downloadCsvTemplate } from '../utils/csvTemplate';
@@ -83,7 +85,7 @@
     useSearchForm: true,
     showTableSetting: true,
     showIndexColumn: true,
-    actionColumn: { width: 120, title: '操作', dataIndex: 'action', slots: { customRender: 'action' } },
+    actionColumn: { width: 160, title: '操作', dataIndex: 'action', slots: { customRender: 'action' } },
     formConfig: {
       labelWidth: 80,
       schemas: [
@@ -120,9 +122,16 @@
       ];
     }
     return [
+      { icon: 'ant-design:eye-outlined', onClick: () => openPreview(record), title: '预览' },
       { icon: 'ant-design:edit-outlined', onClick: () => openDrawer(true, { record, isUpdate: true }), title: '编辑' },
       { icon: 'ant-design:delete-outlined', onClick: () => handleMoveToRecycleBin(record), title: '移入回收站', color: 'error' },
     ];
+  }
+
+  const previewModalRef = ref<{ open: (src: { module: 'learn'; id: string; title?: string }) => void } | null>(null);
+  function openPreview(record: HomeaiLearnMaterial) {
+    if (!record.id) return;
+    previewModalRef.value?.open({ module: 'learn', id: record.id, title: record.title });
   }
 
   function handleAdd() {
@@ -130,7 +139,7 @@
   }
 
   function handleDownloadTemplate() {
-    downloadCsvTemplate(['标题', '类型(video/image/pdf/doc/xls/ppt/link/note)', '分类', '标签', '文件URL'], '学习资料导入模板.csv');
+    downloadCsvTemplate(['标题', '类型(video/audio/image/pdf/doc/xls/ppt/link/note)', '分类', '标签', '文件URL'], '学习资料导入模板.csv');
   }
 
   function handleSuccess() {

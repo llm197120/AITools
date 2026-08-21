@@ -20,6 +20,7 @@
     "typeRoots": ["./node_modules/@types/", "./types","./node_modules"],
     "noImplicitAny": false,
     "skipLibCheck": true,
+    "baseUrl": ".",
     "paths": {
       "@rys-fe/vite-plugin-theme/es/client": ["build/vite/plugin/theme-plugin/client/client.ts"],
       "@rys-fe/vite-plugin-theme/es/colorUtils": ["build/vite/plugin/theme-plugin/client/colorUtils.ts"],

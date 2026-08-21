@@ -60,6 +60,7 @@
   import type { HomeaiCategory, HomeaiRecipe, HomeaiRecipeStep } from '/@/api/homeai';
   import type { HomeaiRecipeIngredient } from '/@/api/homeai/types';
   import HomeaiMediaUpload from '/@/views/homeai/components/HomeaiMediaUpload.vue';
+  import { toFamilySelectOptions } from '../utils/activeFamily';
 
   const emit = defineEmits(['success']);
   const { createMessage } = useMessage();
@@ -98,8 +99,7 @@
   async function loadFamilyOptions() {
     try {
       const res: any = await familyApi.list({ pageNo: 1, pageSize: 500 });
-      const records = res?.records || res?.result?.records || [];
-      familyOptions.value = records.map((f: any) => ({ label: f.name, value: f.id }));
+      familyOptions.value = toFamilySelectOptions(res);
     } catch {
       familyOptions.value = [];
     }

@@ -49,6 +49,7 @@
   import { useMethods } from '/@/hooks/system/useMethods';
   import { useUserStore } from '/@/store/modules/user';
   import { userApi, familyApi } from '/@/api/homeai';
+import { toFamilySelectOptions } from '../utils/activeFamily';
   import type { HomeaiPageParams, HomeaiUser } from '/@/api/homeai';
   import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
   import UserDrawer from './UserDrawer.vue';
@@ -63,7 +64,7 @@
   async function loadFamilyOptions() {
     try {
       const res: any = await familyApi.list({ pageNo: 1, pageSize: 1000 });
-      familyOptions.value = (res?.records || res || []).map((f: any) => ({ label: f.name, value: f.id }));
+      familyOptions.value = toFamilySelectOptions(res);
     } catch {
       familyOptions.value = [];
     }
@@ -104,7 +105,7 @@
     showTableSetting: true,
     showIndexColumn: true,
     actionColumn: {
-      width: 200,
+      width: 240,
       title: '操作',
       dataIndex: 'action',
       slots: { customRender: 'action' },
@@ -157,6 +158,11 @@
         title: '编辑',
       },
       {
+        icon: 'ant-design:key-outlined',
+        onClick: () => handleResetPassword(record),
+        title: '重置密码',
+      },
+      {
         icon: record.status === '1' ? 'ant-design:stop-outlined' : 'ant-design:check-circle-outlined',
         onClick: () => handleToggleStatus(record),
         title: record.status === '1' ? '禁用' : '启用',
@@ -192,5 +198,21 @@
         reload();
       },
     });
+  }
+
+  async function handleResetPassword(record: HomeaiUser) {
+    createConfirm({
+      iconType: 'warning',
+      title: '重置密码',
+      content: `确定将用户「${record.nickname}」的密码重置为默认密码 123456 吗？重置后需重新登录。`,
+      onOk: async () => {
+        await userApi.resetPassword(record.id);
+        createMessage.success('密码已重置为 123456');
+      },
+    });
+  }
+
+  function handleSuccess() {
+    reload();
   }
 </script>
