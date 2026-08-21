@@ -20,14 +20,20 @@ import org.jeecg.modules.homeai.recipe.mapper.RecipeIngredientMapper;
 import org.jeecg.modules.homeai.recipe.mapper.RecipeMapper;
 import org.jeecg.modules.homeai.recipe.mapper.RecipeStepMapper;
 import org.jeecg.modules.homeai.recipe.service.IRecipeService;
+import org.jeecg.modules.homeai.recipe.util.InMemoryMultipartFile;
+import org.jeecg.modules.homeai.recipe.util.RecipeCoverMatch;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDate;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.time.Month;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -76,6 +82,9 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
         result.put("steps", getSteps(id));
         if (oConvertUtils.isNotEmpty(userId)) {
             result.put("isFavorited", isFavorited(userId, id));
+            //update-begin---author:cursor---date:2026-08-20---for:【审查修复】详情返回 canModify，对齐家庭可改---
+            result.put("canModify", canModifyRecipe(recipe, userId, familyId));
+            //update-end---author:cursor---date:2026-08-20---for:【审查修复】详情返回 canModify，对齐家庭可改---
         }
         return result;
     }
@@ -796,6 +805,174 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
     public String uploadCoverFile(MultipartFile file) {
         return saveGeneric(file, "/homeai/recipe/covers/", IMAGE_EXTENSIONS, MAX_IMAGE_SIZE, "封面图片");
     }
+
+    //update-begin---author:cursor---date:2026-08-21---for:【菜谱封面】单张/文件夹/zip 按文件名或父目录匹配导入---
+    private static final int MAX_COVER_IMPORT_FILES = 500;
+    private static final int MAX_ZIP_ENTRIES = 2000;
+    private static final long MAX_ZIP_UNCOMPRESSED = 80L * 1024 * 1024;
+
+    @Override
+    public Map<String, Object> importCovers(List<MultipartFile> files) {
+        List<Map<String, Object>> matched = new ArrayList<>();
+        List<String> unmatched = new ArrayList<>();
+        List<MultipartFile> expanded = new ArrayList<>();
+        if (files != null) {
+            for (MultipartFile f : files) {
+                if (f == null || f.isEmpty()) {
+                    continue;
+                }
+                String original = f.getOriginalFilename();
+                if (RecipeCoverMatch.isZip(original)) {
+                    try {
+                        expanded.addAll(expandZipImages(f, unmatched));
+                    } catch (Exception ex) {
+                        log.warn("封面 zip 展开失败: {}", original, ex);
+                        unmatched.add((original == null ? "zip" : original) + "（解压失败）");
+                    }
+                } else {
+                    expanded.add(f);
+                }
+            }
+        }
+        if (expanded.size() > MAX_COVER_IMPORT_FILES) {
+            throw new JeecgBootException("单次最多导入 " + MAX_COVER_IMPORT_FILES + " 张图片，请拆分后重试");
+        }
+        if (expanded.isEmpty()) {
+            Map<String, Object> empty = new LinkedHashMap<>();
+            empty.put("matched", matched);
+            empty.put("unmatched", unmatched.isEmpty() ? List.of("未识别到有效图片文件") : unmatched);
+            return empty;
+        }
+
+        List<Recipe> nameRows = list(new LambdaQueryWrapper<Recipe>()
+                .select(Recipe::getId, Recipe::getName)
+                .eq(Recipe::getDelFlag, 0)
+                .isNotNull(Recipe::getName));
+        Map<String, String> nameIndex = new LinkedHashMap<>();
+        for (Recipe r : nameRows) {
+            if (r == null || oConvertUtils.isEmpty(r.getName())) {
+                continue;
+            }
+            nameIndex.putIfAbsent(RecipeCoverMatch.normalize(r.getName()), r.getName());
+        }
+
+        Map<String, MultipartFile> bestFile = new LinkedHashMap<>();
+        Map<String, Integer> bestScore = new HashMap<>();
+        for (MultipartFile f : expanded) {
+            String original = f.getOriginalFilename();
+            if (RecipeCoverMatch.isIgnoredPath(original) || !RecipeCoverMatch.isImage(original)) {
+                unmatched.add(displayName(original) + "（非图片）");
+                continue;
+            }
+            String recipeName = RecipeCoverMatch.matchRecipeName(original, nameIndex);
+            if (recipeName == null) {
+                unmatched.add(displayName(original));
+                continue;
+            }
+            int score = RecipeCoverMatch.coverScore(original, recipeName);
+            Integer prev = bestScore.get(recipeName);
+            if (prev == null || score > prev) {
+                bestScore.put(recipeName, score);
+                bestFile.put(recipeName, f);
+            }
+        }
+
+        if (!bestFile.isEmpty()) {
+            List<Recipe> recipes = list(new LambdaQueryWrapper<Recipe>()
+                    .in(Recipe::getName, bestFile.keySet())
+                    .eq(Recipe::getDelFlag, 0));
+            Map<String, List<Recipe>> byName = recipes.stream().collect(Collectors.groupingBy(Recipe::getName));
+            for (Map.Entry<String, MultipartFile> e : bestFile.entrySet()) {
+                List<Recipe> hit = byName.get(e.getKey());
+                if (hit == null || hit.isEmpty()) {
+                    unmatched.add(displayName(e.getValue().getOriginalFilename()));
+                    continue;
+                }
+                try {
+                    String coverUrl = fileStorageService.resolveAccessUrl(uploadCoverFile(e.getValue()));
+                    for (Recipe r : hit) {
+                        r.setCoverUrl(coverUrl);
+                        updateById(r);
+                    }
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("fileName", displayName(e.getValue().getOriginalFilename()));
+                    row.put("recipeName", e.getKey());
+                    row.put("count", hit.size());
+                    row.put("coverUrl", coverUrl);
+                    matched.add(row);
+                } catch (Exception ex) {
+                    log.warn("封面导入失败: {}", e.getValue().getOriginalFilename(), ex);
+                    unmatched.add(displayName(e.getValue().getOriginalFilename()) + "（上传失败）");
+                }
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("matched", matched);
+        result.put("unmatched", unmatched);
+        return result;
+    }
+
+    private List<MultipartFile> expandZipImages(MultipartFile zipFile, List<String> unmatched) throws IOException {
+        if (zipFile.getSize() > MAX_IMAGE_SIZE) {
+            throw new JeecgBootException("压缩包大小不能超过 10MB，较大目录请直接选择文件夹");
+        }
+        HomeaiFileMagicUtil.validate(zipFile, "zip");
+        List<MultipartFile> images = new ArrayList<>();
+        long uncompressed = 0;
+        int entries = 0;
+        try (InputStream in = zipFile.getInputStream(); ZipInputStream zis = new ZipInputStream(in)) {
+            ZipEntry entry;
+            byte[] buf = new byte[8192];
+            while ((entry = zis.getNextEntry()) != null) {
+                entries++;
+                if (entries > MAX_ZIP_ENTRIES) {
+                    throw new JeecgBootException("压缩包内文件过多");
+                }
+                String name = entry.getName();
+                if (entry.isDirectory() || RecipeCoverMatch.isIgnoredPath(name)) {
+                    continue;
+                }
+                String path = RecipeCoverMatch.originalPath(name);
+                if (path.contains("..")) {
+                    throw new JeecgBootException("压缩包路径不合法");
+                }
+                if (!RecipeCoverMatch.isImage(path)) {
+                    continue;
+                }
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                int n;
+                boolean skip = false;
+                while ((n = zis.read(buf)) > 0) {
+                    uncompressed += n;
+                    if (uncompressed > MAX_ZIP_UNCOMPRESSED) {
+                        throw new JeecgBootException("压缩包解压后过大");
+                    }
+                    if (out.size() + n > MAX_IMAGE_SIZE) {
+                        unmatched.add(displayName(path) + "（超过 10MB）");
+                        skip = true;
+                        break;
+                    }
+                    out.write(buf, 0, n);
+                }
+                if (skip || out.size() == 0) {
+                    continue;
+                }
+                String ext = RecipeCoverMatch.extension(path);
+                images.add(new InMemoryMultipartFile(path, "image/" + ("jpg".equals(ext) ? "jpeg" : ext), out.toByteArray()));
+            }
+        }
+        if (images.isEmpty()) {
+            unmatched.add(displayName(zipFile.getOriginalFilename()) + "（压缩包内无图片）");
+        }
+        return images;
+    }
+
+    private String displayName(String originalFilename) {
+        String path = RecipeCoverMatch.originalPath(originalFilename);
+        return oConvertUtils.isEmpty(path) ? "未命名" : path;
+    }
+    //update-end---author:cursor---date:2026-08-21---for:【菜谱封面】单张/文件夹/zip 按文件名或父目录匹配导入---
 
     @Override
     public String uploadVideoFile(MultipartFile file) {

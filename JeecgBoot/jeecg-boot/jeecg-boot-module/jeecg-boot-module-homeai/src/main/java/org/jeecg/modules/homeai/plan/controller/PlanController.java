@@ -15,7 +15,6 @@ import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.oConvertUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
-import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.audit.service.IHomeaiAuditLogService;
 import org.jeecg.modules.homeai.plan.entity.PlanCategory;
 import org.jeecg.modules.homeai.plan.entity.PlanMaster;
@@ -25,7 +24,6 @@ import org.jeecg.modules.homeai.plan.service.IPlanCategoryService;
 import org.jeecg.modules.homeai.plan.service.IPlanService;
 import org.jeecg.modules.homeai.recipe.entity.Recipe;
 import org.jeecg.modules.homeai.recipe.service.IRecipeService;
-import org.jeecg.modules.homeai.user.service.IWxUserService;
 import org.jeecgframework.poi.excel.ExcelImportUtil;
 import org.jeecgframework.poi.excel.def.NormalExcelConstants;
 import org.jeecgframework.poi.excel.entity.ExportParams;
@@ -51,9 +49,6 @@ public class PlanController {
     private IPlanService planService;
 
     @Autowired
-    private IWxUserService wxUserService;
-
-    @Autowired
     private PlanMasterMapper planMasterMapper;
 
     @Autowired
@@ -73,35 +68,13 @@ public class PlanController {
     private static final String ACTION_PLAN_ROLL_FORWARD = "plan_repeat_roll_forward";
 
     private String getUserId(HttpServletRequest r) {
-        // 优先从Shiro认证获取（管理端）
-        try {
-            if (SecurityUtils.getSubject() != null && SecurityUtils.getSubject().isAuthenticated()) {
-                Object principal = SecurityUtils.getSubject().getPrincipal();
-                if (principal instanceof LoginUser) {
-                    return ((LoginUser) principal).getId();
-                }
-                return principal != null ? principal.toString() : null;
-            }
-        } catch (Exception ignored) {}
-        // 回退到HomeaiJWT认证（小程序端）
-        String t = r.getHeader("X-Access-Token");
-        String o = HomeaiJwtUtil.getOpenid(t);
-        if (o == null) return null;
-        var u = wxUserService.getByOpenid(o);
-        return u != null ? u.getId() : null;
+        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
+        return securityUtil.getCurrentUserId(r);
+        //update-end---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
     }
 
     private String getOperatorId(HttpServletRequest r) {
-        try {
-            if (SecurityUtils.getSubject() != null && SecurityUtils.getSubject().isAuthenticated()) {
-                Object principal = SecurityUtils.getSubject().getPrincipal();
-                if (principal instanceof LoginUser) {
-                    return ((LoginUser) principal).getId();
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return getUserId(r);
+        return securityUtil.getCurrentUserId(r);
     }
 
     private String clientIp(HttpServletRequest r) {
@@ -169,6 +142,49 @@ public class PlanController {
         }
         return Result.OK("OK");
     }
+
+    //update-begin---author:cursor---date:2026-08-20---for:【Android体验】APP 计划详情/编辑/删除（勿走管理端 PUT /{id}）---
+    /** APP：计划实例详情（含详细内容） */
+    @GetMapping("/instance/{id}")
+    public Result<?> instanceDetail(@PathVariable String id, HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        try {
+            PlanInstance inst = planService.getOwnedInstanceDetail(uid, id);
+            if (inst == null) {
+                return Result.error("计划不存在");
+            }
+            return Result.OK(inst);
+        } catch (org.jeecg.common.exception.JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** APP：更新自己的主计划 */
+    @PutMapping("/instance/{id}")
+    public Result<?> updateOwned(@PathVariable String id, @RequestBody PlanMaster plan, HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        try {
+            return Result.OK(planService.updateOwnedPlan(uid, id, plan));
+        } catch (org.jeecg.common.exception.JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** APP：软删除自己的主计划 */
+    @DeleteMapping("/instance/{id}")
+    public Result<?> deleteOwned(@PathVariable String id, HttpServletRequest r) {
+        String uid = getUserId(r);
+        if (uid == null) return Result.error("未登录");
+        try {
+            planService.softDeleteOwnedPlan(uid, id);
+            return Result.OK("已删除");
+        } catch (org.jeecg.common.exception.JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+    //update-end---author:cursor---date:2026-08-20---for:【Android体验】APP 计划详情/编辑/删除（勿走管理端 PUT /{id}）---
 
     /** 管理端分页 */
     @GetMapping("/list")

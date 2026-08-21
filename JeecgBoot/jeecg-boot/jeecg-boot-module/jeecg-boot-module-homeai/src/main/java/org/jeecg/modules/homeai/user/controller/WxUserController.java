@@ -11,12 +11,14 @@ import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.jeecg.common.api.vo.Result;
 import org.jeecg.common.aspect.annotation.AutoLog;
-import org.jeecg.common.constant.CommonConstant;
+import org.jeecg.common.constant.PasswordConstant;
 import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.oConvertUtils;
 import io.swagger.v3.oas.annotations.Operation;
-import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
+import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
+import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
+import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.family.entity.Family;
 import org.jeecg.modules.homeai.family.entity.FamilyMember;
 import org.jeecg.modules.homeai.family.service.IFamilyMemberService;
@@ -37,6 +39,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
 import org.springframework.web.servlet.ModelAndView;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -59,6 +62,12 @@ public class WxUserController {
 
     @Autowired
     private IFamilyMemberService familyMemberService;
+
+    @Autowired
+    private HomeaiSecurityUtil securityUtil;
+
+    @Autowired
+    private IHomeaiFileStorageService fileStorageService;
 
     /**
      * 微信登录（code 换 JWT）
@@ -88,21 +97,138 @@ public class WxUserController {
 
     /**
      * 获取当前用户信息
-     * 从请求头 X-Access-Token 解析用户
+     * 优先按 JWT userId 解析（手机号登录），兼容旧微信 openid token
      */
     @GetMapping("/info")
     public Result<?> getInfo(HttpServletRequest request) {
-        String token = request.getHeader("X-Access-Token");
-        if (token == null || token.isEmpty()) {
+        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】按 userId 取当前用户并剔除密码盐-----------
+        WxUser user = securityUtil.getWxUser(request);
+        if (user == null) {
             return Result.error("未登录");
         }
-        String openid = HomeaiJwtUtil.getOpenid(token);
-        if (openid == null) {
-            return Result.error("Token 无效");
+        sanitizeUser(user);
+        return Result.OK(user);
+        //update-end---author:cursor---date:2026-08-20---for:【Android体验】按 userId 取当前用户并剔除密码盐-----------
+    }
+
+    //update-begin---author:cursor---date:2026-08-20---for:【Android体验】APP 修改昵称/头像-----------
+    /**
+     * 当前用户修改昵称/头像（APP；路径第一段为 info，不进管理端拦截）
+     */
+    @PutMapping("/info")
+    @Operation(summary = "当前用户-修改资料")
+    public Result<?> updateInfo(@RequestBody Map<String, String> body, HttpServletRequest request) {
+        WxUser user = securityUtil.getWxUser(request);
+        if (user == null) {
+            return Result.error("未登录");
         }
-        WxUser user = wxUserService.getByOpenid(openid);
+        if (body == null) {
+            return Result.error("请求参数为空");
+        }
+        String nickname = body.get("nickname");
+        if (nickname != null) {
+            nickname = nickname.trim();
+            if (nickname.isEmpty()) {
+                return Result.error("请输入昵称");
+            }
+            if (nickname.length() > 20) {
+                return Result.error("昵称最多 20 字");
+            }
+            user.setNickname(nickname);
+        }
+        if (body.containsKey("avatarUrl")) {
+            String avatarUrl = body.get("avatarUrl");
+            if (oConvertUtils.isEmpty(avatarUrl)) {
+                user.setAvatarUrl(null);
+            } else {
+                user.setAvatarUrl(fileStorageService.normalizeStoredReference(avatarUrl));
+            }
+        }
+        wxUserService.updateById(user);
+        sanitizeUser(user);
         return Result.OK(user);
     }
+
+    /**
+     * 当前用户上传头像（multipart，白名单 + 魔数校验）
+     */
+    @PostMapping("/info/avatar")
+    @Operation(summary = "当前用户-上传头像")
+    public Result<?> uploadAvatar(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
+        WxUser user = securityUtil.getWxUser(request);
+        if (user == null) {
+            return Result.error("未登录");
+        }
+        if (file == null || file.isEmpty()) {
+            return Result.error("请选择要上传的文件");
+        }
+        long maxSize = 2L * 1024 * 1024;
+        if (file.getSize() > maxSize) {
+            return Result.error("头像大小不能超过 2MB");
+        }
+        String ext = sanitizeExtension(file);
+        Set<String> allowed = new HashSet<>(Arrays.asList("jpg", "jpeg", "png", "webp"));
+        if (oConvertUtils.isEmpty(ext) || !allowed.contains(ext)) {
+            return Result.error("不支持的头像格式，仅支持 jpg/jpeg/png/webp");
+        }
+        try {
+            HomeaiFileMagicUtil.validate(file, ext);
+        } catch (IOException e) {
+            return Result.error(e.getMessage());
+        }
+        String fileName = System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8) + "." + ext;
+        String objectKey = "homeai/avatar/" + user.getId() + "/" + fileName;
+        String stored = fileStorageService.storeMultipart(file, objectKey);
+        String oldAvatar = user.getAvatarUrl();
+        user.setAvatarUrl(stored);
+        wxUserService.updateById(user);
+        if (oConvertUtils.isNotEmpty(oldAvatar)) {
+            try {
+                fileStorageService.deleteIfExists(oldAvatar);
+            } catch (Exception e) {
+                log.warn("删除旧头像失败: {}", e.getMessage());
+            }
+        }
+        return Result.OK(fileStorageService.resolveAccessUrl(stored));
+    }
+
+    private void sanitizeUser(WxUser user) {
+        if (user == null) {
+            return;
+        }
+        user.setPassword(null);
+        user.setSalt(null);
+        if (oConvertUtils.isNotEmpty(user.getAvatarUrl())) {
+            user.setAvatarUrl(fileStorageService.resolveAccessUrl(user.getAvatarUrl()));
+        }
+    }
+
+    private String sanitizeExtension(MultipartFile file) {
+        String original = file.getOriginalFilename();
+        String ext = original == null ? "" : original.substring(original.lastIndexOf('.') + 1);
+        ext = ext.replaceAll("[^a-zA-Z0-9]", "").toLowerCase();
+        return ext.length() > 8 ? ext.substring(0, 8) : ext;
+    }
+    //update-end---author:cursor---date:2026-08-20---for:【Android体验】APP 修改昵称/头像-----------
+
+    //update-begin---author:cursor---date:2026-08-20---for:【安全】管理端接口不返回密码哈希---
+    private void hideCredentials(WxUser user) {
+        if (user == null) {
+            return;
+        }
+        user.setPassword(null);
+        user.setSalt(null);
+    }
+
+    private void hideCredentials(List<WxUser> users) {
+        if (users == null || users.isEmpty()) {
+            return;
+        }
+        for (WxUser user : users) {
+            hideCredentials(user);
+        }
+    }
+    //update-end---author:cursor---date:2026-08-20---for:【安全】管理端接口不返回密码哈希---
 
     /**
      * 用户列表（管理端）
@@ -118,6 +244,9 @@ public class WxUserController {
         Page<WxUser> page = new Page<>(pageNo, pageSize);
         IPage<WxUser> pageList = wxUserService.page(page, queryWrapper);
         fillFamilyName(pageList.getRecords());
+        //update-begin---author:cursor---date:2026-08-20---for:【安全】管理端用户列表不返回密码哈希---
+        hideCredentials(pageList.getRecords());
+        //update-end---author:cursor---date:2026-08-20---for:【安全】管理端用户列表不返回密码哈希---
         return Result.OK(pageList);
     }
 
@@ -156,6 +285,9 @@ public class WxUserController {
     @RequiresPermissions("homeai:user:list")
     public Result<?> getById(@PathVariable String id) {
         WxUser user = wxUserService.getById(id);
+        //update-begin---author:cursor---date:2026-08-20---for:【安全】管理端用户详情不返回密码哈希---
+        hideCredentials(user);
+        //update-end---author:cursor---date:2026-08-20---for:【安全】管理端用户详情不返回密码哈希---
         return Result.OK(user);
     }
 
@@ -170,6 +302,10 @@ public class WxUserController {
         wxUser.setId(id);
         // 家庭关联不在此处处理，由专属接口 /{id}/family 维护，避免编辑其他字段时误操作
         wxUser.setFamilyId(null);
+        //update-begin---author:cursor---date:2026-08-20---for:【安全】管理端编辑忽略密码字段，避免误覆盖---
+        wxUser.setPassword(null);
+        wxUser.setSalt(null);
+        //update-end---author:cursor---date:2026-08-20---for:【安全】管理端编辑忽略密码字段，避免误覆盖---
         wxUserService.updateById(wxUser);
         return Result.OK("编辑成功");
     }
@@ -251,6 +387,29 @@ public class WxUserController {
         return Result.OK("操作成功");
     }
 
+    //update-begin---author:cursor---date:2026-08-21---for:【后台新增用户】管理端重置 App 登录密码为 123456---
+    /**
+     * 重置 App 登录密码为默认密码 123456（管理端）
+     */
+    @PutMapping("/{id}/resetPassword")
+    @AutoLog(value = "微信用户-重置密码")
+    @Operation(summary = "微信用户-重置密码为默认密码")
+    @RequiresPermissions("homeai:user:edit")
+    public Result<?> resetPassword(@PathVariable String id) {
+        WxUser user = wxUserService.getById(id);
+        if (user == null) {
+            return Result.error("用户不存在");
+        }
+        wxUserService.applyPassword(user, PasswordConstant.DEFAULT_PASSWORD);
+        if (oConvertUtils.isEmpty(user.getLoginType())) {
+            user.setLoginType("phone");
+        }
+        wxUserService.updateById(user);
+        securityUtil.invalidateWxUserTokens(user);
+        return Result.OK("密码已重置为默认密码 123456");
+    }
+    //update-end---author:cursor---date:2026-08-21---for:【后台新增用户】管理端重置 App 登录密码为 123456---
+
     //update-begin---author:admin ---date:2026-07-30  for：用户管理-新增/导入/导出/回收站功能-----------
     /**
      * 新增用户（管理端）
@@ -260,17 +419,29 @@ public class WxUserController {
     @Operation(summary="微信用户-新增")
     @RequiresPermissions("homeai:user:add")
     public Result<?> add(@RequestBody WxUser wxUser) {
+        //update-begin---author:cursor---date:2026-08-21---for:【后台新增用户】校验手机号并写入默认密码+salt---
+        if (oConvertUtils.isEmpty(wxUser.getPhone()) || !wxUser.getPhone().matches("^1[3-9]\\d{9}$")) {
+            return Result.error("手机号格式不正确");
+        }
+        if (wxUserService.getByPhone(wxUser.getPhone()) != null) {
+            return Result.error("该手机号已注册");
+        }
         wxUser.setDelFlag(0);
         if (wxUser.getStatus() == null) {
             wxUser.setStatus("1");
         }
+        // 忽略前端传入的密码/盐，统一由服务端写入默认密码 123456
+        wxUser.setPassword(null);
+        wxUser.setSalt(null);
+        wxUserService.prepareAdminCreatedUser(wxUser);
+        //update-end---author:cursor---date:2026-08-21---for:【后台新增用户】校验手机号并写入默认密码+salt---
         boolean saved = wxUserService.save(wxUser);
         if (!saved) {
             return Result.error("新增失败，请检查用户数据是否完整");
         }
         // 同步用户-家庭关联
         syncUserFamily(wxUser.getId(), wxUser.getFamilyId(), wxUser.getFamilyRoleType());
-        return Result.OK("新增成功");
+        return Result.OK("新增成功，默认密码 123456");
     }
 
     /**
@@ -349,6 +520,17 @@ public class WxUserController {
                     List<WxUser> list = ExcelImportUtil.importExcel(file.getInputStream(), WxUser.class, params);
                     for (WxUser item : list) {
                         try {
+                            //update-begin---author:cursor---date:2026-08-21---for:【后台新增用户】Excel 导入同样写入默认密码+salt---
+                            if (oConvertUtils.isEmpty(item.getPhone()) || !item.getPhone().matches("^1[3-9]\\d{9}$")) {
+                                throw new IllegalArgumentException("手机号格式不正确");
+                            }
+                            if (wxUserService.getByPhone(item.getPhone()) != null) {
+                                throw new IllegalArgumentException("该手机号已注册");
+                            }
+                            item.setPassword(null);
+                            item.setSalt(null);
+                            wxUserService.prepareAdminCreatedUser(item);
+                            //update-end---author:cursor---date:2026-08-21---for:【后台新增用户】Excel 导入同样写入默认密码+salt---
                             wxUserService.save(item);
                             successLines++;
                         } catch (Exception e) {
@@ -380,6 +562,9 @@ public class WxUserController {
                                 HttpServletRequest req) {
         // 原生SQL分页查询回收站，避免逻辑删除自动追加 del_flag=0 导致查不到数据
         IPage<WxUser> pageList = wxUserMapper.selectRecycleBinPage(new Page<>(pageNo, pageSize), wxUser.getNickname(), wxUser.getPhone());
+        //update-begin---author:cursor---date:2026-08-20---for:【安全】回收站列表不返回密码哈希---
+        hideCredentials(pageList.getRecords());
+        //update-end---author:cursor---date:2026-08-20---for:【安全】回收站列表不返回密码哈希---
         return Result.OK(pageList);
     }
 

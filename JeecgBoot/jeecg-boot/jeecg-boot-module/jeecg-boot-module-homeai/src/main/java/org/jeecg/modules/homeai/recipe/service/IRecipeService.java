@@ -96,6 +96,14 @@ public interface IRecipeService extends IService<Recipe> {
     String uploadStepImage(MultipartFile file);
     /** 通用上传封面图片，返回图片地址（不绑定菜谱） */
     String uploadCoverFile(MultipartFile file);
+
+    //update-begin---author:cursor---date:2026-08-21---for:【菜谱封面】单张/文件夹/zip 按文件名或父目录匹配导入---
+    /**
+     * 批量导入封面。按文件名或父目录名匹配菜谱名称；zip 会展开后同样匹配。
+     * 返回 { matched: [...], unmatched: [...] }
+     */
+    Map<String, Object> importCovers(List<MultipartFile> files);
+    //update-end---author:cursor---date:2026-08-21---for:【菜谱封面】单张/文件夹/zip 按文件名或父目录匹配导入---
     /** 通用上传做菜视频，返回视频地址（不绑定菜谱） */
     String uploadVideoFile(MultipartFile file);
 

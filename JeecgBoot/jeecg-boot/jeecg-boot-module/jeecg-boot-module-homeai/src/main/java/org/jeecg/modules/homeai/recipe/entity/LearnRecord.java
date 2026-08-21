@@ -18,6 +18,11 @@ public class LearnRecord implements Serializable {
     private String id;
     private String userId;
     private String materialId;
+    //update-begin---author:cursor---date:2026-08-20---for:【Android体验】旧库 study_date 无默认值，insert 必须写入---
+    @TableField("study_date")
+    @Schema(description = "学习日期")
+    private Date studyDate;
+    //update-end---author:cursor---date:2026-08-20---for:【Android体验】旧库 study_date 无默认值，insert 必须写入---
     private Date startTime;
     private Date endTime;
     private Integer duration;

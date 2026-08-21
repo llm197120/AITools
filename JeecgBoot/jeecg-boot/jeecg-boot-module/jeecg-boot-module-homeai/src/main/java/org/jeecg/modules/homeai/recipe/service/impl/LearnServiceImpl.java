@@ -5,7 +5,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
+import org.jeecg.modules.homeai.config.HomeaiUploadLimitService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
+import org.jeecg.modules.homeai.config.service.IHomeaiFileWhitelistService;
 import org.jeecg.modules.homeai.learn.entity.LearnCategory;
 import org.jeecg.modules.homeai.learn.service.ILearnCategoryService;
 import org.jeecg.modules.homeai.recipe.entity.*;
@@ -14,6 +16,8 @@ import org.jeecg.modules.homeai.recipe.mapper.LearnRecordMapper;
 import org.jeecg.modules.homeai.user.entity.WxUser;
 import org.jeecg.modules.homeai.user.mapper.WxUserMapper;
 import org.jeecg.modules.homeai.recipe.service.ILearnService;
+import org.jeecg.modules.homeai.learn.util.LearnMaterialAccess;
+import org.jeecg.modules.homeai.learn.util.LearnRecordAssembler;
 import org.jeecg.common.util.RedisUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -33,6 +37,10 @@ public class LearnServiceImpl extends ServiceImpl<LearnMaterialMapper, LearnMate
     @Autowired private WxUserMapper wxUserMapper;
     @Autowired private RedisUtil redisUtil;
     @Autowired private IHomeaiFileStorageService fileStorageService;
+    //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】学习上传白名单与单文件上限-----------
+    @Autowired private IHomeaiFileWhitelistService whitelistService;
+    @Autowired private HomeaiUploadLimitService uploadLimitService;
+    //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】学习上传白名单与单文件上限-----------
     //update-begin---author:copilot ---date:2026-08-12 for：【第15轮】学习按分类统计-----------
     @Autowired private ILearnCategoryService learnCategoryService;
     //update-end---author:copilot ---date:2026-08-12 for：【第15轮】学习按分类统计-----------
@@ -47,28 +55,33 @@ public class LearnServiceImpl extends ServiceImpl<LearnMaterialMapper, LearnMate
         return String.format(LEARN_SESSION_KEY, userId, materialId);
     }
 
+    //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
+    private void assertCanUseMaterial(String userId, String materialId) {
+        LearnMaterialAccess.assertCanUse(getById(materialId), userId);
+    }
+    //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
+
     @Override
     public void startLearn(String userId, String materialId) {
+        //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
+        assertCanUseMaterial(userId, materialId);
+        //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
         redisUtil.set(sessionKey(userId, materialId), System.currentTimeMillis(), LEARN_SESSION_TTL);
         redisUtil.set(String.format(LEARN_ACTIVE_USER_KEY, userId), materialId, LEARN_SESSION_TTL);
     }
 
     @Override
     public LearnRecord stopLearn(String userId, String materialId) {
+        //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
+        assertCanUseMaterial(userId, materialId);
+        //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
         Object raw = redisUtil.get(sessionKey(userId, materialId));
         redisUtil.del(sessionKey(userId, materialId));
         redisUtil.del(String.format(LEARN_ACTIVE_USER_KEY, userId));
-        Date start = raw != null ? new Date(Long.parseLong(raw.toString())) : null;
-        Date end = new Date();
-        int duration = start != null ? (int) ((end.getTime() - start.getTime()) / 1000) : 0;
-        LearnRecord rec = new LearnRecord();
-        rec.setUserId(userId);
-        rec.setMaterialId(materialId);
-        rec.setStartTime(start);
-        rec.setEndTime(end);
-        rec.setDuration(duration);
-        rec.setMode("timer");
-        rec.setCreateTime(end);
+        Long startMs = raw != null ? Long.parseLong(raw.toString()) : null;
+        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】结束学习统一写入 study_date---
+        LearnRecord rec = LearnRecordAssembler.fromTimerSession(userId, materialId, startMs, new Date());
+        //update-end---author:cursor---date:2026-08-20---for:【Android体验】结束学习统一写入 study_date---
         recordMapper.insert(rec);
         redisUtil.del(String.format(CACHE_LEARN_STATS, userId));
         return rec;
@@ -123,12 +136,18 @@ public class LearnServiceImpl extends ServiceImpl<LearnMaterialMapper, LearnMate
 
     @Override
     public LearnRecord addRecord(String userId, String materialId, int duration, String recordType) {
+        //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
+        assertCanUseMaterial(userId, materialId);
+        //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
         LearnRecord rec = new LearnRecord();
         rec.setUserId(userId);
         rec.setMaterialId(materialId);
         rec.setDuration(duration);
         rec.setMode(recordType != null && !recordType.isEmpty() ? recordType : "timer");
         rec.setCreateTime(new Date());
+        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】写入 study_date 避免旧库无默认值插入失败---
+        rec.setStudyDate(java.sql.Date.valueOf(LocalDate.now()));
+        //update-end---author:cursor---date:2026-08-20---for:【Android体验】写入 study_date 避免旧库无默认值插入失败---
         recordMapper.insert(rec);
         redisUtil.del(String.format(CACHE_LEARN_STATS, userId));
         return rec;
@@ -399,22 +418,25 @@ public class LearnServiceImpl extends ServiceImpl<LearnMaterialMapper, LearnMate
         LocalDate start = LocalDate.parse(yearMonth + "-01");
         LocalDate end = start.plusMonths(1);
         LambdaQueryWrapper<LearnRecord> q = new LambdaQueryWrapper<>();
-        q.eq(LearnRecord::getUserId, userId).orderByAsc(LearnRecord::getCreateTime);
+        //update-begin---author:cursor---date:2026-08-20---for:【审查修复】学习日历按月用 study_date 查库---
+        q.eq(LearnRecord::getUserId, userId)
+                .ge(LearnRecord::getStudyDate, java.sql.Date.valueOf(start))
+                .lt(LearnRecord::getStudyDate, java.sql.Date.valueOf(end))
+                .orderByAsc(LearnRecord::getStudyDate);
         List<LearnRecord> records = recordMapper.selectList(q);
         java.util.TreeSet<String> dates = new java.util.TreeSet<>();
         for (LearnRecord r : records) {
-            if (r.getCreateTime() == null) continue;
-            LocalDate d = r.getCreateTime().toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
-            if (!d.isBefore(start) && d.isBefore(end)) {
-                dates.add(d.toString());
-            }
+            if (r.getStudyDate() == null) continue;
+            dates.add(new java.sql.Date(r.getStudyDate().getTime()).toLocalDate().toString());
         }
+        //update-end---author:cursor---date:2026-08-20---for:【审查修复】学习日历按月用 study_date 查库---
         return new ArrayList<>(dates);
     }
 
     /** 资料类型与允许的文件扩展名 */
     private static final Map<String, Set<String>> TYPE_EXTENSIONS = Map.of(
-            "video", Set.of("mp4", "avi", "mov", "webm", "mkv", "flv", "wmv"),
+            "video", Set.of("mp4", "avi", "mov", "webm", "mkv"),
+            "audio", Set.of("mp3", "wav", "m4a", "aac"),
             "image", Set.of("jpg", "jpeg", "png", "gif", "webp", "bmp"),
             "pdf", Set.of("pdf"),
             "doc", Set.of("doc", "docx"),
@@ -464,6 +486,12 @@ public class LearnServiceImpl extends ServiceImpl<LearnMaterialMapper, LearnMate
             throw new JeecgBootException("文件格式与资料类型不匹配，" + type + " 类型允许: "
                     + allowed.stream().sorted().collect(Collectors.joining(", ")));
         }
+        //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】学习上传对齐白名单与单文件上限-----------
+        if (!whitelistService.isAllowedExtension(ext)) {
+            throw new JeecgBootException("不支持上传该文件类型");
+        }
+        uploadLimitService.assertAllowed(ext, file.getSize());
+        //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】学习上传对齐白名单与单文件上限-----------
         try {
             HomeaiFileMagicUtil.validate(file, ext);
         } catch (IOException e) {

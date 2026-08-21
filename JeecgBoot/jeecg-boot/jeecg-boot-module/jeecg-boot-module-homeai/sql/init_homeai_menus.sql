@@ -37,6 +37,12 @@ VALUES ('homeai_menu_family', 'homeai_menu_root', '家庭管理', '/homeai/famil
 INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `icon`, `sort_no`, `status`, `del_flag`, `create_time`)
 VALUES ('homeai_menu_dashboard', 'homeai_menu_root', '综合统计', '/homeai/dashboard/crossStats', '/views/homeai/dashboard/crossStats', 1, 'homeai:dashboard:view', 1, 'ant-design:dashboard-outlined', 2.5, 1, 0, NOW());
 
+INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `icon`, `sort_no`, `status`, `del_flag`, `create_time`)
+VALUES ('homeai_menu_app_version', 'homeai_menu_root', 'APP版本', '/homeai/config/appVersion', '/views/homeai/config/appVersion', 1, 'homeai:app:version:edit', 1, 'ant-design:mobile-outlined', 2.6, 1, 0, NOW());
+
+INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `sort_no`, `status`, `del_flag`, `create_time`)
+VALUES ('homeai_btn_app_version_edit', 'homeai_menu_app_version', '保存配置', NULL, NULL, 0, 'homeai:app:version:edit', 2, 1.0, 1, 0, NOW());
+
 -- 家庭管理 - 按钮权限
 INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `sort_no`, `status`, `del_flag`, `create_time`)
 VALUES

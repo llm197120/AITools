@@ -9,23 +9,19 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.jeecg.common.api.CommonAPI;
 import org.jeecg.common.api.vo.Result;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.system.query.QueryGenerator;
-import org.jeecg.common.system.util.JwtUtil;
-import org.jeecg.common.system.vo.LoginUser;
-import org.jeecg.common.util.RedisUtil;
-import org.jeecg.common.util.TokenUtils;
 import org.jeecg.modules.homeai.audit.service.IHomeaiAuditLogService;
 import com.fasterxml.jackson.databind.JsonNode;
-import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.config.service.IHomeaiStorageConfigService;
 import org.jeecg.modules.homeai.family.entity.Family;
 import org.jeecg.modules.homeai.family.service.IFamilyService;
+import org.jeecg.modules.homeai.preview.HomeaiFilePreviewDto;
+import org.jeecg.modules.homeai.preview.IHomeaiFilePreviewService;
 import org.jeecg.modules.homeai.storage.constant.StorageVisibility;
 import org.jeecg.modules.homeai.storage.util.StorageFileNameUtil;
 import org.jeecg.modules.homeai.storage.entity.StorageFile;
@@ -38,7 +34,6 @@ import org.jeecg.modules.homeai.storage.util.StorageAccessUtil;
 import org.jeecg.modules.homeai.user.entity.WxUser;
 import org.jeecg.modules.homeai.user.service.IWxUserService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -67,18 +62,16 @@ public class StorageController {
     @Autowired
     private IWxUserService wxUserService;
 
-    @Lazy
-    @Autowired
-    private CommonAPI commonApi;
-
-    @Autowired
-    private RedisUtil redisUtil;
-
     @Autowired
     private HomeaiSecurityUtil securityUtil;
 
     @Autowired
     private IHomeaiFileStorageService fileStorageService;
+
+    //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】文件预览-----------
+    @Autowired
+    private IHomeaiFilePreviewService filePreviewService;
+    //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】文件预览-----------
 
     @Autowired
     private IStorageResourceFamilyService resourceFamilyService;
@@ -97,45 +90,12 @@ public class StorageController {
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】存储配额配置-----------
 
     /**
-     * 从 Token 解析用户ID
-     * 支持三种认证来源：
-     *  1. Shiro 认证（管理端，若 /homeai/** 被放行为 anon 则不生效）
-     *  2. JeecgBoot 标准 JWT（管理端，X-Access-Token 头）
-     *  3. HomeaiJWT（小程序端，X-Access-Token 头）
+     * 从 Token 解析用户ID：管理端控制台 JWT 或 HomeAI APP JWT（含手机号 userId claim）
      */
     private String getUserId(HttpServletRequest request) {
-        // 1. 优先从 Shiro 认证获取（管理端已通过 Shiro 过滤器的情况）
-        try {
-            if (SecurityUtils.getSubject() != null && SecurityUtils.getSubject().isAuthenticated()) {
-                Object principal = SecurityUtils.getSubject().getPrincipal();
-                if (principal instanceof LoginUser) {
-                    return ((LoginUser) principal).getId();
-                }
-                return principal != null ? principal.toString() : null;
-            }
-        } catch (Exception ignored) {}
-
-        String token = request.getHeader("X-Access-Token");
-        if (token == null || token.trim().isEmpty()) {
-            return null;
-        }
-
-        // 2. 尝试解析 JeecgBoot 标准 JWT（管理端）
-        try {
-            String username = JwtUtil.getUsername(token);
-            if (username != null && TokenUtils.verifyToken(token, commonApi, redisUtil)) {
-                LoginUser loginUser = TokenUtils.getLoginUser(username, commonApi, redisUtil);
-                if (loginUser != null) {
-                    return loginUser.getId();
-                }
-            }
-        } catch (Exception ignored) {}
-
-        // 3. 回退到 HomeaiJWT 认证（小程序端）
-        String openid = HomeaiJwtUtil.getOpenid(token);
-        if (openid == null) return null;
-        WxUser user = wxUserService.getByOpenid(openid);
-        return user != null ? user.getId() : null;
+        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
+        return securityUtil.getCurrentUserId(request);
+        //update-end---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
     }
 
     /** 管理端/具备资料存储权限的角色可查看全部资源 */
@@ -252,9 +212,10 @@ public class StorageController {
         if (userId == null) return Result.error("未登录");
         List<Map<String, String>> rows = new ArrayList<>();
         if (isStorageAdmin(request)) {
+            //update-begin---author:cursor---date:2026-08-20---for:【家庭管理】Family 启用 TableLogic，勿再手动 eq delFlag-----------
             List<Family> families = familyService.list(new LambdaQueryWrapper<Family>()
-                    .eq(Family::getDelFlag, 0)
                     .orderByAsc(Family::getName));
+            //update-end---author:cursor---date:2026-08-20---for:【家庭管理】Family 启用 TableLogic，勿再手动 eq delFlag-----------
             for (Family family : families) {
                 Map<String, String> row = new LinkedHashMap<>();
                 row.put("id", family.getId());
@@ -552,9 +513,15 @@ public class StorageController {
             String userFamilyId = resolveUserFamilyId(userId);
             StorageFolder folder = null;
             List<String> assignedFamilies = resolveFamilyIds(visibility, familyIds, userFamilyId);
-            if (folderId != null) {
+            if (oConvertUtils.isNotEmpty(folderId)) {
                 folder = folderService.getById(folderId);
-                if (folder != null && !StorageVisibility.PRIVATE.equals(folder.getVisibility())) {
+                //update-begin---author:cursor---date:2026-08-20---for:【审查修复】上传到指定文件夹须校验写权限---
+                if (folder == null) return Result.error("文件夹不存在");
+                if (!StorageAccessUtil.canWriteFolder(userId, folder) && !isStorageAdmin(request)) {
+                    return Result.error("无权上传到该文件夹");
+                }
+                //update-end---author:cursor---date:2026-08-20---for:【审查修复】上传到指定文件夹须校验写权限---
+                if (!StorageVisibility.PRIVATE.equals(folder.getVisibility())) {
                     visibility = folder.getVisibility();
                     if (StorageVisibility.FAMILY.equals(visibility)) {
                         assignedFamilies = resourceFamilyService.getFolderFamilyIds(folder.getId());
@@ -957,6 +924,46 @@ public class StorageController {
         }
         return Result.OK(fileStorageService.resolveAccessUrl(sf.getFileUrl()));
     }
+
+    //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】文件预览-----------
+    @GetMapping("/files/{id}/preview")
+    @Operation(summary = "资料文件-预览描述")
+    public Result<?> previewFile(@PathVariable String id, HttpServletRequest request) {
+        StorageFile sf = fileService.getById(id);
+        Result<?> denied = assertCanReadFile(sf, request);
+        if (denied != null) return denied;
+        return Result.OK(filePreviewService.previewStorage(sf));
+    }
+
+    @PostMapping("/files/{id}/preview-pdf")
+    @Operation(summary = "资料文件-Office 转 PDF 预览")
+    public Result<?> previewFilePdf(@PathVariable String id, HttpServletRequest request) {
+        StorageFile sf = fileService.getById(id);
+        Result<?> denied = assertCanReadFile(sf, request);
+        if (denied != null) return denied;
+        String userId = getUserId(request);
+        try {
+            HomeaiFilePreviewDto dto = filePreviewService.ensureStoragePreviewPdf(userId, sf);
+            return Result.OK(dto);
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    private Result<?> assertCanReadFile(StorageFile sf, HttpServletRequest request) {
+        if (sf == null) return Result.error("文件不存在");
+        String userId = getUserId(request);
+        if (userId == null) return Result.error("未登录");
+        StorageFolder folder = oConvertUtils.isNotEmpty(sf.getFolderId())
+                ? folderService.getById(sf.getFolderId()) : null;
+        String familyId = resolveUserFamilyId(userId);
+        if (!StorageAccessUtil.canAccessFile(userId, familyId, sf, folder, resourceFamilyService)
+                && !isStorageAdmin(request)) {
+            return Result.error("无权查看该文件");
+        }
+        return null;
+    }
+    //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】文件预览-----------
 
     /**
      * 文件夹列表（管理端分页）

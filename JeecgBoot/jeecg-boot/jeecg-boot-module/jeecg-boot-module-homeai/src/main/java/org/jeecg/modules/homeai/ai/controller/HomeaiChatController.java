@@ -4,14 +4,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.api.vo.Result;
 import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
-import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
+import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileWhitelistService;
 import org.jeecg.modules.homeai.ai.service.IHomeaiChatService;
 import org.jeecg.modules.homeai.ai.service.IAiQuotaService;
 import org.jeecg.modules.homeai.ai.service.IHomeaiAiQuotaPrecheckService;
-import org.jeecg.modules.homeai.user.entity.WxUser;
-import org.jeecg.modules.homeai.user.service.IWxUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -38,7 +36,7 @@ public class HomeaiChatController {
     private IHomeaiAiQuotaPrecheckService precheckService;
 
     @Autowired
-    private IWxUserService wxUserService;
+    private HomeaiSecurityUtil securityUtil;
 
     @Autowired
     private IHomeaiFileWhitelistService whitelistService;
@@ -47,14 +45,12 @@ public class HomeaiChatController {
     private IHomeaiFileStorageService fileStorageService;
 
     /**
-     * 从 Token 解析用户ID
+     * 从 Token 解析用户ID（手机号 JWT 按 userId，微信 JWT 按 openid）
      */
     private String getUserId(HttpServletRequest request) {
-        String token = request.getHeader("X-Access-Token");
-        String openid = HomeaiJwtUtil.getOpenid(token);
-        if (openid == null) return null;
-        WxUser user = wxUserService.getByOpenid(openid);
-        return user != null ? user.getId() : null;
+        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】AI 发送按 userId 解析手机号用户-----------
+        return securityUtil.getWxUserId(request);
+        //update-end---author:cursor---date:2026-08-20---for:【Android体验】AI 发送按 userId 解析手机号用户-----------
     }
 
     /**

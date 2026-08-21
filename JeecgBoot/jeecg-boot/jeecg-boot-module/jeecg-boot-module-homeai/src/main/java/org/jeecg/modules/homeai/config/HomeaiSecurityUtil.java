@@ -110,16 +110,45 @@ public class HomeaiSecurityUtil {
         //update-end---author:admin ---date:2026-08-17 for:【Android迁移】JWT 增加 userId claim 兼容旧 token---
     }
 
+    //update-begin---author:cursor---date:2026-08-20---for:【Android体验】业务接口按主键解析手机号 JWT-----------
+    /**
+     * 仅解析 HomeAI APP/小程序用户 ID（不含管理端账号）。
+     * 手机号登录 JWT 的 openid claim 可能是主键 UUID，库内 openid 是 phone_*，必须先 getById。
+     */
+    public String getWxUserId(HttpServletRequest request) {
+        WxUser wxUser = getWxUser(request);
+        return wxUser != null ? wxUser.getId() : null;
+    }
+    //update-end---author:cursor---date:2026-08-20---for:【Android体验】业务接口按主键解析手机号 JWT-----------
+
     /**
      * 获取当前操作人 ID：
-     * 管理端返回系统用户 ID，小程序端返回微信用户 ID；均未登录返回 null
+     * 管理端返回系统用户 ID，APP/小程序返回 WxUser 主键；均未登录返回 null
      */
     public String getCurrentUserId(HttpServletRequest request) {
         LoginUser loginUser = getConsoleUser(request);
         if (loginUser != null) {
             return loginUser.getId();
         }
-        WxUser wxUser = getWxUser(request);
-        return wxUser != null ? wxUser.getId() : null;
+        return getWxUserId(request);
     }
+
+    //update-begin---author:cursor---date:2026-08-20---for:【Android体验】退出登录作废 Redis token-----------
+    /**
+     * 作废 APP token：同时删 userId 与 openid 两把 Redis 钥匙（手机号登录与微信登录各用一把）
+     */
+    public void invalidateWxUserTokens(WxUser user) {
+        if (user == null) {
+            return;
+        }
+        if (oConvertUtils.isNotEmpty(user.getId())) {
+            redisUtil.del("homeai_token:" + user.getId());
+            redisUtil.del("homeai_refresh:" + user.getId());
+        }
+        if (oConvertUtils.isNotEmpty(user.getOpenid())) {
+            redisUtil.del("homeai_token:" + user.getOpenid());
+            redisUtil.del("homeai_refresh:" + user.getOpenid());
+        }
+    }
+    //update-end---author:cursor---date:2026-08-20---for:【Android体验】退出登录作废 Redis token-----------
 }

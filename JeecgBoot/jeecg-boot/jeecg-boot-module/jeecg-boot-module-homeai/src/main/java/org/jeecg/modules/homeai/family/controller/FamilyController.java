@@ -15,7 +15,7 @@ import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.oConvertUtils;
 import io.swagger.v3.oas.annotations.Operation;
-import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
+import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.family.entity.Family;
 import org.jeecg.modules.homeai.family.entity.FamilyInviteCode;
 import org.jeecg.modules.homeai.family.entity.FamilyMember;
@@ -64,15 +64,16 @@ public class FamilyController {
     @Autowired
     private FamilyMapper familyMapper;
 
+    @Autowired
+    private HomeaiSecurityUtil securityUtil;
+
     /**
-     * 从请求中解析当前用户ID
+     * 从请求中解析当前 APP 用户ID（手机号 JWT 按 userId，微信 JWT 按 openid）
      */
     private String getCurrentUserId(HttpServletRequest request) {
-        String token = request.getHeader("X-Access-Token");
-        String openid = HomeaiJwtUtil.getOpenid(token);
-        if (openid == null) return null;
-        WxUser user = wxUserService.getByOpenid(openid);
-        return user != null ? user.getId() : null;
+        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】家庭接口按 userId 解析手机号用户-----------
+        return securityUtil.getWxUserId(request);
+        //update-end---author:cursor---date:2026-08-20---for:【Android体验】家庭接口按 userId 解析手机号用户-----------
     }
 
     /**
@@ -161,6 +162,15 @@ public class FamilyController {
         if (member == null) {
             return Result.error("您不在任何家庭中");
         }
+        //update-begin---author:cursor---date:2026-08-20---for:【审查修复】仅管理员可生成邀请码---
+        if (!"admin".equals(member.getRole())) {
+            return Result.error("仅管理员可生成邀请码");
+        }
+        Family family = familyService.getById(member.getFamilyId());
+        if (family == null || "disbanded".equals(family.getStatus())) {
+            return Result.error("家庭不存在或已解散");
+        }
+        //update-end---author:cursor---date:2026-08-20---for:【审查修复】仅管理员可生成邀请码---
 
         FamilyInviteCode code = familyInviteCodeService.generateCode(member.getFamilyId(), userId);
         return Result.OK(code.getInviteCode());
@@ -184,8 +194,18 @@ public class FamilyController {
             return Result.error("您已有家庭，不能重复加入");
         }
 
-        familyService.joinFamily(userId, inviteCode.getFamilyId(), inviteCode.getId());
-        return Result.OK("加入成功");
+        //update-begin---author:cursor---date:2026-08-20---for:【审查修复】已解散家庭不可加入---
+        Family target = familyService.getById(inviteCode.getFamilyId());
+        if (target == null || "disbanded".equals(target.getStatus())) {
+            return Result.error("家庭不存在或已解散");
+        }
+        try {
+            familyService.joinFamily(userId, inviteCode.getFamilyId(), inviteCode.getId());
+            return Result.OK("加入成功");
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+        //update-end---author:cursor---date:2026-08-20---for:【审查修复】已解散家庭不可加入---
     }
 
     /**
@@ -387,6 +407,9 @@ public class FamilyController {
                           @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
                           HttpServletRequest req) {
         QueryWrapper<Family> queryWrapper = QueryGenerator.initQueryWrapper(family, req.getParameterMap());
+        //update-begin---author:cursor---date:2026-08-20---for:【家庭管理】列表排除已移入回收站的家庭-----------
+        queryWrapper.eq("del_flag", 0);
+        //update-end---author:cursor---date:2026-08-20---for:【家庭管理】列表排除已移入回收站的家庭-----------
         Page<Family> page = new Page<>(pageNo, pageSize);
         IPage<Family> pageList = familyService.page(page, queryWrapper);
         return Result.OK(pageList);
@@ -604,6 +627,9 @@ public class FamilyController {
     @RequiresPermissions("homeai:family:exportXls")
     public ModelAndView exportXls(HttpServletRequest request, Family family) {
         QueryWrapper<Family> queryWrapper = QueryGenerator.initQueryWrapper(family, request.getParameterMap());
+        //update-begin---author:cursor---date:2026-08-20---for:【家庭管理】导出同样排除已移入回收站的家庭-----------
+        queryWrapper.eq("del_flag", 0);
+        //update-end---author:cursor---date:2026-08-20---for:【家庭管理】导出同样排除已移入回收站的家庭-----------
         List<Family> pageList = familyService.list(queryWrapper);
         ModelAndView mv = new ModelAndView(new JeecgEntityExcelView());
         String selections = request.getParameter("selections");

@@ -15,7 +15,7 @@ import java.util.Set;
 public final class HomeaiFileMagicUtil {
 
     private static final Set<String> SKIP_MAGIC_EXTENSIONS = new HashSet<>(Arrays.asList(
-            "txt", "csv", "md", "rar", "7z", "avi", "mov", "mkv", "bmp"
+            "txt", "csv", "md", "rar", "7z", "avi", "mov", "mkv", "bmp", "aac"
     ));
 
     private HomeaiFileMagicUtil() {
@@ -30,7 +30,9 @@ public final class HomeaiFileMagicUtil {
             validateNotExecutable(file);
             return;
         }
-        byte[] header = readHeader(file, 8);
+        //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】webp/wav 需 12 字节头-----------
+        byte[] header = readHeader(file, 12);
+        //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】webp/wav 需 12 字节头-----------
         if (!matchesMagic(header, ext)) {
             throw new IOException("文件内容与扩展名不匹配");
         }
@@ -87,6 +89,9 @@ public final class HomeaiFileMagicUtil {
                         && header[2] == 'D'
                         && header[3] == 'F';
             case "zip":
+            //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R69】apk 同 zip 魔数 PK-----------
+            case "apk":
+            //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R69】apk 同 zip 魔数 PK-----------
             case "docx":
             case "xlsx":
             case "pptx":
@@ -100,7 +105,21 @@ public final class HomeaiFileMagicUtil {
                         && header[2] == 0x11
                         && header[3] == (byte) 0xE0;
             case "mp4":
+            case "m4a":
                 return containsAscii(header, "ftyp");
+            //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】webp/音频魔数-----------
+            case "webp":
+                return header.length >= 12
+                        && header[0] == 'R' && header[1] == 'I' && header[2] == 'F' && header[3] == 'F'
+                        && header[8] == 'W' && header[9] == 'E' && header[10] == 'B' && header[11] == 'P';
+            case "wav":
+                return header.length >= 12
+                        && header[0] == 'R' && header[1] == 'I' && header[2] == 'F' && header[3] == 'F'
+                        && header[8] == 'W' && header[9] == 'A' && header[10] == 'V' && header[11] == 'E';
+            case "mp3":
+                return (header[0] == 'I' && header[1] == 'D' && header[2] == '3')
+                        || ((header[0] & 0xFF) == 0xFF && (header[1] & 0xE0) == 0xE0);
+            //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】webp/音频魔数-----------
             default:
                 return true;
         }

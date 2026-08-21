@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS `homeai_wx_user` (
     `nickname`        VARCHAR(64)           COMMENT '微信昵称',
     `avatar_url`      VARCHAR(512)          COMMENT '头像URL',
     `phone`           VARCHAR(20)           COMMENT '手机号',
+    `password`        VARCHAR(128)          COMMENT '密码(PBE加密)',
+    `salt`            VARCHAR(64)           COMMENT '密码盐',
+    `login_type`      VARCHAR(20)  DEFAULT 'wechat' COMMENT '登录方式:wechat/phone',
     `family_role`     VARCHAR(20)  DEFAULT '其他' COMMENT '家庭角色:爸爸/妈妈/孩子/其他',
     `family_id`       VARCHAR(32)           COMMENT '所属家庭ID（NULL=无家庭）',
     `family_role_type` VARCHAR(10) DEFAULT 'member' COMMENT '家庭成员权限:admin/member/restricted',
@@ -216,6 +219,7 @@ CREATE TABLE IF NOT EXISTS `homeai_storage_file` (
     `file_size`       BIGINT       DEFAULT 0 COMMENT '文件大小(字节)',
     `file_url`        VARCHAR(512) NOT NULL COMMENT '文件访问URL',
     `thumbnail_url`   VARCHAR(512)          COMMENT '缩略图URL（图片/视频）',
+    `preview_pdf_url` VARCHAR(512)          COMMENT 'Office 预览用 PDF 存储引用',
     `visibility`      VARCHAR(20)  DEFAULT 'private' COMMENT '可见性:private/family/public',
     `is_favorite`     VARCHAR(2)   DEFAULT '0' COMMENT '是否收藏:1=是 0=否',
     `download_count`  INT          DEFAULT 0 COMMENT '下载次数',
@@ -241,7 +245,7 @@ CREATE TABLE IF NOT EXISTS `homeai_office_convert_history` (
     `id`              VARCHAR(32)  NOT NULL COMMENT '主键',
     `file_id`         VARCHAR(32)  NOT NULL COMMENT '源文件ID',
     `user_id`         VARCHAR(32)  NOT NULL COMMENT '操作人',
-    `convert_type`    VARCHAR(20)  NOT NULL COMMENT '转换类型:format_convert=格式转换 ai_generate=AI生成',
+    `convert_type`    VARCHAR(32)  NOT NULL COMMENT '转换类型:format_convert/ai_generate/preview_pdf/preview_pdf_learn',
     `source_format`   VARCHAR(20)           COMMENT '源格式',
     `target_format`   VARCHAR(20)           COMMENT '目标格式（格式转换时）',
     `instruction`     VARCHAR(1000)         COMMENT 'AI生成指令',
@@ -544,9 +548,10 @@ CREATE TABLE IF NOT EXISTS `homeai_learn_material` (
     `user_id`         VARCHAR(32)  NULL COMMENT '上传者用户ID（NULL=管理端录入）',
     `family_id`       VARCHAR(32)           COMMENT '家庭ID',
     `title`           VARCHAR(200) NOT NULL COMMENT '资料标题',
-    `type`            VARCHAR(20)  NOT NULL COMMENT '类型:video/image/pdf/doc/xls/ppt/link/note',
+    `type`            VARCHAR(20)  NOT NULL COMMENT '类型:video/image/pdf/doc/xls/ppt/link/note/audio',
     `file_url`        VARCHAR(512)          COMMENT '文件URL',
     `thumbnail_url`   VARCHAR(512)          COMMENT '缩略图URL',
+    `preview_pdf_url` VARCHAR(512)          COMMENT 'Office 预览用 PDF 存储引用',
     `category`        VARCHAR(50)           COMMENT '分类名称(冗余)',
     `category_id`     VARCHAR(32)           COMMENT '分类ID',
     `tags`            VARCHAR(500)          COMMENT '标签(JSON数组)',
@@ -614,6 +619,7 @@ CREATE TABLE IF NOT EXISTS `homeai_learn_record` (
     `id`              VARCHAR(32)  NOT NULL COMMENT '主键',
     `user_id`         VARCHAR(32)  NOT NULL COMMENT '用户ID',
     `material_id`     VARCHAR(32)  NOT NULL COMMENT '学习资料ID',
+    `study_date`      DATE                  COMMENT '学习日期',
     `start_time`      DATETIME              COMMENT '开始时间',
     `end_time`        DATETIME              COMMENT '结束时间',
     `mode`            VARCHAR(20)  DEFAULT 'timer' COMMENT '学习模式:timer=计时 manual=手动',
@@ -649,6 +655,30 @@ CREATE TABLE IF NOT EXISTS `homeai_audit_log` (
     KEY `idx_hw_audit_create` (`create_time`),
     KEY `idx_hw_audit_module_time` (`module`, `create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='操作审计日志' ROW_FORMAT=DYNAMIC;
+
+-- =============================================================
+-- APP 当前发布版本（单行 id=current）
+-- =============================================================
+CREATE TABLE IF NOT EXISTS `homeai_app_version` (
+    `id`               VARCHAR(32)  NOT NULL COMMENT '固定 current',
+    `version_name`     VARCHAR(32)  NOT NULL DEFAULT '1.0.0' COMMENT '展示版本号',
+    `version_code`     INT          NOT NULL DEFAULT 100 COMMENT '整数版本，仅当本地更小才更新',
+    `update_mode`      VARCHAR(16)  NOT NULL DEFAULT 'apk' COMMENT 'resource=热更新 H5 zip / apk=覆盖安装',
+    `force_update`     TINYINT      NOT NULL DEFAULT 0 COMMENT '1=强制，不可跳过',
+    `apk_url`          VARCHAR(1024)         COMMENT 'APK 持久化引用或 URL',
+    `resource_url`     VARCHAR(1024)         COMMENT 'H5 zip 持久化引用或 URL',
+    `apk_sha256`       VARCHAR(64)           COMMENT 'APK SHA-256',
+    `resource_sha256`  VARCHAR(64)           COMMENT 'zip SHA-256',
+    `min_shell_code`   INT          NOT NULL DEFAULT 100 COMMENT '热更新要求的最低原生 versionCode',
+    `changelog`        VARCHAR(2000)         COMMENT '更新说明',
+    `enabled`          TINYINT      NOT NULL DEFAULT 0 COMMENT '1=对 APP 生效',
+    `create_by`        VARCHAR(50)           COMMENT '创建人',
+    `create_time`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_by`        VARCHAR(50)           COMMENT '更新人',
+    `update_time`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `del_flag`         TINYINT      DEFAULT 0 COMMENT '删除状态(0-正常,1-已删除)',
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='APP当前发布版本' ROW_FORMAT=DYNAMIC;
 
 -- =============================================================
 -- 初始化数据：默认账单分类
@@ -703,6 +733,7 @@ VALUES
 ('fw_png',  'png',  'image',   3, 1),
 ('fw_gif',  'gif',  'image',   4, 1),
 ('fw_bmp',  'bmp',  'image',   5, 1),
+('fw_webp', 'webp', 'image',   6, 1),
 ('fw_pdf',  'pdf',  'doc',     10, 1),
 ('fw_doc',  'doc',  'doc',     11, 1),
 ('fw_docx', 'docx', 'doc',     12, 1),
@@ -714,9 +745,23 @@ VALUES
 ('fw_avi',  'avi',  'video',   21, 1),
 ('fw_mov',  'mov',  'video',   22, 1),
 ('fw_mkv',  'mkv',  'video',   23, 1),
+('fw_webm', 'webm', 'video',   24, 1),
 ('fw_zip',  'zip',  'archive', 30, 1),
+('fw_apk',  'apk',  'archive', 33, 1),
 ('fw_rar',  'rar',  'archive', 31, 1),
 ('fw_7z',   '7z',   'archive', 32, 1),
 ('fw_txt',  'txt',  'text',    40, 1),
 ('fw_csv',  'csv',  'text',    41, 1),
-('fw_md',   'md',   'text',    42, 1);
+('fw_md',   'md',   'text',    42, 1),
+('fw_mp3',  'mp3',  'audio',   50, 1),
+('fw_wav',  'wav',  'audio',   51, 1),
+('fw_m4a',  'm4a',  'audio',   52, 1),
+('fw_aac',  'aac',  'audio',   53, 1);
+
+-- =============================================================
+-- 初始化数据：APP 版本（默认关闭，避免内测包误触发更新）
+-- =============================================================
+INSERT IGNORE INTO `homeai_app_version`
+(`id`, `version_name`, `version_code`, `update_mode`, `force_update`, `min_shell_code`, `enabled`, `changelog`)
+VALUES
+('current', '1.0.0', 100, 'apk', 0, 100, 0, '当前内测版本，未开放自动更新');

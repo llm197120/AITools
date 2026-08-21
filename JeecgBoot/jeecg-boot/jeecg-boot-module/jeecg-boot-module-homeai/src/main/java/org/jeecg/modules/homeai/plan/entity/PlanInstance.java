@@ -62,4 +62,10 @@ public class PlanInstance implements Serializable {
     @Schema(description = "主计划提醒提前分钟数")
     private Integer remindMinutes;
     //update-end---author:admin---date:2026-08-18---for:【Android迁移R2-本地通知】---
+    //update-begin---author:cursor---date:2026-08-20---for:【Android体验】详情展示主计划内容---
+    /** 冗余展示字段：主计划详细内容 */
+    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    @Schema(description = "主计划详细内容")
+    private String content;
+    //update-end---author:cursor---date:2026-08-20---for:【Android体验】详情展示主计划内容---
 }

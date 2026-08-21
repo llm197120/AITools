@@ -58,6 +58,11 @@ public class StorageFile implements Serializable {
     @Schema(description = "缩略图URL")
     private String thumbnailUrl;
 
+    //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】Office 预览 PDF 缓存-----------
+    @Schema(description = "Office 预览用 PDF 存储引用")
+    private String previewPdfUrl;
+    //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】Office 预览 PDF 缓存-----------
+
     @Schema(description = "可见性:private/family/public")
     private String visibility;
 

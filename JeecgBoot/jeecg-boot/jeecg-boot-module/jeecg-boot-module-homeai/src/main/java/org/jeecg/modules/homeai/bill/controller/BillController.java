@@ -21,8 +21,7 @@ import org.jeecg.modules.homeai.bill.entity.BillCategory;
 import org.jeecg.modules.homeai.bill.mapper.BillEntryMapper;
 import org.jeecg.modules.homeai.bill.service.IBillEntryService;
 import org.jeecg.modules.homeai.bill.service.IBillCategoryService;
-import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
-import org.jeecg.modules.homeai.user.service.IWxUserService;
+import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecgframework.poi.excel.ExcelImportUtil;
 import org.jeecgframework.poi.excel.def.NormalExcelConstants;
 import org.jeecgframework.poi.excel.entity.ExportParams;
@@ -48,15 +47,13 @@ import java.nio.charset.StandardCharsets;
 public class BillController {
     @Autowired private IBillEntryService billService;
     @Autowired private IBillCategoryService categoryService;
-    @Autowired private IWxUserService wxUserService;
     @Autowired private BillEntryMapper billEntryMapper;
+    @Autowired private HomeaiSecurityUtil securityUtil;
 
     private String getUserId(HttpServletRequest r) {
-        String t = r.getHeader("X-Access-Token");
-        String o = HomeaiJwtUtil.getOpenid(t);
-        if (o == null) return null;
-        var u = wxUserService.getByOpenid(o);
-        return u != null ? u.getId() : null;
+        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】账单接口按 userId 解析手机号用户-----------
+        return securityUtil.getWxUserId(r);
+        //update-end---author:cursor---date:2026-08-20---for:【Android体验】账单接口按 userId 解析手机号用户-----------
     }
 
     @PostMapping("/entry")
@@ -82,8 +79,15 @@ public class BillController {
     @DeleteMapping("/entry/{id}")
     public Result<?> delete(@PathVariable String id, HttpServletRequest r) {
         String uid = getUserId(r);
-        billService.softDelete(id, uid);
-        return Result.OK("删除成功");
+        if (uid == null) return Result.error("未登录");
+        //update-begin---author:cursor---date:2026-08-20---for:【审查修复】删除对齐查/改，校验登录与所有权---
+        try {
+            billService.softDelete(id, uid);
+            return Result.OK("删除成功");
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+        //update-end---author:cursor---date:2026-08-20---for:【审查修复】删除对齐查/改，校验登录与所有权---
     }
 
     //update-begin---author:cursor ---date:2026-08-13 for：【体验优化】账单单条查询，供编辑页按 id 加载（避免整条数据塞 URL）-----------

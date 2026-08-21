@@ -8,6 +8,7 @@ import org.jeecg.modules.homeai.bill.entity.BillEntry;
 import org.jeecg.modules.homeai.bill.mapper.BillEntryMapper;
 import org.jeecg.modules.homeai.bill.service.IBillCategoryService;
 import org.jeecg.modules.homeai.bill.service.IBillEntryService;
+import org.jeecg.modules.homeai.bill.util.BillEntryAccess;
 import org.jeecg.common.util.RedisUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -186,14 +187,20 @@ public class BillEntryServiceImpl extends ServiceImpl<BillEntryMapper, BillEntry
     @Override
     public void softDelete(String id, String userId) {
         BillEntry existing = getById(id);
+        if (existing == null) {
+            throw new RuntimeException("账单不存在");
+        }
+        //update-begin---author:cursor---date:2026-08-20---for:【审查修复】APP 删除须校验所有权，管理端 userId 为空跳过---
+        if (!BillEntryAccess.canSoftDelete(userId, existing.getUserId())) {
+            throw new RuntimeException("无权删除他人账单");
+        }
+        //update-end---author:cursor---date:2026-08-20---for:【审查修复】APP 删除须校验所有权，管理端 userId 为空跳过---
         // @TableLogic 字段不参与 updateById，需通过 update wrapper 显式设置
         update(new LambdaUpdateWrapper<BillEntry>()
                 .eq(BillEntry::getId, id)
                 .set(BillEntry::getDelFlag, 1));
-        if (existing != null) {
-            clearMonthlyCache(existing.getUserId() != null ? existing.getUserId() : userId,
-                    existing.getBillDate() != null ? existing.getBillDate() : LocalDate.now());
-        }
+        clearMonthlyCache(existing.getUserId() != null ? existing.getUserId() : userId,
+                existing.getBillDate() != null ? existing.getBillDate() : LocalDate.now());
     }
 
     private void clearMonthlyCache(String userId, LocalDate date) {

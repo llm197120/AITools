@@ -9,10 +9,15 @@ import org.jeecg.modules.homeai.recipe.entity.RecipeCategory;
 import org.jeecg.modules.homeai.recipe.mapper.RecipeCategoryMapper;
 import org.jeecg.modules.homeai.recipe.mapper.RecipeMapper;
 import org.jeecg.modules.homeai.recipe.service.IRecipeCategoryService;
+import org.jeecg.modules.homeai.recipe.util.RecipeCategoryResolve;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class RecipeCategoryServiceImpl extends ServiceImpl<RecipeCategoryMapper, RecipeCategory>
@@ -70,4 +75,26 @@ public class RecipeCategoryServiceImpl extends ServiceImpl<RecipeCategoryMapper,
             throw new JeecgBootException("该分类下仍有菜谱，无法删除");
         }
     }
+
+    //update-begin---author:cursor---date:2026-08-21---for:【菜谱导入】分类ID/中文名解析并按菜名纠正---
+    @Override
+    public String resolveImportCategoryId(String rawCategory, String recipeName) {
+        List<RecipeCategory> all = listAllOrdered();
+        if (all == null || all.isEmpty()) {
+            throw new JeecgBootException("未配置菜谱分类，请先初始化默认分类");
+        }
+        Set<String> ids = all.stream().map(RecipeCategory::getId).collect(Collectors.toSet());
+        Map<String, String> nameToId = new LinkedHashMap<>();
+        for (RecipeCategory c : all) {
+            if (c.getName() != null) {
+                nameToId.putIfAbsent(c.getName().trim(), c.getId());
+            }
+        }
+        try {
+            return RecipeCategoryResolve.resolve(rawCategory, recipeName, ids, nameToId);
+        } catch (IllegalArgumentException e) {
+            throw new JeecgBootException(e.getMessage());
+        }
+    }
+    //update-end---author:cursor---date:2026-08-21---for:【菜谱导入】分类ID/中文名解析并按菜名纠正---
 }

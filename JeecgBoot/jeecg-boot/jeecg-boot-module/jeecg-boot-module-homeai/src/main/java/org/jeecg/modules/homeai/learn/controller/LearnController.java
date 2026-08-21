@@ -17,13 +17,13 @@ import org.jeecg.common.util.oConvertUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.audit.service.IHomeaiAuditLogService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
-import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.learn.service.ILearnCategoryService;
+import org.jeecg.modules.homeai.preview.HomeaiFilePreviewDto;
+import org.jeecg.modules.homeai.preview.IHomeaiFilePreviewService;
 import org.jeecg.modules.homeai.recipe.entity.LearnMaterial;
 import org.jeecg.modules.homeai.recipe.mapper.LearnMaterialMapper;
 import org.jeecg.modules.homeai.recipe.service.ILearnService;
-import org.jeecg.modules.homeai.user.service.IWxUserService;
 import org.jeecgframework.poi.excel.ExcelImportUtil;
 import org.jeecgframework.poi.excel.def.NormalExcelConstants;
 import org.jeecgframework.poi.excel.entity.ExportParams;
@@ -45,31 +45,20 @@ import java.util.stream.Collectors;
 public class LearnController {
     @Autowired private ILearnService learnService;
     @Autowired private ILearnCategoryService learnCategoryService;
-    @Autowired private IWxUserService wxUserService;
     @Autowired private LearnMaterialMapper learnMaterialMapper;
     @Autowired private HomeaiSecurityUtil securityUtil;
     @Autowired private IHomeaiFileStorageService fileStorageService;
+    //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】学习资料预览-----------
+    @Autowired private IHomeaiFilePreviewService filePreviewService;
+    //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】学习资料预览-----------
     //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R22】学习审计埋点-----------
     @Autowired private IHomeaiAuditLogService auditLogService;
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】学习审计埋点-----------
 
     private String getUserId(HttpServletRequest r) {
-        // 优先从Shiro认证获取（管理端）
-        try {
-            if (SecurityUtils.getSubject() != null && SecurityUtils.getSubject().isAuthenticated()) {
-                Object principal = SecurityUtils.getSubject().getPrincipal();
-                if (principal instanceof LoginUser) {
-                    return ((LoginUser) principal).getId();
-                }
-                return principal != null ? principal.toString() : null;
-            }
-        } catch (Exception ignored) {}
-        // 回退到HomeaiJWT认证（小程序端）
-        String tk = r.getHeader("X-Access-Token");
-        String o = HomeaiJwtUtil.getOpenid(tk);
-        if (o == null) return null;
-        var u = wxUserService.getByOpenid(o);
-        return u != null ? u.getId() : null;
+        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
+        return securityUtil.getCurrentUserId(r);
+        //update-end---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
     }
 
     private Result<?> syncLearnCategory(LearnMaterial m) {
@@ -92,6 +81,13 @@ public class LearnController {
     public Result<?> materials(LearnMaterial m, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "10") int pageSize, HttpServletRequest req) {
         QueryWrapper<LearnMaterial> qw = QueryGenerator.initQueryWrapper(m, req.getParameterMap());
         qw.eq("del_flag", "0").orderByDesc("create_time");
+        //update-begin---author:cursor---date:2026-08-20---for:【审查修复】APP 只看自己的资料；管理端控制台仍看全部---
+        if (!securityUtil.isConsoleAuthenticated(req)) {
+            String uid = getUserId(req);
+            if (uid == null) return Result.error("未登录");
+            qw.eq("user_id", uid);
+        }
+        //update-end---author:cursor---date:2026-08-20---for:【审查修复】APP 只看自己的资料；管理端控制台仍看全部---
         IPage<LearnMaterial> result = learnService.page(new Page<>(pageNo, pageSize), qw);
         // 兼容历史相对地址数据：统一转换为绝对访问地址
         if (result.getRecords() != null) {
@@ -102,24 +98,87 @@ public class LearnController {
                 if (item.getCoverUrl() != null && !item.getCoverUrl().startsWith("data:")) {
                     item.setCoverUrl(fileStorageService.resolveAccessUrl(item.getCoverUrl()));
                 }
+                if (item.getPreviewPdfUrl() != null) {
+                    item.setPreviewPdfUrl(fileStorageService.resolveAccessUrl(item.getPreviewPdfUrl()));
+                }
             }
         }
         return Result.OK(result);
     }
 
+    //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】学习资料预览-----------
+    @GetMapping("/materials/{id}/preview")
+    @Operation(summary = "学习资料-预览描述")
+    public Result<?> previewMaterial(@PathVariable String id, HttpServletRequest req) {
+        LearnMaterial material = learnService.getById(id);
+        Result<?> denied = assertCanReadMaterial(material, req);
+        if (denied != null) return denied;
+        return Result.OK(filePreviewService.previewLearn(material));
+    }
+
+    @PostMapping("/materials/{id}/preview-pdf")
+    @Operation(summary = "学习资料-Office 转 PDF 预览")
+    public Result<?> previewMaterialPdf(@PathVariable String id, HttpServletRequest req) {
+        LearnMaterial material = learnService.getById(id);
+        Result<?> denied = assertCanReadMaterial(material, req);
+        if (denied != null) return denied;
+        String uid = getUserId(req);
+        try {
+            HomeaiFilePreviewDto dto = filePreviewService.ensureLearnPreviewPdf(uid, material);
+            return Result.OK(dto);
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    private Result<?> assertCanReadMaterial(LearnMaterial material, HttpServletRequest req) {
+        if (material == null) return Result.error("学习资料不存在");
+        if (securityUtil.isConsoleAuthenticated(req)) {
+            return null;
+        }
+        String uid = getUserId(req);
+        if (uid == null) return Result.error("未登录");
+        if (!uid.equals(material.getUserId())) return Result.error("无权查看该资料");
+        return null;
+    }
+    //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】学习资料预览-----------
+
+    //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
+    private Result<?> requireUsableMaterial(String materialId, HttpServletRequest r) {
+        LearnMaterial material = learnService.getById(materialId);
+        return assertCanReadMaterial(material, r);
+    }
+    //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
+
     @PostMapping("/start")
     public Result<?> start(@RequestParam String materialId, HttpServletRequest r) {
         String uid = getUserId(r);
         if (uid == null) return Result.error("未登录");
-        learnService.startLearn(uid, materialId);
-        return Result.OK("OK");
+        //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
+        Result<?> denied = requireUsableMaterial(materialId, r);
+        if (denied != null) return denied;
+        try {
+            learnService.startLearn(uid, materialId);
+            return Result.OK("OK");
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
+        //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
     }
 
     @PostMapping("/stop")
     public Result<?> stop(@RequestParam String materialId, HttpServletRequest r) {
         String uid = getUserId(r);
         if (uid == null) return Result.error("未登录");
-        return Result.OK(learnService.stopLearn(uid, materialId));
+        //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
+        Result<?> denied = requireUsableMaterial(materialId, r);
+        if (denied != null) return denied;
+        try {
+            return Result.OK(learnService.stopLearn(uid, materialId));
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
+        //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
     }
 
     @GetMapping("/session/active")
@@ -329,7 +388,15 @@ public class LearnController {
                 ? Integer.parseInt(String.valueOf(body.get("duration"))) : 0;
         String recordType = body.get("recordType") != null
                 ? String.valueOf(body.get("recordType")) : "timer";
-        return Result.OK(learnService.addRecord(uid, materialId, duration, recordType));
+        //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
+        Result<?> denied = requireUsableMaterial(materialId, r);
+        if (denied != null) return denied;
+        try {
+            return Result.OK(learnService.addRecord(uid, materialId, duration, recordType));
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
+        //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R64】计时/记录校验资料归属-----------
     }
 
     @PostMapping("/material")

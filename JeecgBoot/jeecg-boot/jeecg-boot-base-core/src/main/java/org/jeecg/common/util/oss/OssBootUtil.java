@@ -1,10 +1,13 @@
 package org.jeecg.common.util.oss;
 
 import com.aliyun.oss.ClientConfiguration;
+import com.aliyun.oss.ClientException;
 import com.aliyun.oss.OSSClient;
 import com.aliyun.oss.common.auth.DefaultCredentialProvider;
+import com.aliyun.oss.common.comm.Protocol;
 import com.aliyun.oss.model.CannedAccessControlList;
 import com.aliyun.oss.model.OSSObject;
+import com.aliyun.oss.model.ObjectMetadata;
 import com.aliyun.oss.model.PutObjectResult;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.fileupload.FileItemStream;
@@ -315,11 +318,22 @@ public class OssBootUtil {
      *
      * @return
      */
-    private static OSSClient initOss(String endpoint, String accessKeyId, String accessKeySecret) {
+    private static synchronized OSSClient initOss(String endpoint, String accessKeyId, String accessKeySecret) {
         if (ossClient == null) {
+            //update-begin---author:cursor---date:2026-08-21---for:【OSS】HTTPS + 超时/重试，避免空闲连接被对端 RST---
+            ClientConfiguration conf = new ClientConfiguration();
+            conf.setProtocol(Protocol.HTTPS);
+            conf.setMaxErrorRetry(5);
+            conf.setConnectionTimeout(15000);
+            conf.setSocketTimeout(60000);
+            conf.setIdleConnectionTime(30000);
+            conf.setRequestTimeoutEnabled(true);
+            conf.setRequestTimeout(60000);
+            conf.setSupportCname(false);
             ossClient = new OSSClient(endpoint,
                     new DefaultCredentialProvider(accessKeyId, accessKeySecret),
-                    new ClientConfiguration());
+                    conf);
+            //update-end---author:cursor---date:2026-08-21---for:【OSS】HTTPS + 超时/重试，避免空闲连接被对端 RST---
         }
         return ossClient;
     }
@@ -355,26 +369,93 @@ public class OssBootUtil {
      * 上传至私有桶（不修改 Bucket ACL），返回对象 Key
      */
     public static String uploadPrivate(InputStream stream, String relativePath) {
+        return uploadPrivate(stream, relativePath, -1, null);
+    }
+
+    /**
+     * 上传至私有桶。必须带 Content-Length：Multipart 流的 available() 往往不是文件大小，
+     * OSS 走 chunked 时本机 JDK 容易被对端 Connection reset。
+     */
+    public static String uploadPrivate(InputStream stream, String relativePath, long contentLength, String contentType) {
         if (oConvertUtils.isEmpty(relativePath)) {
             return null;
         }
         initOss(endPoint, accessKeyId, accessKeySecret);
-        String objectKey = relativePath.replace("\\", "/");
-        while (objectKey.startsWith("/")) {
-            objectKey = objectKey.substring(1);
-        }
-        objectKey = StrAttackFilter.filter(objectKey);
+        //update-begin---author:cursor---date:2026-08-21---for:【OSS文件名】StrAttackFilter 会清掉 . 和 _，导致 png 变成 xxxpng---
+        String objectKey = sanitizePrivateObjectKey(relativePath);
+        //update-end---author:cursor---date:2026-08-21---for:【OSS文件名】StrAttackFilter 会清掉 . 和 _，导致 png 变成 xxxpng---
         try {
-            if (!ossClient.doesBucketExist(bucketName)) {
-                ossClient.createBucket(bucketName);
+            //update-begin---author:cursor---date:2026-08-21---for:【OSS】去掉每次 doesBucketExist；带 Content-Length 上传---
+            ObjectMetadata metadata = new ObjectMetadata();
+            if (contentLength > 0) {
+                metadata.setContentLength(contentLength);
             }
-            ossClient.putObject(bucketName, objectKey, stream);
+            if (oConvertUtils.isNotEmpty(contentType)) {
+                metadata.setContentType(contentType);
+            }
+            ossClient.putObject(bucketName, objectKey, stream, metadata);
+            //update-end---author:cursor---date:2026-08-21---for:【OSS】去掉每次 doesBucketExist；带 Content-Length 上传---
             log.info("------OSS私有文件上传成功------{}", objectKey);
             return objectKey;
         } catch (Exception e) {
             log.error("OSS私有上传失败: {}", e.getMessage(), e);
-            return null;
+            throw new RuntimeException(summarizeOssFailure(e), e);
         }
+    }
+
+    /**
+     * 连接被对端掐掉或超时时，关掉旧客户端，下次 init 会新建连接池。
+     */
+    public static synchronized void resetClient() {
+        if (ossClient == null) {
+            return;
+        }
+        try {
+            ossClient.shutdown();
+        } catch (Exception e) {
+            log.debug("关闭 OSS 客户端: {}", e.getMessage());
+        }
+        ossClient = null;
+    }
+
+    public static boolean isTransientNetworkFailure(Throwable e) {
+        Throwable t = e;
+        while (t != null) {
+            if (t instanceof java.net.SocketException
+                    || t instanceof java.net.SocketTimeoutException
+                    || t instanceof javax.net.ssl.SSLException
+                    || t instanceof ClientException) {
+                if (t instanceof ClientException) {
+                    String code = ((ClientException) t).getErrorCode();
+                    if (code != null && (code.contains("Socket") || code.contains("Timeout") || "Unknown".equals(code))) {
+                        return true;
+                    }
+                } else {
+                    return true;
+                }
+            }
+            String msg = t.getMessage();
+            if (msg != null) {
+                String m = msg.toLowerCase();
+                if (m.contains("connection reset")
+                        || m.contains("broken pipe")
+                        || m.contains("connection refused")
+                        || m.contains("timed out")
+                        || m.contains("timeout")) {
+                    return true;
+                }
+            }
+            t = t.getCause();
+        }
+        return false;
+    }
+
+    private static String summarizeOssFailure(Throwable e) {
+        if (isTransientNetworkFailure(e)) {
+            return "连不上对象存储（连接被重置），请稍后重试";
+        }
+        String msg = e.getMessage();
+        return oConvertUtils.isEmpty(msg) ? "OSS 上传失败" : msg;
     }
 
     /**
@@ -422,4 +503,27 @@ public class OssBootUtil {
         log.info("------replacePrefix---替换后---objectName:{}",objectName);
         return objectName;
     }
+
+    //update-begin---author:cursor---date:2026-08-21---for:【OSS文件名】目录过滤攻击字符，文件名保留扩展名与下划线---
+    /**
+     * 私有上传 objectKey 清洗：只过滤目录段，文件名保留 `.` `_` `-`，避免扩展名丢失。
+     * <p>与 {@code upload(MultipartFile, fileDir)} 一致——后者也只 filter 目录、不碰文件名。
+     */
+    public static String sanitizePrivateObjectKey(String relativePath) {
+        if (oConvertUtils.isEmpty(relativePath)) {
+            return relativePath;
+        }
+        String objectKey = relativePath.replace("\\", "/");
+        while (objectKey.startsWith("/")) {
+            objectKey = objectKey.substring(1);
+        }
+        int slash = objectKey.lastIndexOf('/');
+        if (slash < 0) {
+            return objectKey;
+        }
+        String dir = StrAttackFilter.filter(objectKey.substring(0, slash + 1));
+        String name = objectKey.substring(slash + 1);
+        return dir + name;
+    }
+    //update-end---author:cursor---date:2026-08-21---for:【OSS文件名】目录过滤攻击字符，文件名保留扩展名与下划线---
 }

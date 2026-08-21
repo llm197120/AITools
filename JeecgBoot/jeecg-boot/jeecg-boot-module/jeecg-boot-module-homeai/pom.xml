@@ -50,4 +50,18 @@
         </dependency>
         <!-- update-end author:admin date:2026-08-12 for:【HomeAI-R22】PDF 首帧缩略图 -->
     </dependencies>
+
+    <!-- 父 POM 默认 skipTests=true；本模块纯逻辑单测在 test 阶段执行 -->
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <skipTests>false</skipTests>
+                    <argLine>-Dfile.encoding=UTF-8</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

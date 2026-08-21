@@ -19,9 +19,9 @@ import org.jeecg.common.util.oConvertUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.audit.service.IHomeaiAuditLogService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
-import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.recipe.entity.Recipe;
+import org.jeecg.modules.homeai.recipe.entity.RecipeCategory;
 import org.jeecg.modules.homeai.recipe.entity.RecipeIngredient;
 import org.jeecg.modules.homeai.recipe.entity.RecipeStep;
 import org.jeecg.modules.homeai.recipe.mapper.RecipeMapper;
@@ -66,22 +66,9 @@ public class RecipeController {
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】菜谱审计埋点-----------
 
     private String getUserId(HttpServletRequest r) {
-        // 优先从Shiro认证获取（管理端）
-        try {
-            if (SecurityUtils.getSubject() != null && SecurityUtils.getSubject().isAuthenticated()) {
-                Object principal = SecurityUtils.getSubject().getPrincipal();
-                if (principal instanceof LoginUser) {
-                    return ((LoginUser) principal).getId();
-                }
-                return principal != null ? principal.toString() : null;
-            }
-        } catch (Exception ignored) {}
-        // 回退到HomeaiJWT认证（小程序端）
-        String tk = r.getHeader("X-Access-Token");
-        String o = HomeaiJwtUtil.getOpenid(tk);
-        if (o == null) return null;
-        var u = wxUserService.getByOpenid(o);
-        return u != null ? u.getId() : null;
+        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
+        return securityUtil.getCurrentUserId(r);
+        //update-end---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
     }
 
     /**
@@ -89,12 +76,12 @@ public class RecipeController {
      */
     //update-begin---author:cursor ---date:2026-08-13 for：【菜谱导入】按文件名批量导入封面图-----------
     /**
-     * 批量导入菜谱封面（按文件名去扩展名匹配菜谱名称）
+     * 批量导入菜谱封面（按文件名或父目录名匹配菜谱名称；支持 zip）
      * 返回：{ matched: [{fileName, recipeName, count, coverUrl}], unmatched: [文件名...] }
      */
     @PostMapping("/import-covers")
     @AutoLog(value="菜谱-批量导入封面")
-    @Operation(summary="菜谱-批量导入封面(按文件名匹配)")
+    @Operation(summary="菜谱-批量导入封面(按文件名或父目录匹配)")
     @RequiresPermissions("homeai:recipe:importExcel")
     public Result<?> importCovers(HttpServletRequest request) {
         try {
@@ -102,61 +89,18 @@ public class RecipeController {
                 return Result.error("请求格式不正确，请使用multipart/form-data格式上传文件");
             }
             MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) request;
-            Map<String, MultipartFile> fileMap = multipartRequest.getFileMap();
-            if (fileMap.isEmpty()) {
+            List<MultipartFile> files = new ArrayList<>();
+            for (List<MultipartFile> group : multipartRequest.getMultiFileMap().values()) {
+                if (group != null) {
+                    files.addAll(group);
+                }
+            }
+            if (files.isEmpty()) {
                 return Result.error("未检测到上传文件");
             }
-            // 文件名（去扩展名、去空白）→ 文件
-            Map<String, MultipartFile> byName = new LinkedHashMap<>();
-            for (MultipartFile f : fileMap.values()) {
-                if (f == null || f.isEmpty()) {
-                    continue;
-                }
-                String original = f.getOriginalFilename();
-                String base = original == null ? "" : original.substring(0, original.lastIndexOf('.') < 0 ? original.length() : original.lastIndexOf('.')).trim();
-                if (oConvertUtils.isEmpty(base)) {
-                    continue;
-                }
-                byName.putIfAbsent(base, f);
-            }
-            if (byName.isEmpty()) {
-                return Result.error("未识别到有效图片文件");
-            }
-            // 按名称批量匹配菜谱（同名称的菜谱都会更新为该封面）
-            List<Recipe> recipes = recipeService.list(new LambdaQueryWrapper<Recipe>()
-                    .in(Recipe::getName, byName.keySet())
-                    .eq(Recipe::getDelFlag, 0));
-            Map<String, List<Recipe>> byRecipeName = recipes.stream()
-                    .collect(Collectors.groupingBy(Recipe::getName));
-            List<Map<String, Object>> matched = new ArrayList<>();
-            List<String> unmatched = new ArrayList<>();
-            for (Map.Entry<String, MultipartFile> e : byName.entrySet()) {
-                List<Recipe> hit = byRecipeName.get(e.getKey());
-                if (hit == null || hit.isEmpty()) {
-                    unmatched.add(e.getValue().getOriginalFilename());
-                    continue;
-                }
-                try {
-                    String coverUrl = fileStorageService.resolveAccessUrl(recipeService.uploadCoverFile(e.getValue()));
-                    for (Recipe r : hit) {
-                        r.setCoverUrl(coverUrl);
-                        recipeService.updateById(r);
-                    }
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("fileName", e.getValue().getOriginalFilename());
-                    row.put("recipeName", e.getKey());
-                    row.put("count", hit.size());
-                    row.put("coverUrl", coverUrl);
-                    matched.add(row);
-                } catch (Exception ex) {
-                    log.warn("封面导入失败: {}", e.getValue().getOriginalFilename(), ex);
-                    unmatched.add(e.getValue().getOriginalFilename() + "（上传失败）");
-                }
-            }
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("matched", matched);
-            result.put("unmatched", unmatched);
-            return Result.OK(result);
+            return Result.OK(recipeService.importCovers(files));
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
         } catch (Exception e) {
             log.error("封面批量导入异常", e);
             return Result.error("封面导入失败: " + e.getMessage());
@@ -201,8 +145,10 @@ public class RecipeController {
         IPage<Recipe> result = recipeService.page(new Page<>(pageNo, pageSize), qw);
         // 兼容历史相对地址数据：统一转换为绝对访问地址
         if (result.getRecords() != null) {
+            Map<String, String> catNames = recipeCategoryNameMap();
             for (Recipe item : result.getRecords()) {
                 resolveRecipeUrls(item);
+                fillCategoryName(item, catNames);
             }
         }
         return Result.OK(result);
@@ -350,6 +296,29 @@ public class RecipeController {
             recipe.setVideoUrl(fileStorageService.resolveAccessUrl(recipe.getVideoUrl()));
         }
     }
+
+    //update-begin---author:cursor---date:2026-08-21---for:【菜谱列表】分类中文名---
+    private Map<String, String> recipeCategoryNameMap() {
+        Map<String, String> map = new LinkedHashMap<>();
+        List<RecipeCategory> all = recipeCategoryService.listAllOrdered();
+        if (all != null) {
+            for (RecipeCategory c : all) {
+                if (c.getId() != null) {
+                    map.put(c.getId(), c.getName() != null ? c.getName() : c.getId());
+                }
+            }
+        }
+        return map;
+    }
+
+    private void fillCategoryName(Recipe recipe, Map<String, String> catNames) {
+        if (recipe == null || oConvertUtils.isEmpty(recipe.getCategoryId())) {
+            return;
+        }
+        String name = catNames != null ? catNames.get(recipe.getCategoryId()) : null;
+        recipe.setCategoryName(oConvertUtils.isNotEmpty(name) ? name : recipe.getCategoryId());
+    }
+    //update-end---author:cursor---date:2026-08-21---for:【菜谱列表】分类中文名---
 
     @SuppressWarnings("unchecked")
     private void resolveRecipeDetail(Map<String, Object> detail) {
@@ -548,6 +517,7 @@ public class RecipeController {
                             if (oConvertUtils.isEmpty(item.getName())) {
                                 throw new JeecgBootException("菜谱名称不能为空");
                             }
+                            item.setName(item.getName().trim());
                             if (oConvertUtils.isEmpty(item.getVisibility())) {
                                 item.setVisibility("private");
                             }
@@ -557,14 +527,30 @@ public class RecipeController {
                             }
                             //update-end---author:cursor ---date:2026-08-13 for：【菜谱导入】封面图片地址格式校验-----------
                             item.setDelFlag(0);
-                            item.setId(null);
+                            item.setCategoryId(recipeCategoryService.resolveImportCategoryId(item.getCategoryId(), item.getName()));
                             List<RecipeIngredient> ingredients = recipeService.parseIngredientsFromExcel(item.getIngredients());
                             List<RecipeStep> steps = recipeService.parseStepsFromExcel(item.getSteps());
-                            // 清空文本列，避免被当成主表字段误解
                             item.setIngredients(null);
                             item.setSteps(null);
                             recipeService.applyAdminVisibilityOnSave(item);
-                            recipeService.saveWithRelations(item, ingredients, steps);
+                            //update-begin---author:cursor---date:2026-08-21---for:【菜谱导入】同名覆盖更新，避免重复---
+                            Recipe existing = recipeService.getOne(new LambdaQueryWrapper<Recipe>()
+                                    .eq(Recipe::getName, item.getName())
+                                    .orderByAsc(Recipe::getCreateTime)
+                                    .last("LIMIT 1"));
+                            if (existing != null) {
+                                item.setId(existing.getId());
+                                item.setUserId(existing.getUserId());
+                                item.setFamilyId(existing.getFamilyId());
+                                if (oConvertUtils.isEmpty(item.getCoverUrl())) {
+                                    item.setCoverUrl(existing.getCoverUrl());
+                                }
+                                recipeService.updateWithRelations(item, ingredients, steps);
+                            } else {
+                                item.setId(null);
+                                recipeService.saveWithRelations(item, ingredients, steps);
+                            }
+                            //update-end---author:cursor---date:2026-08-21---for:【菜谱导入】同名覆盖更新，避免重复---
                             //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R24】Excel 含子表导入-----------
                             successLines++;
                         } catch (Exception ex) {
@@ -592,7 +578,15 @@ public class RecipeController {
     @RequiresPermissions("homeai:recipe:moveToRecycleBin")
     public Result<?> recycleBin(Recipe r, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "10") int pageSize, HttpServletRequest req) {
         // 原生SQL分页查询回收站，避免逻辑删除自动追加 del_flag=0 导致查不到数据
-        return Result.OK(recipeMapper.selectRecycleBinPage(new Page<>(pageNo, pageSize), r.getName()));
+        IPage<Recipe> page = recipeMapper.selectRecycleBinPage(new Page<>(pageNo, pageSize), r.getName());
+        if (page != null && page.getRecords() != null) {
+            Map<String, String> catNames = recipeCategoryNameMap();
+            for (Recipe item : page.getRecords()) {
+                resolveRecipeUrls(item);
+                fillCategoryName(item, catNames);
+            }
+        }
+        return Result.OK(page);
     }
 
     //update-begin---author:admin ---date:2026-07-31  for：修复软删除/恢复失效问题（@TableLogic 字段不参与 updateById）-----------
@@ -812,7 +806,7 @@ public class RecipeController {
                 if (oConvertUtils.isNotEmpty(v)) {
                     String title = v.trim();
                     titleMap.put(cell.getColumnIndex(), title);
-                    if (RECIPE_EXCEL_FIELDS.containsKey(title)) {
+                    if (RECIPE_EXCEL_FIELDS.containsKey(title) || resolveExcelField(title) != null) {
                         matchedColumns++;
                     }
                 }
@@ -833,7 +827,7 @@ public class RecipeController {
                         continue;
                     }
                     hasData = true;
-                    Field field = RECIPE_EXCEL_FIELDS.get(entry.getValue());
+                    Field field = resolveExcelField(entry.getValue());
                     if (field == null) {
                         continue;
                     }
@@ -854,6 +848,22 @@ public class RecipeController {
         }
         return list;
     }
+
+    //update-begin---author:cursor---date:2026-08-21---for:【菜谱导入】分类列兼容「分类」中文表头---
+    private Field resolveExcelField(String title) {
+        if (oConvertUtils.isEmpty(title)) {
+            return null;
+        }
+        Field field = RECIPE_EXCEL_FIELDS.get(title.trim());
+        if (field != null) {
+            return field;
+        }
+        if ("分类".equals(title.trim()) || "分类id".equalsIgnoreCase(title.trim())) {
+            return RECIPE_EXCEL_FIELDS.get("分类ID");
+        }
+        return null;
+    }
+    //update-end---author:cursor---date:2026-08-21---for:【菜谱导入】分类列兼容「分类」中文表头---
 
     /** 读取单元格文本，不改变单元格类型（避免 inlineStr 单元格内容被清空） */
     private String readCellText(Cell cell) {

@@ -1,8 +1,10 @@
 package org.jeecg.modules.homeai.plan.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
+import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.modules.homeai.plan.entity.PlanMaster;
 import org.jeecg.modules.homeai.plan.entity.PlanInstance;
 import org.jeecg.modules.homeai.plan.mapper.PlanMasterMapper;
@@ -189,6 +191,95 @@ public class PlanServiceImpl extends ServiceImpl<PlanMasterMapper, PlanMaster> i
         return instanceMapper.selectById(instanceId);
     }
 
+    //update-begin---author:cursor---date:2026-08-20---for:【Android体验】APP 计划编辑/删除（校验归属）---
+    private PlanMaster requireOwnedMaster(String userId, String instanceId) {
+        PlanInstance inst = instanceMapper.selectById(instanceId);
+        if (inst == null) {
+            throw new JeecgBootException("计划不存在");
+        }
+        PlanMaster master = getById(inst.getMasterId());
+        if (master == null) {
+            throw new JeecgBootException("计划不存在");
+        }
+        if (!userId.equals(master.getUserId())) {
+            throw new JeecgBootException("无权操作该计划");
+        }
+        return master;
+    }
+
+    @Override
+    public PlanInstance getOwnedInstanceDetail(String userId, String instanceId) {
+        if (oConvertUtils.isEmpty(instanceId)) {
+            return null;
+        }
+        PlanInstance inst = instanceMapper.selectById(instanceId);
+        if (inst == null) {
+            return null;
+        }
+        PlanMaster master = getById(inst.getMasterId());
+        if (master == null) {
+            return null;
+        }
+        if (!userId.equals(master.getUserId())) {
+            throw new JeecgBootException("无权操作该计划");
+        }
+        fillMasterInfo(Collections.singletonList(inst));
+        return inst;
+    }
+
+    @Override
+    public PlanMaster updateOwnedPlan(String userId, String instanceId, PlanMaster patch) {
+        PlanMaster existing = requireOwnedMaster(userId, instanceId);
+        PlanInstance inst = instanceMapper.selectById(instanceId);
+        if (patch == null || oConvertUtils.isEmpty(patch.getTitle())) {
+            throw new JeecgBootException("请输入标题");
+        }
+        boolean allDay = Integer.valueOf(1).equals(patch.getIsAllDay());
+        java.time.LocalTime startTime = allDay ? null : patch.getStartTime();
+        Integer remind = allDay ? 0 : (patch.getRemindMinutes() == null ? 0 : patch.getRemindMinutes());
+        if (!allDay && remind > 0 && startTime == null) {
+            throw new JeecgBootException("设置提醒请先选择开始时间");
+        }
+        update(new LambdaUpdateWrapper<PlanMaster>()
+                .eq(PlanMaster::getId, existing.getId())
+                .eq(PlanMaster::getUserId, userId)
+                .set(PlanMaster::getTitle, patch.getTitle().trim())
+                .set(PlanMaster::getContent, patch.getContent())
+                .set(PlanMaster::getPriority, patch.getPriority())
+                .set(PlanMaster::getCategory, patch.getCategory())
+                .set(PlanMaster::getIsAllDay, allDay ? 1 : 0)
+                .set(PlanMaster::getStartTime, startTime)
+                .set(PlanMaster::getRemindMinutes, remind)
+                .set(PlanMaster::getRecipeId, patch.getRecipeId())
+                .set(PlanMaster::getUpdateTime, new Date()));
+        invalidateCalendarCache(userId, inst != null ? inst.getPlanDate() : existing.getPlanDate());
+        return getById(existing.getId());
+    }
+
+    @Override
+    public void softDeleteOwnedPlan(String userId, String instanceId) {
+        PlanMaster existing = requireOwnedMaster(userId, instanceId);
+        LambdaQueryWrapper<PlanInstance> q = new LambdaQueryWrapper<>();
+        q.eq(PlanInstance::getMasterId, existing.getId()).select(PlanInstance::getPlanDate);
+        List<PlanInstance> insts = instanceMapper.selectList(q);
+        update(new LambdaUpdateWrapper<PlanMaster>()
+                .eq(PlanMaster::getId, existing.getId())
+                .eq(PlanMaster::getUserId, userId)
+                .set(PlanMaster::getDelFlag, 1)
+                .set(PlanMaster::getUpdateTime, new Date()));
+        Set<String> months = new HashSet<>();
+        for (PlanInstance i : insts) {
+            if (i.getPlanDate() != null) {
+                months.add(i.getPlanDate().toString().substring(0, 7));
+            }
+        }
+        for (String ym : months) {
+            redisUtil.del(String.format(CACHE_PLAN_CALENDAR, userId, ym));
+            redisUtil.del(String.format(CACHE_PLAN_CALENDAR_SUMMARY, userId, ym));
+        }
+    }
+    //update-end---author:cursor---date:2026-08-20---for:【Android体验】APP 计划编辑/删除（校验归属）---
+
     @Override
     public List<LocalDate> getCalendarDates(String userId, String yearMonth) {
         String cacheKey = String.format(CACHE_PLAN_CALENDAR, userId, yearMonth);
@@ -228,32 +319,53 @@ public class PlanServiceImpl extends ServiceImpl<PlanMasterMapper, PlanMaster> i
         return instances;
     }
 
+    //update-begin---author:cursor---date:2026-08-20---for:【Android体验】按日列表批量填充主计划，避免 N+1---
     private void fillMasterInfo(List<PlanInstance> instances) {
-        for (PlanInstance inst : instances) {
-            PlanMaster m = getById(inst.getMasterId());
-            if (m != null) {
-                inst.setTitle(m.getTitle());
-                inst.setCategory(m.getCategory());
-                inst.setPriority(m.getPriority());
-                inst.setIsAllDay(m.getIsAllDay());
-                inst.setUserId(m.getUserId());
-                inst.setRepeatRule(m.getRepeatRule());
-                //update-begin---author:admin---date:2026-08-18---for:【Android迁移R2-本地通知】---
-                inst.setStartTime(m.getStartTime());
-                inst.setRemindMinutes(m.getRemindMinutes());
-                //update-end---author:admin---date:2026-08-18---for:【Android迁移R2-本地通知】---
-                //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】计划关联菜谱-----------
-                inst.setRecipeId(m.getRecipeId());
-                if (oConvertUtils.isNotEmpty(m.getRecipeId())) {
-                    Recipe recipe = recipeService.getById(m.getRecipeId());
-                    if (recipe != null) {
-                        inst.setRecipeName(recipe.getName());
-                    }
+        if (instances == null || instances.isEmpty()) {
+            return;
+        }
+        Set<String> masterIds = instances.stream()
+                .map(PlanInstance::getMasterId)
+                .filter(oConvertUtils::isNotEmpty)
+                .collect(Collectors.toSet());
+        if (masterIds.isEmpty()) {
+            return;
+        }
+        Map<String, PlanMaster> masterMap = listByIds(masterIds).stream()
+                .collect(Collectors.toMap(PlanMaster::getId, m -> m, (a, b) -> a));
+        Set<String> recipeIds = masterMap.values().stream()
+                .map(PlanMaster::getRecipeId)
+                .filter(oConvertUtils::isNotEmpty)
+                .collect(Collectors.toSet());
+        Map<String, String> recipeNames = new HashMap<>();
+        if (!recipeIds.isEmpty()) {
+            for (Recipe recipe : recipeService.listByIds(recipeIds)) {
+                if (recipe != null && oConvertUtils.isNotEmpty(recipe.getId())) {
+                    recipeNames.put(recipe.getId(), recipe.getName());
                 }
-                //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】计划关联菜谱-----------
+            }
+        }
+        for (PlanInstance inst : instances) {
+            PlanMaster m = masterMap.get(inst.getMasterId());
+            if (m == null) {
+                continue;
+            }
+            inst.setTitle(m.getTitle());
+            inst.setCategory(m.getCategory());
+            inst.setPriority(m.getPriority());
+            inst.setIsAllDay(m.getIsAllDay());
+            inst.setUserId(m.getUserId());
+            inst.setRepeatRule(m.getRepeatRule());
+            inst.setStartTime(m.getStartTime());
+            inst.setRemindMinutes(m.getRemindMinutes());
+            inst.setContent(m.getContent());
+            inst.setRecipeId(m.getRecipeId());
+            if (oConvertUtils.isNotEmpty(m.getRecipeId())) {
+                inst.setRecipeName(recipeNames.get(m.getRecipeId()));
             }
         }
     }
+    //update-end---author:cursor---date:2026-08-20---for:【Android体验】按日列表批量填充主计划，避免 N+1---
 
     @Override
     public void toggleInstanceStatus(String instanceId) {

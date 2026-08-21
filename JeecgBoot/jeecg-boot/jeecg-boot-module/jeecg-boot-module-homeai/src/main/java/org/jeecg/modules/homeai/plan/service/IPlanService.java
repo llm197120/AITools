@@ -28,6 +28,17 @@ public interface IPlanService extends IService<PlanMaster> {
     /** 根据 ID 查询计划实例 */
     PlanInstance getInstanceById(String instanceId);
 
+    //update-begin---author:cursor---date:2026-08-20---for:【Android体验】APP 计划编辑/删除（校验归属）---
+    /** APP：查询自己的计划实例详情（含主计划冗余字段） */
+    PlanInstance getOwnedInstanceDetail(String userId, String instanceId);
+
+    /** APP：更新自己的主计划（标题/内容/提醒等，不改日期与重复规则） */
+    PlanMaster updateOwnedPlan(String userId, String instanceId, PlanMaster patch);
+
+    /** APP：软删除自己的主计划（重复计划整条系列一并隐藏） */
+    void softDeleteOwnedPlan(String userId, String instanceId);
+    //update-end---author:cursor---date:2026-08-20---for:【Android体验】APP 计划编辑/删除（校验归属）---
+
     /** 创建重复计划的后续实例 */
     PlanInstance createInstance(String masterId, LocalDate planDate);
 

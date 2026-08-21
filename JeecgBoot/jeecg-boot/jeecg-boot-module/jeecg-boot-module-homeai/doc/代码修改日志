@@ -203,4 +203,18 @@ HomeaiChatServiceImpl 已直接复用 IAiragChatService.send() 实现 SSE 流式
   JeecgUniapp/src/pages.json + src/types/uni-pages.d.ts（去掉 StorageBrowser 误注册）
   JeecgUniapp/src/pages-homeai-more/recipe/index.vue（做过 N 次）
   docs/plan/homeai-optimization-roadmap.md
+-- author:cursor---date:20260820--for: 【家庭管理】后台删除后家庭仍出现在列表且状态为正常 ---
+涉及的文件：
+  jeecg-boot-module-homeai/.../family/entity/Family.java（delFlag 补 @TableLogic）
+  jeecg-boot-module-homeai/.../family/controller/FamilyController.java（列表/导出排除 del_flag=1）
+  jeecg-boot-module-homeai/.../storage/controller/StorageController.java（TableLogic 后去掉手动 eq delFlag）
+  jeecg-boot-module-homeai/.../storage/service/impl/StorageFileServiceImpl.java（同上）
+  jeecgboot-vue3/src/views/homeai/family/FamilyDrawer.vue（详情状态改用 status，勿与 delFlag 混用）
+  docs/plan/homeai-optimization-roadmap.md
+-- author:cursor---date:20260821--for: 【OSS】封面上传 Connection reset 重试与 Content-Length ---
+涉及的文件：
+  jeecg-boot-base-core/.../oss/OssBootUtil.java（HTTPS 客户端、Content-Length、resetClient）
+  jeecg-boot-module-homeai/.../HomeaiFileStorageServiceImpl.java（瞬时失败重试 3 次）
+  jeecgboot-vue3/src/views/homeai/recipe/recipeList.vue（单张失败不中断、再试一次）
+  jeecgboot-vue3/src/views/homeai/components/HomeaiMediaUpload.vue（超时 120s）
 

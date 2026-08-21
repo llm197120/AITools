@@ -22,4 +22,15 @@ public interface IFamilyInviteCodeService extends IService<FamilyInviteCode> {
      * @return 邀请码记录（无效返回 null）
      */
     FamilyInviteCode validateCode(String code);
+
+    /**
+     * 原子占用未使用且未过期的邀请码
+     * @return true 占用成功
+     */
+    boolean tryOccupy(String inviteCodeId, String userId);
+
+    /**
+     * 解散家庭时作废未使用邀请码
+     */
+    void invalidateUnusedByFamilyId(String familyId);
 }

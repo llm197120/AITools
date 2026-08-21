@@ -2,6 +2,7 @@ package org.jeecg.modules.homeai.family.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -70,6 +71,9 @@ public class Family implements Serializable {
     private Date updateTime;
 
     /** 删除状态(0-正常,1-已删除) */
+    //update-begin---author:cursor---date:2026-08-20---for:【家庭管理】补逻辑删除，后台移入回收站后不再出现在列表-----------
+    @TableLogic
+    //update-end---author:cursor---date:2026-08-20---for:【家庭管理】补逻辑删除，后台移入回收站后不再出现在列表-----------
     @Schema(description = "删除状态(0-正常,1-已删除)")
     private Integer delFlag;
 

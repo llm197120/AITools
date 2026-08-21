@@ -5,28 +5,20 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.jeecg.common.api.CommonAPI;
 import org.jeecg.common.api.vo.Result;
 import org.jeecg.common.aspect.annotation.AutoLog;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.common.system.query.QueryGenerator;
-import org.jeecg.common.system.util.JwtUtil;
-import org.jeecg.common.system.vo.LoginUser;
-import org.jeecg.common.util.RedisUtil;
-import org.jeecg.common.util.TokenUtils;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.ai.constant.HomeaiAiQuotaScene;
 import org.jeecg.modules.homeai.ai.service.IHomeaiAiQuotaPrecheckService;
+import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiPlanConfigService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
-import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.storage.entity.StorageConvertTask;
 import org.jeecg.modules.homeai.storage.service.IStorageConvertTaskService;
-import org.jeecg.modules.homeai.user.service.IWxUserService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -44,14 +36,7 @@ public class StorageOfficeController {
     private IStorageConvertTaskService taskService;
 
     @Autowired
-    private IWxUserService wxUserService;
-
-    @Lazy
-    @Autowired
-    private CommonAPI commonApi;
-
-    @Autowired
-    private RedisUtil redisUtil;
+    private HomeaiSecurityUtil securityUtil;
 
     @Autowired
     private IHomeaiAiQuotaPrecheckService precheckService;
@@ -63,40 +48,12 @@ public class StorageOfficeController {
     private IHomeaiFileStorageService fileStorageService;
 
     /**
-     * 从 Token 解析用户ID（支持管理端 JeecgBoot JWT 与小程序端 HomeaiJWT）
+     * 从 Token 解析用户ID（管理端控制台 JWT 或 HomeAI APP JWT）
      */
     private String getUserId(HttpServletRequest request) {
-        try {
-            if (SecurityUtils.getSubject() != null && SecurityUtils.getSubject().isAuthenticated()) {
-                Object principal = SecurityUtils.getSubject().getPrincipal();
-                if (principal instanceof LoginUser) {
-                    return ((LoginUser) principal).getId();
-                }
-                return principal != null ? principal.toString() : null;
-            }
-        } catch (Exception ignored) {}
-
-        String token = request.getHeader("X-Access-Token");
-        if (token == null || token.trim().isEmpty()) {
-            return null;
-        }
-
-        // 尝试解析 JeecgBoot 标准 JWT（管理端）
-        try {
-            String username = JwtUtil.getUsername(token);
-            if (username != null && TokenUtils.verifyToken(token, commonApi, redisUtil)) {
-                LoginUser loginUser = TokenUtils.getLoginUser(username, commonApi, redisUtil);
-                if (loginUser != null) {
-                    return loginUser.getId();
-                }
-            }
-        } catch (Exception ignored) {}
-
-        // 回退到 HomeaiJWT 认证（小程序端）
-        String openid = HomeaiJwtUtil.getOpenid(token);
-        if (openid == null) return null;
-        var user = wxUserService.getByOpenid(openid);
-        return user != null ? user.getId() : null;
+        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
+        return securityUtil.getCurrentUserId(request);
+        //update-end---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
     }
 
     /**

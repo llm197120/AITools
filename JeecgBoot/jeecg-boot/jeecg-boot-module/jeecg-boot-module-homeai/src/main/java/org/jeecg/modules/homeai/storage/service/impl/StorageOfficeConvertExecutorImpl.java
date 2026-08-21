@@ -2,7 +2,11 @@ package org.jeecg.modules.homeai.storage.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
+import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
+import org.jeecg.modules.homeai.preview.IHomeaiFilePreviewService;
+import org.jeecg.modules.homeai.recipe.entity.LearnMaterial;
+import org.jeecg.modules.homeai.recipe.service.ILearnService;
 import org.jeecg.modules.homeai.storage.entity.StorageConvertTask;
 import org.jeecg.modules.homeai.storage.entity.StorageFile;
 import org.jeecg.modules.homeai.storage.service.IStorageAiGenerateService;
@@ -39,6 +43,11 @@ public class StorageOfficeConvertExecutorImpl implements IStorageOfficeConvertEx
     @Autowired
     private IHomeaiFileStorageService fileStorageService;
 
+    //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】学习资料预览转 PDF-----------
+    @Autowired
+    private ILearnService learnService;
+    //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】学习资料预览转 PDF-----------
+
     @Override
     @Async
     public void executeAsync(String taskId) {
@@ -70,6 +79,12 @@ public class StorageOfficeConvertExecutorImpl implements IStorageOfficeConvertEx
                 processAiGenerate(task, startMs);
                 return;
             }
+            //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】学习资料预览转 PDF-----------
+            if (IHomeaiFilePreviewService.CONVERT_PREVIEW_PDF_LEARN.equals(task.getConvertType())) {
+                processLearnPreviewPdf(task, startMs);
+                return;
+            }
+            //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】学习资料预览转 PDF-----------
             processFormatConvert(task, startMs);
         } catch (Exception e) {
             log.error("Office转换任务失败: taskId={}", taskId, e);
@@ -117,8 +132,55 @@ public class StorageOfficeConvertExecutorImpl implements IStorageOfficeConvertEx
         task.setResultFileUrl(fileStorageService.storeLocalFile(converted, objectKey));
         task.setResultFileSize(Files.size(converted));
         task.setErrorMessage(null);
+        //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】预览 PDF 回写源文件-----------
+        if (IHomeaiFilePreviewService.CONVERT_PREVIEW_PDF.equals(task.getConvertType())
+                || "pdf".equals(targetFormat)) {
+            if (IHomeaiFilePreviewService.CONVERT_PREVIEW_PDF.equals(task.getConvertType())
+                    || oConvertUtils.isEmpty(sourceFile.getPreviewPdfUrl())) {
+                sourceFile.setPreviewPdfUrl(task.getResultFileUrl());
+                sourceFile.setUpdateTime(new Date());
+                fileService.updateById(sourceFile);
+            }
+        }
+        //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】预览 PDF 回写源文件-----------
         finishTask(task, startMs);
     }
+
+    //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】学习资料预览转 PDF-----------
+    private void processLearnPreviewPdf(StorageConvertTask task, long startMs) throws Exception {
+        LearnMaterial material = learnService.getById(task.getFileId());
+        if (material == null) {
+            failTask(task, "学习资料不存在", startMs);
+            return;
+        }
+        if (oConvertUtils.isEmpty(material.getFileUrl())) {
+            failTask(task, "学习资料没有文件", startMs);
+            return;
+        }
+        Path sourcePath = fileStorageService.resolveLocalPath(material.getFileUrl());
+        if (sourcePath == null || !Files.exists(sourcePath)) {
+            failTask(task, "源文件物理路径不存在: " + sourcePath, startMs);
+            return;
+        }
+        Path outDir = sourcePath.getParent();
+        Path converted = officeConvertUtil.convert(sourcePath, outDir, "pdf");
+        if (converted == null || !Files.exists(converted)) {
+            failTask(task, "格式转换失败，请确认本机已安装 Microsoft Office 或 LibreOffice（soffice）", startMs);
+            return;
+        }
+        String storedName = converted.getFileName().toString();
+        String objectKey = "homeai/learn/" + material.getId() + "/" + storedName;
+        String storedRef = fileStorageService.storeLocalFile(converted, objectKey);
+        task.setStatus("COMPLETED");
+        task.setResultFileUrl(storedRef);
+        task.setResultFileSize(Files.size(converted));
+        task.setErrorMessage(null);
+        material.setPreviewPdfUrl(storedRef);
+        material.setUpdateTime(new Date());
+        learnService.updateById(material);
+        finishTask(task, startMs);
+    }
+    //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】学习资料预览转 PDF-----------
 
     private void finishTask(StorageConvertTask task, long startMs) {
         task.setTaskDuration((int) TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis() - startMs));

@@ -6,7 +6,10 @@ import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.api.vo.Result;
 import org.jeecg.common.constant.CommonConstant;
+import org.jeecg.common.constant.PasswordConstant;
+import org.jeecg.common.util.PasswordUtil;
 import org.jeecg.common.util.RedisUtil;
+import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.config.shiro.IgnoreAuth;
 import org.jeecg.modules.homeai.config.HomeaiJwtUtil;
 import org.jeecg.modules.homeai.user.entity.WxUser;
@@ -27,6 +30,7 @@ import java.time.Duration;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 微信用户 Service 实现
@@ -53,11 +57,6 @@ public class WxUserServiceImpl extends ServiceImpl<WxUserMapper, WxUser> impleme
     /** 当前激活的 Spring Profile（用于区分开发/生产环境） */
     @Value("${spring.profiles.active:dev}")
     private String activeProfile;
-
-    //update-begin---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录---
-    @Autowired
-    private WxUserMapper wxUserMapper;
-    //update-end---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录---
 
     /** Token 在 Redis 中的缓存前缀 */
     private static final String PREFIX_USER_TOKEN = "homeai_token:";
@@ -144,8 +143,9 @@ public class WxUserServiceImpl extends ServiceImpl<WxUserMapper, WxUser> impleme
     @Override
     public WxUser getByPhone(String phone) {
         LambdaQueryWrapper<WxUser> q = new LambdaQueryWrapper<>();
-        q.eq(WxUser::getPhone, phone).eq(WxUser::getDelFlag, 0).last("LIMIT 1");
-        return wxUserMapper.selectOne(q);
+        // TableLogic 会自动附加 del_flag=0，勿再手动 eq delFlag（MP 3.5 可能报逻辑删除字段不可入条件）
+        q.eq(WxUser::getPhone, phone).last("LIMIT 1");
+        return getOne(q, false);
     }
 
     @Override
@@ -158,6 +158,29 @@ public class WxUserServiceImpl extends ServiceImpl<WxUserMapper, WxUser> impleme
         return user;
     }
     //update-end---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录---
+
+    //update-begin---author:cursor---date:2026-08-21---for:【后台新增用户】统一写 salt+密码哈希，避免 App 登录 NPE---
+    @Override
+    public void applyPassword(WxUser user, String plainPassword) {
+        String salt = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        user.setSalt(salt);
+        user.setPassword(PasswordUtil.encrypt(plainPassword, PasswordUtil.SALT, salt));
+    }
+
+    @Override
+    public void prepareAdminCreatedUser(WxUser user) {
+        applyPassword(user, PasswordConstant.DEFAULT_PASSWORD);
+        if (oConvertUtils.isEmpty(user.getLoginType())) {
+            user.setLoginType("phone");
+        }
+        if (oConvertUtils.isEmpty(user.getOpenid()) && oConvertUtils.isNotEmpty(user.getPhone())) {
+            user.setOpenid("phone_" + user.getPhone());
+        }
+        if (user.getCreateTime() == null) {
+            user.setCreateTime(new Date());
+        }
+    }
+    //update-end---author:cursor---date:2026-08-21---for:【后台新增用户】统一写 salt+密码哈希，避免 App 登录 NPE---
 
     /**
      * 调用微信 code2Session 接口换取 openid

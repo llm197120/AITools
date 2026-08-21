@@ -47,8 +47,11 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
             //update-end---author:admin ---date:2026-08-12 for：【HomeAI】订阅模板公开配置-----------
             //update-begin---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录公开接口-----------
             "/homeai/auth/register",
-            "/homeai/auth/login/password"
+            "/homeai/auth/login/password",
             //update-end---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录公开接口-----------
+            //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R69】APP 版本公开探测-----------
+            "/homeai/app/version"
+            //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R69】APP 版本公开探测-----------
     );
 
     private static final List<String> ADMIN_PREFIXES = Arrays.asList(
@@ -131,8 +134,12 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
             "/homeai/storage/recycleBin",
             "/homeai/storage/restore",
             "/homeai/storage/deletePermanently",
-            "/homeai/audit"
+            "/homeai/audit",
             //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】资料回收站与审计管理端入口-----------
+            //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R69】APP 版本管理端-----------
+            "/homeai/app/version/admin",
+            "/homeai/app/version/upload"
+            //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R69】APP 版本管理端-----------
     );
 
     @Lazy
@@ -216,6 +223,15 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
 
     private boolean isHomeaiAppTokenValid(String token) {
         try {
+            //update-begin---author:cursor---date:2026-08-20---for:【Android登录】手机号 JWT 优先按 userId 校验 Redis token-----------
+            String userId = HomeaiJwtUtil.getUserId(token);
+            if (oConvertUtils.isNotEmpty(userId)) {
+                String cachedByUserId = (String) redisUtil.get("homeai_token:" + userId);
+                if (cachedByUserId != null && cachedByUserId.equals(token)) {
+                    return true;
+                }
+            }
+            //update-end---author:cursor---date:2026-08-20---for:【Android登录】手机号 JWT 优先按 userId 校验 Redis token-----------
             String openid = HomeaiJwtUtil.getOpenid(token);
             if (oConvertUtils.isEmpty(openid)) {
                 return false;

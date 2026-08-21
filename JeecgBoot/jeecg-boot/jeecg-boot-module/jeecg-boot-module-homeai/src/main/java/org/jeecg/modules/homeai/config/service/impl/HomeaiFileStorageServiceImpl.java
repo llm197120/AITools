@@ -49,15 +49,7 @@ public class HomeaiFileStorageServiceImpl implements IHomeaiFileStorageService {
     public String storeMultipart(MultipartFile file, String objectKey) {
         String key = normalizeObjectKey(objectKey);
         if (isOssEnabled()) {
-            try (InputStream in = file.getInputStream()) {
-                String uploadedKey = OssBootUtil.uploadPrivate(in, key);
-                if (oConvertUtils.isEmpty(uploadedKey)) {
-                    throw new RuntimeException("OSS 上传失败");
-                }
-                return toOssReference(uploadedKey);
-            } catch (IOException e) {
-                throw new RuntimeException("OSS 上传失败", e);
-            }
+            return storeToOss(file::getInputStream, file.getSize(), file.getContentType(), key);
         }
         try {
             Path target = localPath(key);
@@ -73,12 +65,8 @@ public class HomeaiFileStorageServiceImpl implements IHomeaiFileStorageService {
     public String storeLocalFile(Path localFile, String objectKey) {
         String key = normalizeObjectKey(objectKey);
         if (isOssEnabled()) {
-            try (InputStream in = Files.newInputStream(localFile)) {
-                String uploadedKey = OssBootUtil.uploadPrivate(in, key);
-                if (oConvertUtils.isEmpty(uploadedKey)) {
-                    throw new RuntimeException("OSS 上传失败");
-                }
-                return toOssReference(uploadedKey);
+            try {
+                return storeToOss(() -> Files.newInputStream(localFile), Files.size(localFile), null, key);
             } catch (IOException e) {
                 throw new RuntimeException("OSS 上传失败", e);
             }
@@ -158,6 +146,11 @@ public class HomeaiFileStorageServiceImpl implements IHomeaiFileStorageService {
         if (oConvertUtils.isNotEmpty(file.getThumbnailUrl())) {
             file.setThumbnailUrl(resolveAccessUrl(file.getThumbnailUrl()));
         }
+        //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】预览 PDF URL 同步签名-----------
+        if (oConvertUtils.isNotEmpty(file.getPreviewPdfUrl())) {
+            file.setPreviewPdfUrl(resolveAccessUrl(file.getPreviewPdfUrl()));
+        }
+        //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】预览 PDF URL 同步签名-----------
         //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R21】缩略图 URL 同步签名/解析-----------
     }
 
@@ -286,6 +279,40 @@ public class HomeaiFileStorageServiceImpl implements IHomeaiFileStorageService {
     private Path localPath(String objectKey) {
         return Paths.get(uploadPath, objectKey.split("/"));
     }
+
+    //update-begin---author:cursor---date:2026-08-21---for:【OSS】连接重置时重建客户端并重试，上传带文件大小---
+    @FunctionalInterface
+    private interface OssStreamSupplier {
+        InputStream open() throws IOException;
+    }
+
+    private String storeToOss(OssStreamSupplier stream, long size, String contentType, String key) {
+        Exception last = null;
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try (InputStream in = stream.open()) {
+                String uploadedKey = OssBootUtil.uploadPrivate(in, key, size, contentType);
+                if (oConvertUtils.isEmpty(uploadedKey)) {
+                    throw new RuntimeException("OSS 上传失败");
+                }
+                return toOssReference(uploadedKey);
+            } catch (Exception e) {
+                last = e;
+                log.warn("OSS 上传失败 attempt={}/{} key={}: {}", attempt, 3, key, e.getMessage());
+                if (!OssBootUtil.isTransientNetworkFailure(e) || attempt == 3) {
+                    break;
+                }
+                OssBootUtil.resetClient();
+                try {
+                    Thread.sleep(400L * attempt);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        throw new RuntimeException(last != null ? last.getMessage() : "OSS 上传失败，请稍后重试", last);
+    }
+    //update-end---author:cursor---date:2026-08-21---for:【OSS】连接重置时重建客户端并重试，上传带文件大小---
 
     private String normalizeObjectKey(String objectKey) {
         if (oConvertUtils.isEmpty(objectKey)) {

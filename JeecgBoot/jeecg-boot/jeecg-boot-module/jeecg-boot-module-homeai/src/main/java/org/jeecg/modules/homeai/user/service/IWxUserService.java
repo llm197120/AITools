@@ -46,4 +46,16 @@ public interface IWxUserService extends IService<WxUser> {
      */
     WxUser registerByPhone(WxUser user);
     //update-end---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录---
+
+    //update-begin---author:cursor---date:2026-08-21---for:【后台新增用户】统一写 salt+密码哈希，避免 App 登录 NPE---
+    /**
+     * 按明文密码生成 8 位 per-user 盐并写入加密后的 password/salt（与 App 注册算法一致）
+     */
+    void applyPassword(WxUser user, String plainPassword);
+
+    /**
+     * 管理端新增/导入：默认密码 123456，补齐 loginType=phone 与占位 openid
+     */
+    void prepareAdminCreatedUser(WxUser user);
+    //update-end---author:cursor---date:2026-08-21---for:【后台新增用户】统一写 salt+密码哈希，避免 App 登录 NPE---
 }

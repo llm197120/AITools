@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
+import org.jeecg.modules.homeai.config.HomeaiUploadLimitService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileWhitelistService;
 import org.jeecg.modules.homeai.config.service.IHomeaiStorageConfigService;
@@ -66,6 +67,11 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
 
     @Autowired
     private IHomeaiFileWhitelistService whitelistService;
+
+    //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】单文件分类上限-----------
+    @Autowired
+    private HomeaiUploadLimitService uploadLimitService;
+    //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】单文件分类上限-----------
 
     @Autowired
     private IHomeaiFileStorageService fileStorageService;
@@ -128,6 +134,9 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
         if (!whitelistService.isAllowedExtension(ext)) {
             throw new RuntimeException("不支持上传该文件类型");
         }
+        //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】单文件分类上限-----------
+        uploadLimitService.assertAllowed(ext, file.getSize());
+        //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】单文件分类上限-----------
         try {
             HomeaiFileMagicUtil.validate(file, ext);
         } catch (IOException e) {
@@ -473,9 +482,10 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
     @Override
     public List<Map<String, Object>> listFamilyQuotaBoard(String keyword, Boolean onlyWarn, Boolean onlyCustom) {
         int warnPercent = storageConfigService.getWarnPercent();
+        //update-begin---author:cursor---date:2026-08-20---for:【家庭管理】Family 启用 TableLogic，勿再手动 eq delFlag-----------
         List<Family> families = familyService.list(new LambdaQueryWrapper<Family>()
-                .eq(Family::getDelFlag, 0)
                 .ne(Family::getStatus, "disbanded"));
+        //update-end---author:cursor---date:2026-08-20---for:【家庭管理】Family 启用 TableLogic，勿再手动 eq delFlag-----------
         String kw = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
         List<Map<String, Object>> rows = new ArrayList<>();
         for (Family fam : families) {

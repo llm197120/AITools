@@ -1,8 +1,10 @@
 package org.jeecg.modules.homeai.family.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
+import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.family.entity.FamilyInviteCode;
 import org.jeecg.modules.homeai.family.mapper.FamilyInviteCodeMapper;
 import org.jeecg.modules.homeai.family.service.IFamilyInviteCodeService;
@@ -48,6 +50,32 @@ public class FamilyInviteCodeServiceImpl extends ServiceImpl<FamilyInviteCodeMap
                 .last("LIMIT 1");
         return getOne(query);
     }
+
+    //update-begin---author:cursor---date:2026-08-20---for:【审查修复】邀请码原子占用；解散作废未使用码---
+    @Override
+    public boolean tryOccupy(String inviteCodeId, String userId) {
+        if (oConvertUtils.isEmpty(inviteCodeId) || oConvertUtils.isEmpty(userId)) {
+            return false;
+        }
+        return update(new LambdaUpdateWrapper<FamilyInviteCode>()
+                .eq(FamilyInviteCode::getId, inviteCodeId)
+                .isNull(FamilyInviteCode::getUsedBy)
+                .gt(FamilyInviteCode::getExpireAt, new Date())
+                .set(FamilyInviteCode::getUsedBy, userId)
+                .set(FamilyInviteCode::getUsedAt, new Date()));
+    }
+
+    @Override
+    public void invalidateUnusedByFamilyId(String familyId) {
+        if (oConvertUtils.isEmpty(familyId)) {
+            return;
+        }
+        update(new LambdaUpdateWrapper<FamilyInviteCode>()
+                .eq(FamilyInviteCode::getFamilyId, familyId)
+                .isNull(FamilyInviteCode::getUsedBy)
+                .set(FamilyInviteCode::getExpireAt, new Date()));
+    }
+    //update-end---author:cursor---date:2026-08-20---for:【审查修复】邀请码原子占用；解散作废未使用码---
 
     /**
      * 生成指定长度的随机字母数字字符串

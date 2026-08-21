@@ -37,8 +37,8 @@ spring:
     clean-disabled: true
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+      max-file-size: 200MB
+      max-request-size: 200MB
   mail:
     # 定时任务发送邮件
     timeJobSend: false
@@ -384,6 +384,16 @@ homeai:
   ai:
     # AES-256-GCM加密密钥(32字节，生产环境请更换)
     key-encryption-key: HomeAI@2026!SecretKeyForAES!!!
+  #update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】单文件分类上限-----------
+  upload:
+    limits:
+      video: 209715200
+      audio: 52428800
+      image: 20971520
+      document: 52428800
+      archive: 104857600
+      text: 10485760
+  #update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】单文件分类上限-----------
   office:
     # Windows 下优先使用本机 Microsoft Office（Word/Excel/PowerPoint），失败或未安装时回退 LibreOffice
     prefer-ms-office: true

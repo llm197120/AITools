@@ -4,9 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
-import org.jeecg.common.constant.CommonConstant;
 import org.jeecg.modules.homeai.family.entity.Family;
-import org.jeecg.modules.homeai.family.entity.FamilyInviteCode;
 import org.jeecg.modules.homeai.family.entity.FamilyMember;
 import org.jeecg.modules.homeai.family.mapper.FamilyMapper;
 import org.jeecg.modules.homeai.family.service.IFamilyInviteCodeService;
@@ -97,6 +95,9 @@ public class FamilyServiceImpl extends ServiceImpl<FamilyMapper, Family> impleme
         query.eq(FamilyMember::getFamilyId, familyId);
         List<FamilyMember> members = familyMemberService.list(query);
         familyMemberService.remove(query);
+        //update-begin---author:cursor---date:2026-08-20---for:【审查修复】解散后作废未使用邀请码---
+        familyInviteCodeService.invalidateUnusedByFamilyId(familyId);
+        //update-end---author:cursor---date:2026-08-20---for:【审查修复】解散后作废未使用邀请码---
         // 同步所有成员的用户表缓存字段
         for (FamilyMember m : members) {
             WxUser u = wxUserService.getById(m.getUserId());
@@ -164,6 +165,15 @@ public class FamilyServiceImpl extends ServiceImpl<FamilyMapper, Family> impleme
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void joinFamily(String userId, String familyId, String inviteCodeId) {
+        //update-begin---author:cursor---date:2026-08-20---for:【审查修复】已解散不可加入；邀请码原子占用---
+        Family family = getById(familyId);
+        if (family == null || "disbanded".equals(family.getStatus())) {
+            throw new RuntimeException("家庭不存在或已解散");
+        }
+        if (!familyInviteCodeService.tryOccupy(inviteCodeId, userId)) {
+            throw new RuntimeException("邀请码无效或已被使用");
+        }
+        //update-end---author:cursor---date:2026-08-20---for:【审查修复】已解散不可加入；邀请码原子占用---
         FamilyMember member = new FamilyMember();
         member.setFamilyId(familyId);
         member.setUserId(userId);
@@ -177,13 +187,6 @@ public class FamilyServiceImpl extends ServiceImpl<FamilyMapper, Family> impleme
         if (user != null) {
             user.setFamilyId(familyId);
             wxUserService.updateById(user);
-        }
-
-        FamilyInviteCode inviteCode = familyInviteCodeService.getById(inviteCodeId);
-        if (inviteCode != null) {
-            inviteCode.setUsedBy(userId);
-            inviteCode.setUsedAt(new Date());
-            familyInviteCodeService.updateById(inviteCode);
         }
 
         refreshMemberCount(familyId);
