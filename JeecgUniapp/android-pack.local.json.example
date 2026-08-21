@@ -1,0 +1,10 @@
+{
+  "offlineRoot": "C:\\Users\\57089\\homeai-android-offline\\HBuilder-Integrate-AS",
+  "appModule": "simpleDemo",
+  "keystorePath": "C:\\Users\\57089\\secret\\homeai-release.keystore",
+  "keystoreAlias": "homeai",
+  "storePassword": "",
+  "keyPassword": "",
+  "dcloudAppKey": ""
+}
+

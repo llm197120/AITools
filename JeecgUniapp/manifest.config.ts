@@ -16,9 +16,9 @@ const {
 export default defineManifestConfig({
   name: VITE_APP_TITLE,
   appid: VITE_UNI_APPID,
-  description: '',
-  versionName: '1.0.0',
-  versionCode: '100',
+  description: '面向家庭场景的记账、菜谱、学习与 AI 助手',
+  versionName: '1.0.1',
+  versionCode: '101',
   transformPx: false,
   locale: VITE_FALLBACK_LOCALE, // 'zh-Hans'
   /* 5+App特有相关 */
@@ -39,29 +39,36 @@ export default defineManifestConfig({
       autoclose: true,
       delay: 0,
     },
-    /* 模块配置 */
+    /* 模块配置：仅保留本 App 实际用到的能力 */
     modules: {
-      Maps: {},
-      Messaging: {},
-      Contacts: {},
       Camera: {},
+      Gallery: {},
+      // 本地通知（plus.push.createMessage），不接入 UniPush / 厂商通道
+      Push: {},
     },
     /* 应用发布信息 */
     distribute: {
       /* android打包配置 */
       android: {
+        packagename: 'com.homeai.app',
         minSdkVersion: 26,
         // 上架前建议 targetSdk ≥ 34（符合应用商店政策）
         targetSdkVersion: 34,
         abiFilters: ['armeabi-v7a', 'arm64-v8a'],
+        // 备案前内测走局域网 HTTP；上架 HTTPS 后可改为 false
+        usesCleartextTraffic: true,
         permissions: [
           // # Android 权限精简（隐私合规）：仅保留功能必需项，见 docs/plan/android-migration-design.md
           // 已移除（非必需/敏感）：MOUNT_UNMOUNT_FILESYSTEMS、READ_LOGS、GET_ACCOUNTS、READ_PHONE_STATE、
           // WRITE_SETTINGS、CHANGE_NETWORK_STATE、CHANGE_WIFI_STATE、FLASHLIGHT
           // （FLASHLIGHT：Android 6+ 闪光灯由 Camera API 控制，该权限已废弃为 no-op，移除不影响相机使用）
           // 以下为功能必需权限：
+          // INTERNET：访问后端 API（自定义 permissions 会覆盖默认列表，必须显式声明）
+          '<uses-permission android:name="android.permission.INTERNET"/>',
           // VIBRATE：通知/消息提醒振动
           '<uses-permission android:name="android.permission.VIBRATE"/>',
+          // POST_NOTIFICATIONS：Android 13+ 本地通知（计划提醒 / 学习目标），运行时在 push.ts 申请
+          '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>',
           // ACCESS_WIFI_STATE：获取 Wi-Fi 状态（网络连接判断）
           '<uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>',
           // ACCESS_NETWORK_STATE：获取网络状态（网络连接判断）
@@ -73,25 +80,27 @@ export default defineManifestConfig({
           // 相册/存储权限（保存图片/视频到本地，见 platform/download.ts 运行时申请）：
           // WRITE_EXTERNAL_STORAGE：Android 13 以下保存到相册需要写外部存储
           '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>',
-          // READ_MEDIA_IMAGES / READ_MEDIA_VIDEO：Android 13+ 媒体权限模型（targetSdk 34 下读取相册必需）
-          // 隐私合规：仅在用户主动保存图片/视频时申请，拒绝后引导去系统设置开启
+          // READ_MEDIA_IMAGES / VIDEO / AUDIO：Android 13+ 媒体权限（相册、选音频）
+          // 隐私合规：仅在用户主动保存或选择媒体时申请，拒绝后引导去系统设置开启
           '<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>',
           '<uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>',
+          '<uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>',
+          // 覆盖安装新 APK（启动页更新）
+          '<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>',
           '<uses-feature android:name="android.hardware.camera.autofocus"/>',
           '<uses-feature android:name="android.hardware.camera"/>',
         ],
       },
       /* ios打包配置 */
       ios: {},
-      /* SDK配置 */
+      /**
+       * 已弃用云打包。下列 sdkConfigs 仅避免有人误用 HBuilderX 时再次缺 Push 红屏。
+       * 云打包依据 sdkConfigs 决定是否打入原生 SDK。
+       * 仅声明 modules.Push、此处为空时，云打包经常不带 aps，启动一调 plus.push 就报「缺少push模块」。
+       * 只要 push 节点、不要 unipush / 厂商通道（本地通知兜底）。
+       */
       sdkConfigs: {
-        maps: {
-          amap: {
-            name: 'amap_15931993294Bqxlq8EgG',
-            appkey_ios: 'c913e46ffdf548ebc56ac1cf4d883e7e',
-            appkey_android: 'c913e46ffdf548ebc56ac1cf4d883e7e',
-          },
-        },
+        push: {},
       },
       /* 图标配置 */
       icons: {
@@ -165,19 +174,10 @@ export default defineManifestConfig({
     router: {
       base: VITE_APP_PUBLIC_BASE,
     },
-    sdkConfigs: {
-      maps: {
-        amap: {
-          key: '20854e7d231ee339bfa3b277c840070c',
-          securityJsCode: '7a542edee4a82e56ed88fef8ef42b5a5',
-          serviceHost: '',
-        },
-      },
-    },
   },
   'app-harmony': {
     distribute: {
-      bundleName: 'uniapp.demo.test',
+      bundleName: 'com.homeai.app',
     },
   },
   uniStatistics: {

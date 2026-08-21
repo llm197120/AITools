@@ -1,0 +1,34 @@
+// Capacitor 子工程（:capacitor-android 等）自带 buildscript { google() }，
+// 根工程 allprojects 镜像覆盖不到它们的 classpath。本 init 在工程求值前把阿里云插到最前，
+// 避免本机 JDK 直连 dl.google.com TLS/PKIX 失败。
+settingsEvaluated { settings ->
+    settings.pluginManagement {
+        repositories {
+            maven { url 'https://maven.aliyun.com/repository/google' }
+            maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+            maven { url 'https://maven.aliyun.com/repository/central' }
+            maven { url 'https://maven.aliyun.com/repository/public' }
+            google()
+            mavenCentral()
+            gradlePluginPortal()
+        }
+    }
+}
+
+gradle.projectsLoaded {
+    rootProject.allprojects { proj ->
+        proj.buildscript {
+            repositories {
+                maven { url 'https://maven.aliyun.com/repository/google' }
+                maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+                maven { url 'https://maven.aliyun.com/repository/central' }
+                maven { url 'https://maven.aliyun.com/repository/public' }
+            }
+        }
+        proj.repositories {
+            maven { url 'https://maven.aliyun.com/repository/google' }
+            maven { url 'https://maven.aliyun.com/repository/central' }
+            maven { url 'https://maven.aliyun.com/repository/public' }
+        }
+    }
+}

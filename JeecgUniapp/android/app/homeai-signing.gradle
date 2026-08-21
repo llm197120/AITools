@@ -1,0 +1,15 @@
+// HomeAI 本地签名：pack-apk.ps1 会写入同目录 keystore.properties，勿提交该 properties
+def ksPropsFile = file('keystore.properties')
+if (ksPropsFile.exists()) {
+    def ks = new Properties()
+    ksPropsFile.withInputStream { ks.load(it) }
+    android.signingConfigs.create('homeaiRelease') {
+        keyAlias ks['keyAlias']
+        keyPassword ks['keyPassword']
+        storeFile file(ks['storeFile'])
+        storePassword ks['storePassword']
+        v1SigningEnabled true
+        v2SigningEnabled true
+    }
+    android.buildTypes.release.signingConfig = android.signingConfigs.homeaiRelease
+}
