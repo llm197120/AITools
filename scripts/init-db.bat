@@ -155,16 +155,36 @@ echo [OK] HomeAI menu permissions imported and verified
 echo.
 
 :: ==================== Step 6: Incremental Scripts ====================
-echo [6/7] Run incremental scripts (skip sql/legacy/)...
+echo [6/7] Run incremental scripts from alter-order.txt (skip sql/legacy/)...
+set "ALTER_ORDER=!HOMEAI_SQL_DIR!\alter-order.txt"
 set "ALTER_FOUND=0"
-for %%F in ("!HOMEAI_SQL_DIR!\alter_homeai_*.sql") do (
-    set "ALTER_FOUND=1"
-    call :ImportSqlFile "%%~fF"
+if exist "!ALTER_ORDER!" (
+    for /f "usebackq tokens=* eol=#" %%L in ("!ALTER_ORDER!") do (
+        if not "%%L"=="" (
+            set "ALTER_FOUND=1"
+            call :ImportSqlFile "!HOMEAI_SQL_DIR!\%%L"
+        )
+    )
+) else (
+    echo   [WARN] alter-order.txt missing, fallback glob
+    for %%F in ("!HOMEAI_SQL_DIR!\alter_homeai_*.sql") do (
+        set "ALTER_FOUND=1"
+        call :ImportSqlFile "%%~fF"
+    )
 )
 if "!ALTER_FOUND!"=="0" (
     echo   [SKIP] no alter scripts found
 )
-echo   Note: legacy migrations are in sql/legacy/ and are NOT auto-run on fresh install
+if exist "!HOMEAI_SQL_DIR!\smoke_homeai_schema.sql" (
+    echo   - smoke_homeai_schema.sql
+    mysql --default-character-set=utf8mb4 -h!DB_HOST! -P!DB_PORT! -u!DB_USER! "!DB_NAME!" < "!HOMEAI_SQL_DIR!\smoke_homeai_schema.sql" >nul 2>&1
+    if errorlevel 1 (
+        echo     [WARN] schema smoke had errors, check missing columns
+    ) else (
+        echo     [OK] schema smoke passed
+    )
+)
+echo   Note: legacy migrations are in sql/legacy/ and are NOT auto-run
 echo [OK] Incremental scripts completed
 echo.
 

@@ -63,6 +63,16 @@ function Get-HomeaiMavenCmd {
     return $mvn.Source
 }
 
+# 发布/出包时抑制 pnpm 升级提示等无关噪音
+function Set-HomeaiBuildQuietEnv {
+    $env:PNPM_UPDATE_NOTIFIER = 'false'
+    $env:CI = 'true'
+}
+
+function Get-HomeaiMavenQuietArgs {
+    return @('-Dmaven.compiler.showWarnings=false')
+}
+
 function Ensure-HomeaiJavaHome {
     if (-not $env:JAVA_HOME -or -not (Test-Path -LiteralPath $env:JAVA_HOME)) {
         if (Test-Path -LiteralPath $script:DefaultJavaHome) {
@@ -102,6 +112,38 @@ function Test-HomeaiBackendCmd {
     return $false
 }
 
+function Stop-HomeaiProcessTree {
+    param([int]$ProcessId)
+    if ($ProcessId -le 0) { return $false }
+    if (-not (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)) { return $false }
+    # 经 cmd 吞掉「没有找到进程」。直接调 taskkill 时，/T 已杀掉子进程，
+    # $ErrorActionPreference=Stop 会把 stderr 升成 NativeCommandError。
+    cmd.exe /c "taskkill.exe /PID $ProcessId /T /F >nul 2>&1" | Out-Null
+    return $true
+}
+
+function Show-HomeaiConsoleMenu {
+    param(
+        [Parameter(Mandatory = $true)][string]$Title,
+        [Parameter(Mandatory = $true)][object[]]$Items
+    )
+    Write-Host ''
+    Write-Host $Title
+    foreach ($item in $Items) {
+        Write-Host ("  [{0}] {1}" -f $item.Id, $item.Text)
+    }
+    Write-Host '  [0] 取消'
+    Write-Host ''
+    $sel = Read-Host '请选择'
+    if ([string]::IsNullOrWhiteSpace($sel) -or $sel.Trim() -eq '0') { return $null }
+    $key = $sel.Trim()
+    foreach ($item in $Items) {
+        if ([string]$item.Id -eq $key) { return $item }
+    }
+    Write-Host '无效选择，已取消。'
+    return $null
+}
+
 function Stop-HomeaiBackend {
     param([int]$Port = 0)
     if ($Port -le 0) { $Port = Get-HomeaiBackendPort }
@@ -110,9 +152,11 @@ function Stop-HomeaiBackend {
     $procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue
     foreach ($p in $procs) {
         if (-not (Test-HomeaiBackendCmd -CommandLine $p.CommandLine)) { continue }
-        Write-Host ("[后端] 停止 PID {0} ({1})" -f $p.ProcessId, $p.Name)
-        & taskkill.exe /PID $p.ProcessId /T /F 2>$null | Out-Null
-        $killed[[int]$p.ProcessId] = $true
+        $procId = [int]$p.ProcessId
+        if (-not (Get-Process -Id $procId -ErrorAction SilentlyContinue)) { continue }
+        Write-Host ("[后端] 停止 PID {0} ({1})" -f $procId, $p.Name)
+        [void](Stop-HomeaiProcessTree -ProcessId $procId)
+        $killed[$procId] = $true
     }
 
     foreach ($listenPid in (Get-HomeaiListenPids -Port $Port)) {
@@ -121,9 +165,9 @@ function Stop-HomeaiBackend {
         $name = if ($proc) { $proc.ProcessName } else { '?' }
         if ($name -match '^(java|javaw|mvn)$') {
             Write-Host ("[后端] 停止端口 {0} 监听进程 PID {1} ({2})" -f $Port, $listenPid, $name)
-            & taskkill.exe /PID $listenPid /T /F 2>$null | Out-Null
+            [void](Stop-HomeaiProcessTree -ProcessId $listenPid)
             $killed[$listenPid] = $true
-        } else {
+        } elseif ($proc) {
             Write-Host ("[后端] 端口 {0} 被 {1} PID {2} 占用，未强制结束。请确认是否为 JeecgBoot。" -f $Port, $name, $listenPid)
         }
     }

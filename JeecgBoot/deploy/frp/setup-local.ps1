@@ -16,6 +16,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\common.ps1"
+$repoRoot = Get-HomeaiRepoRoot
+. (Join-Path $repoRoot 'docs\deploy\common.ps1')
 
 $cfg = Get-HomeaiFrpConfig
 $sec = Initialize-HomeaiFrpSecrets
@@ -195,6 +197,7 @@ function Publish-Admin {
             throw '未找到 pnpm，无法构建管理端。可先不带 -BuildAdmin，App 仍可用。'
         }
         Write-Host '[管理端] pnpm run build:docker:prod （可能需要几分钟）...'
+        Set-HomeaiBuildQuietEnv
         Push-Location $vue
         try {
             if (-not (Test-Path 'node_modules')) {

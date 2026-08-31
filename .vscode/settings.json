@@ -1,3 +1,5 @@
 {
-    "java.compile.nullAnalysis.mode": "automatic"
+    "java.compile.nullAnalysis.mode": "automatic",
+    "npm.packageManager": "pnpm",
+    "npm.autoDetect": "off"
 }

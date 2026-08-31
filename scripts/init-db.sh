@@ -148,18 +148,38 @@ if [ "${MENU_COUNT:-0}" -le 0 ]; then
 fi
 echo "[成功] 菜单权限已验证"
 
-# ---------- 执行增量修改脚本（排除 legacy 旧库专用） ----------
+# ---------- 按 alter-order.txt 执行增量（排除 legacy） ----------
 echo ""
-echo "[6/7] 执行增量修改脚本..."
+echo "[6/7] 按 alter-order.txt 执行增量修改脚本..."
 ALTER_FOUND=0
-shopt -s nullglob
-for alter_sql in "$HOMEAI_SQL_DIR"/alter_homeai_*.sql; do
-    ALTER_FOUND=1
-    import_sql "$alter_sql"
-done
-shopt -u nullglob
+ALTER_ORDER="$HOMEAI_SQL_DIR/alter-order.txt"
+if [ -f "$ALTER_ORDER" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            ''|\#*) continue ;;
+        esac
+        ALTER_FOUND=1
+        import_sql "$HOMEAI_SQL_DIR/$line"
+    done < "$ALTER_ORDER"
+else
+    echo "  [警告] 缺少 alter-order.txt，回退为 glob"
+    shopt -s nullglob
+    for alter_sql in "$HOMEAI_SQL_DIR"/alter_homeai_*.sql; do
+        ALTER_FOUND=1
+        import_sql "$alter_sql"
+    done
+    shopt -u nullglob
+fi
 if [ "$ALTER_FOUND" -eq 0 ]; then
-    echo "  [跳过] 未找到 alter_homeai_*.sql"
+    echo "  [跳过] 未找到增量脚本"
+fi
+if [ -f "$HOMEAI_SQL_DIR/smoke_homeai_schema.sql" ]; then
+    echo "  - smoke_homeai_schema.sql"
+    if "${MYSQL_CMD[@]}" "$DB_NAME" < "$HOMEAI_SQL_DIR/smoke_homeai_schema.sql" >/dev/null 2>&1; then
+        echo "    [成功] schema smoke 通过"
+    else
+        echo "    [警告] schema smoke 失败，请检查缺列"
+    fi
 fi
 echo "[成功] 增量修改脚本执行完成"
 

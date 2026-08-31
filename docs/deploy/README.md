@@ -4,7 +4,7 @@
 
 ## 一键脚本（日常要用）
 
-在 PowerShell 中执行（若提示无法运行脚本：`Set-ExecutionPolicy -Scope Process Bypass`）。也可双击同名 `.cmd`，会弹出「全部 / 仅后端 / 仅前端 / 仅 APP」菜单。
+在 PowerShell 中执行（若提示无法运行脚本：`Set-ExecutionPolicy -Scope Process Bypass`）。也可双击同名 `.cmd`（仅 ASCII 启动器，菜单在 PowerShell 里弹出，避免 cmd 按 GBK 拆碎 UTF-8 中文）。
 
 **不传目标 = 做全部**（启动/停止默认不含 APP，因为 APP 没有本机常驻进程）。
 

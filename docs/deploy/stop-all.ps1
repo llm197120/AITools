@@ -12,11 +12,27 @@ param(
     [switch]$Frontend,
     [switch]$Backend,
     [switch]$App,
-    [switch]$KeepTunnel
+    [switch]$KeepTunnel,
+    [switch]$Interactive
 )
 
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\common.ps1"
+
+if ($Interactive) {
+    $picked = Show-HomeaiConsoleMenu -Title 'HomeAI 停止' -Items @(
+        @{ Id = '1'; Text = '全部（后端 + 前端）'; Backend = $true; Frontend = $true; App = $false }
+        @{ Id = '2'; Text = '仅后端'; Backend = $true; Frontend = $false; App = $false }
+        @{ Id = '3'; Text = '仅前端（Nginx / frpc）'; Backend = $false; Frontend = $true; App = $false }
+    )
+    if ($null -eq $picked) {
+        Write-Host '已取消。'
+        exit 0
+    }
+    $Backend = [bool]$picked.Backend
+    $Frontend = [bool]$picked.Frontend
+    $App = [bool]$picked.App
+}
 
 if ($KeepTunnel -and -not $Frontend -and -not $Backend -and -not $App -and $Target.Count -eq 0) {
     $Backend = $true
