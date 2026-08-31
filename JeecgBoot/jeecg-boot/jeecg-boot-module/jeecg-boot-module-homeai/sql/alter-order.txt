@@ -1,0 +1,66 @@
+# -*- coding: utf-8 -*-
+# HomeAI 增量 SQL 显式顺序（已有库按序执行；新库只跑 init_homeai_*.sql）
+# 空行与 # 开头忽略。勿把 sql/legacy/ 列入。
+# 多数脚本可重复或遇已存在列报错可跳过；init-db 按本清单而非 glob。
+
+# 第 1～7 轮：表结构
+alter_homeai_plan_category.sql
+alter_homeai_plan_master.sql
+alter_homeai_plan_instance.sql
+alter_homeai_family_status.sql
+alter_homeai_learn_category.sql
+alter_homeai_learn_material.sql
+alter_homeai_learn_material_tags.sql
+alter_homeai_file_whitelist.sql
+alter_homeai_office_convert_instruction.sql
+alter_homeai_bill_category.sql
+alter_homeai_bill_entry_category_nullable.sql
+alter_homeai_storage_visibility.sql
+alter_homeai_recipe_ingredient_unit.sql
+
+# 第 1～8 轮：菜单与权限补丁
+alter_homeai_menus_recipe_category.sql
+alter_homeai_menus_optimize.sql
+alter_homeai_menus_iteration5.sql
+alter_homeai_menus_iteration8.sql
+alter_homeai_menus_p2.sql
+alter_homeai_menus_buttons.sql
+alter_homeai_menus_buttons_missing.sql
+alter_homeai_menus_fix_component.sql
+alter_homeai_menus_fix_layout.sql
+alter_homeai_menus_fix_menutype.sql
+alter_homeai_menus_conversation.sql
+alter_homeai_menus_bill_import.sql
+alter_homeai_menus_bill_statistics.sql
+alter_homeai_menus_learn_record.sql
+alter_homeai_menus_dashboard_grant.sql
+
+# 第 11～12 轮
+alter_homeai_menus_iteration11.sql
+alter_homeai_recipe_favorite.sql
+alter_homeai_learn_material_category_id.sql
+alter_homeai_learn_record.sql
+
+# 第 22～23 轮
+alter_homeai_menus_iteration22.sql
+alter_homeai_storage_folder_recycle.sql
+alter_homeai_plan_recipe_iteration23.sql
+
+# 第 26 / 32 轮菜单
+alter_homeai_menus_iteration26.sql
+alter_homeai_menus_iteration32.sql
+
+# 可空列与账号
+alter_homeai_admin_userid_nullable.sql
+alter_homeai_family_creator_id_nullable.sql
+alter_homeai_wx_user_openid_nullable.sql
+alter_homeai_wx_user_android_login.sql
+
+# 第 47～48 / 63 / 69 轮补列
+alter_homeai_deleted_at_schema_gap.sql
+alter_homeai_learn_record_study_date.sql
+alter_homeai_file_whitelist_audio_webp.sql
+alter_homeai_preview_pdf_url.sql
+alter_homeai_app_version.sql
+alter_homeai_menus_iteration69.sql
+alter_homeai_perf_indexes.sql
