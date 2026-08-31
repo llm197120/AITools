@@ -151,6 +151,7 @@
       addVisible.value = true;
     } catch {
       userOptions.value = [];
+      createMessage.warning('用户列表加载失败');
       addVisible.value = true;
     }
   }
@@ -175,8 +176,7 @@
   }
 
   // ---------- 修改角色 ----------
-  async function handleChangeRole(record: any, role: string) {
-    if (role === record.role) return;
+  async function applyRoleChange(record: any, role: string) {
     try {
       await familyApi.adminUpdateRole(record.memberId, role);
       createMessage.success('角色修改成功');
@@ -186,6 +186,23 @@
       createMessage.error(e?.message || '修改角色失败');
       await loadMembers();
     }
+  }
+
+  async function handleChangeRole(record: any, role: string) {
+    if (role === record.role) return;
+    if (role === 'admin') {
+      createConfirm({
+        iconType: 'warning',
+        title: '确认升为管理员',
+        content: `确定将「${record.nickname || '该成员'}」设为管理员吗？`,
+        onOk: async () => {
+          await applyRoleChange(record, role);
+        },
+      });
+      await loadMembers();
+      return;
+    }
+    await applyRoleChange(record, role);
   }
 
   // ---------- 移除成员 ----------

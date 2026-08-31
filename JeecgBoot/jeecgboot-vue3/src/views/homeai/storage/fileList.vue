@@ -324,6 +324,7 @@ import { ref, computed, onMounted } from 'vue';
   import { useGo } from '/@/hooks/web/usePage';
   import HomeaiFilePreviewModal from '../components/HomeaiFilePreviewModal.vue';
   import { toFamilyIdNameOptions } from '../utils/activeFamily';
+  import { downloadHomeaiContent } from '../utils/homeaiFileContent';
 
   const { createMessage, createConfirm } = useMessage();
   const { resolveUserLabel, loadUserOptions } = useUserLabel();
@@ -399,8 +400,7 @@ import { ref, computed, onMounted } from 'vue';
       recyclePagination.value.total = res?.total || 0;
       recycleSelectedKeys.value = [];
     } catch {
-      recycleFiles.value = [];
-      recyclePagination.value.total = 0;
+      createMessage.error('回收站加载失败');
     } finally {
       recycleLoading.value = false;
     }
@@ -553,7 +553,7 @@ import { ref, computed, onMounted } from 'vue';
       const res = await familyApi.list({ pageNo: 1, pageSize: 500 });
       familyOptions.value = toFamilyIdNameOptions(res);
     } catch {
-      familyOptions.value = [];
+      createMessage.warning('家庭列表加载失败');
     }
   }
 
@@ -574,7 +574,7 @@ import { ref, computed, onMounted } from 'vue';
       const res = await storageApi.folderTree();
       folderTreeData.value = (res as any)?.result || (res as any[]) || [];
     } catch {
-      folderTreeData.value = [];
+      createMessage.error('文件夹树加载失败');
     }
   }
 
@@ -789,9 +789,15 @@ import { ref, computed, onMounted } from 'vue';
     }
   }
 
-  function handleDownload(record: HomeaiStorageFile) {
-    if (record.fileUrl) {
-      window.open(record.fileUrl, '_blank');
+  async function handleDownload(record: HomeaiStorageFile) {
+    if (!record.id) {
+      createMessage.warning('无法下载：缺少文件编号');
+      return;
+    }
+    try {
+      await downloadHomeaiContent('storage', record.id, record.originalName);
+    } catch (e: any) {
+      createMessage.error(e?.message || '下载失败');
     }
   }
 

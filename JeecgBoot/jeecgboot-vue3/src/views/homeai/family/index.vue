@@ -4,6 +4,17 @@
       <a-tab-pane key="list" tab="家庭列表" />
       <a-tab-pane key="recycle" tab="回收站" />
     </a-tabs>
+    <a-alert
+      v-if="listFailed"
+      type="error"
+      show-icon
+      message="列表加载失败，当前可能不是最新数据"
+      style="margin-bottom: 12px"
+    >
+      <template #action>
+        <a-button size="small" @click="reload">重试</a-button>
+      </template>
+    </a-alert>
     <BasicTable @register="registerTable" :rowSelection="rowSelection">
       <template #tableTitle>
         <a-button v-if="activeTab === 'list'" preIcon="ant-design:plus-outlined" type="primary" @click="handleAdd">新增</a-button>
@@ -71,15 +82,16 @@
   import { useDrawer } from '/@/components/Drawer';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { useMethods } from '/@/hooks/system/useMethods';
-  import { useUserStore } from '/@/store/modules/user';
   import { familyApi, storageApi } from '/@/api/homeai';
   import type { HomeaiFamily, HomeaiPageParams } from '/@/api/homeai';
   import FamilyDrawer from './FamilyDrawer.vue';
   import FamilyMembersDrawer from './FamilyMembersDrawer.vue';
   import { useUserLabel } from '../hooks/useUserLabel';
 import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
+import { useHomeaiListLoad } from '../hooks/useHomeaiListLoad';
 
   const { createMessage } = useMessage();
+  const { listFailed, wrapListApi } = useHomeaiListLoad();
   const { handleExportXls, handleImportXls } = useMethods();
   const [registerDrawer, { openDrawer }] = useDrawer();
   const [registerMembersDrawer, { openDrawer: openMembersDrawer }] = useDrawer();
@@ -101,7 +113,8 @@ import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
 
   const [registerTable, { reload }] = useTable({
     title: '家庭列表',
-    api: (params: HomeaiPageParams) => activeTab.value === 'list' ? familyApi.list(params) : familyApi.recycleBin(params),
+    api: (params: HomeaiPageParams) =>
+      wrapListApi((p) => (activeTab.value === 'list' ? familyApi.list(p) : familyApi.recycleBin(p)))(params),
     columns: columns,
     useSearchForm: true,
     formConfig: {
@@ -243,8 +256,7 @@ import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
   }
 
   function handleDownloadTemplate() {
-    const token = useUserStore().getToken;
-    window.open(`/jeecg-boot/homeai/family/exportTemplate?token=${encodeURIComponent(token)}`, '_blank');
+    handleExportXls('家庭导入模板', familyApi.exportTemplate);
   }
 
   function handleSuccess() {

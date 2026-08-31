@@ -79,8 +79,10 @@
   import type { HomeaiPageParams } from '/@/api/homeai';
   import { useECharts } from '/@/hooks/web/useECharts';
   import { useMethods } from '/@/hooks/system/useMethods';
+  import { useMessage } from '/@/hooks/web/useMessage';
 
   const { handleExportXlsx } = useMethods();
+  const { createMessage } = useMessage();
   const days = ref(30);
   const filterUserId = ref('');
   const stats = ref({ totalRecords: 0, totalDurationMinutes: 0, activeUserCount: 0, activeDayCount: 0 });
@@ -140,7 +142,7 @@
         userId: filterUserId.value || undefined,
       })) as any;
     } catch {
-      stats.value = { totalRecords: 0, totalDurationMinutes: 0, activeUserCount: 0, activeDayCount: 0 };
+      createMessage.error('统计加载失败');
     }
   }
 
@@ -172,7 +174,8 @@
         ],
       });
     } catch {
-      setOptions({ title: { text: '暂无趋势数据', left: 'center', top: 'center' } });
+      createMessage.error('趋势加载失败');
+      setOptions({ title: { text: '加载失败', left: 'center', top: 'center' } });
     }
   }
 
@@ -184,7 +187,7 @@
           userId: filterUserId.value || undefined,
         })) || [];
     } catch {
-      byCategory.value = [];
+      createMessage.error('分类统计加载失败');
     }
     try {
       byUser.value = (await learnApi.adminStatsByUser(days.value > 0 ? days.value : 30)) || [];
@@ -192,7 +195,7 @@
         byUser.value = byUser.value.filter((u) => u.userId === filterUserId.value);
       }
     } catch {
-      byUser.value = [];
+      createMessage.error('用户统计加载失败');
     }
   }
 

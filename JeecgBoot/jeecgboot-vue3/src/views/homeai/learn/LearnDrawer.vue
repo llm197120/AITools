@@ -13,6 +13,8 @@
           :extra-data="() => ({ type: model.type })"
           :accept="getLearnAccept(model.type)"
           :max-size="learnMaxSize(model.type)"
+          :content-module="isUpdate && recordId ? 'learn' : undefined"
+          :content-id="isUpdate && recordId ? recordId : undefined"
           tip="点击或拖拽文件到此处上传，格式需与资料类型匹配"
         />
         <a-button
@@ -93,6 +95,7 @@
       categoryOptions.value = list.map((c) => ({ label: c.name, value: c.id }));
     } catch {
       categoryOptions.value = [];
+      createMessage.warning('分类加载失败，请关闭后重试');
     }
   }
 
@@ -141,7 +144,7 @@
           ],
           onChange: () => formActions.setFieldsValue({ fileUrl: '' }),
         },
-        defaultValue: 'video',
+        defaultValue: 'note',
       },
       {
         field: 'userId',
@@ -172,13 +175,25 @@
   async function handleSubmit(values: HomeaiPayload) {
     const type = String(values.type || '');
     const fileUrl = String(values.fileUrl || '').trim();
+    values.title = String(values.title || '').trim();
+    if (!values.title) {
+      createMessage.warning('请输入标题');
+      return false;
+    }
     if (!values.userId) {
       createMessage.warning('请选择归属用户');
       return false;
     }
-    if (type === 'link' && !fileUrl) {
-      createMessage.warning('请填写链接地址');
-      return false;
+    if (type === 'link') {
+      if (!fileUrl) {
+        createMessage.warning('请填写链接地址');
+        return false;
+      }
+      if (!/^https?:\/\//i.test(fileUrl)) {
+        createMessage.warning('链接请以 http:// 或 https:// 开头');
+        return false;
+      }
+      values.fileUrl = fileUrl;
     }
     if (type && !['link', 'note'].includes(type) && !fileUrl) {
       createMessage.warning('请上传与类型匹配的资料文件');

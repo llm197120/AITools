@@ -68,7 +68,7 @@
   import { defHttp } from '/@/utils/http/axios';
   import { useMessage } from '/@/hooks/web/useMessage';
 
-  const { createMessage } = useMessage();
+  const { createMessage, createConfirm } = useMessage();
   const saving = ref(false);
   const uploading = ref<'apk' | 'resource' | ''>('');
   const form = reactive({
@@ -137,7 +137,7 @@
     }
   }
 
-  async function handleSave() {
+  async function doSave() {
     saving.value = true;
     try {
       await configApi.updateAppVersion({ ...form });
@@ -147,6 +147,19 @@
     } finally {
       saving.value = false;
     }
+  }
+
+  async function handleSave() {
+    if (form.enabled === 1 && form.forceUpdate === 1) {
+      createConfirm({
+        iconType: 'warning',
+        title: '强制更新',
+        content: '开启后旧版本用户必须更新才能继续使用，确定保存？',
+        onOk: doSave,
+      });
+      return;
+    }
+    await doSave();
   }
 
   onMounted(loadData);

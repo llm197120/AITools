@@ -5,6 +5,17 @@
       <a-tab-pane key="recycle" tab="回收站" />
     </a-tabs>
     <a-alert
+      v-if="listFailed"
+      type="error"
+      show-icon
+      message="列表加载失败，当前可能不是最新数据"
+      style="margin-bottom: 12px"
+    >
+      <template #action>
+        <a-button size="small" @click="reload">重试</a-button>
+      </template>
+    </a-alert>
+    <a-alert
       v-if="activeTab === 'list'"
       type="info"
       show-icon
@@ -181,7 +192,7 @@
   import { useUserLabel } from '../hooks/useUserLabel';
   import { recipeDifficultyColor } from '../hooks/homeaiStatusColors';
   import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
-  import { useUserStore } from '/@/store/modules/user';
+  import { useHomeaiListLoad } from '../hooks/useHomeaiListLoad';
 
   const { createMessage } = useMessage();
   const { handleExportXls, handleImportXls } = useMethods();
@@ -527,9 +538,11 @@
     { title: '用户', dataIndex: 'userId', key: 'userId', width: 160 },
   ];
 
+  const { listFailed, wrapListApi } = useHomeaiListLoad();
+
   const [registerTable, { reload }] = useTable({
     title: '菜谱管理',
-    api: (params: HomeaiPageParams) => (activeTab.value === 'list' ? recipeApi.list(params) : recipeApi.recycleBin(params)),
+    api: wrapListApi((params: HomeaiPageParams) => (activeTab.value === 'list' ? recipeApi.list(params) : recipeApi.recycleBin(params))),
     columns: columns,
     useSearchForm: true,
     showTableSetting: true,
@@ -632,8 +645,7 @@
   }
 
   function handleDownloadTemplate() {
-    const token = useUserStore().getToken;
-    window.open(`/jeecg-boot/homeai/recipe/exportTemplate?token=${encodeURIComponent(token)}`, '_blank');
+    handleExportXls('菜谱导入模板', recipeApi.exportTemplate);
   }
 
   function handleSuccess() {

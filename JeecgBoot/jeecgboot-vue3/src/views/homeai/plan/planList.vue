@@ -51,6 +51,17 @@
         </a-card>
       </a-col>
     </a-row>
+    <a-alert
+      v-if="listFailed && activeTab !== 'calendar'"
+      type="error"
+      show-icon
+      message="列表加载失败，当前可能不是最新数据"
+      style="margin-bottom: 12px"
+    >
+      <template #action>
+        <a-button size="small" @click="reload">重试</a-button>
+      </template>
+    </a-alert>
     <BasicTable @register="registerTable" :rowSelection="rowSelection" v-show="activeTab !== 'calendar'">
       <template #tableTitle>
         <a-button v-if="activeTab === 'list'" preIcon="ant-design:plus-outlined" type="primary" @click="handleAdd">新增</a-button>
@@ -89,6 +100,7 @@
 <script lang="ts" name="homeai-plan-list" setup>
   import { PageWrapper } from '/@/components/Page';
   import { computed, ref, onMounted } from 'vue';
+  import dayjs from 'dayjs';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
   import { useMessage } from '/@/hooks/web/useMessage';
@@ -97,6 +109,7 @@
   import { useUserLabel } from '../hooks/useUserLabel';
   import { planPriorityColor } from '../hooks/homeaiStatusColors';
   import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
+  import { useHomeaiListLoad } from '../hooks/useHomeaiListLoad';
   import { downloadCsvTemplate } from '../utils/csvTemplate';
   import PlanDrawer from './PlanDrawer.vue';
   import PlanCalendarTab from './PlanCalendarTab.vue';
@@ -108,7 +121,7 @@
   const completion = ref<Array<{ userId?: string; total?: number; completed?: number; rate?: number }>>([]);
   const categoryOptions = ref<{ label: string; value: string }[]>([]);
   const completionUserId = ref<string | undefined>(undefined);
-  const completionMonth = ref<string>(new Date().toISOString().substring(0, 7));
+  const completionMonth = ref<string>(dayjs().format('YYYY-MM'));
   const { userOptions, loadUserOptions, resolveUserLabel } = useUserLabel();
   const calendarTabRef = ref<{ refreshCalendarTab?: () => void; handleRollForwardAll?: () => void } | null>(null);
 
@@ -153,9 +166,11 @@
     { title: '用户', dataIndex: 'userId', key: 'userId', width: 160 },
   ];
 
+  const { listFailed, wrapListApi } = useHomeaiListLoad();
+
   const [registerTable, { reload }] = useTable({
     title: '计划管理',
-    api: (params) => (activeTab.value === 'list' ? planApi.list(params) : planApi.recycleBin(params)),
+    api: wrapListApi((params) => (activeTab.value === 'list' ? planApi.list(params) : planApi.recycleBin(params))),
     columns: columns,
     useSearchForm: true,
     showTableSetting: true,

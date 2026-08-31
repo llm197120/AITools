@@ -54,6 +54,8 @@ export const userApi = {
   options: () => defHttp.get({ url: `${BASE}/user/options` }),
   /** 导出Excel */
   exportXls: `${BASE}/user/exportXls`,
+  /** 导入模板 */
+  exportTemplate: `${BASE}/user/exportTemplate`,
   /** 导入Excel */
   importExcel: `${BASE}/user/importExcel`,
   /** 回收站列表 */
@@ -88,6 +90,8 @@ export const familyApi = {
     defHttp.post({ url: `${BASE}/family/transfer`, params: { targetUserId } }),
   /** 导出Excel */
   exportXls: `${BASE}/family/exportXls`,
+  /** 导入模板 */
+  exportTemplate: `${BASE}/family/exportTemplate`,
   /** 导入Excel */
   importExcel: `${BASE}/family/importExcel`,
   /** 回收站列表 */

@@ -3,7 +3,16 @@
     <a-card :bordered="false" style="margin-bottom: 16px">
       <a-space>
         <a-date-picker v-model:value="yearMonth" picker="month" value-format="YYYY-MM" :allow-clear="false" @change="load" />
-        <a-input v-model:value="userId" placeholder="用户ID（可选）" style="width: 220px" allow-clear @pressEnter="load" />
+        <a-select
+          v-model:value="userId"
+          allow-clear
+          show-search
+          placeholder="选择用户（可选）"
+          style="width: 220px"
+          :options="userOptions"
+          option-filter-prop="label"
+          @change="load"
+        />
         <a-select v-model:value="days" style="width: 140px" @change="load">
           <a-select-option :value="7">近 7 日趋势</a-select-option>
           <a-select-option :value="30">近 30 日趋势</a-select-option>
@@ -11,6 +20,17 @@
         </a-select>
         <a-button type="primary" @click="load">查询</a-button>
       </a-space>
+      <a-alert
+        v-if="loadFailed"
+        type="error"
+        show-icon
+        message="看板加载失败，数据可能不是最新"
+        style="margin-top: 12px"
+      >
+        <template #action>
+          <a-button size="small" @click="load">重试</a-button>
+        </template>
+      </a-alert>
     </a-card>
 
     <a-row :gutter="16" style="margin-bottom: 16px">
@@ -62,9 +82,15 @@
   import { BasicTable } from '/@/components/Table';
   import { dashboardApi } from '/@/api/homeai';
   import { useECharts } from '/@/hooks/web/useECharts';
+  import { useMessage } from '/@/hooks/web/useMessage';
+  import { useUserLabel } from '../hooks/useUserLabel';
+
+  const { createMessage } = useMessage();
+  const { userOptions, loadUserOptions, resolveUserLabel } = useUserLabel();
+  const loadFailed = ref(false);
 
   const yearMonth = ref(dayjs().format('YYYY-MM'));
-  const userId = ref('');
+  const userId = ref<string | undefined>(undefined);
   const days = ref(30);
   const plan = ref<any>({ overallRate: 0, total: 0, completed: 0, byUser: [] });
   const learn = ref<any>({
@@ -79,7 +105,12 @@
   const { setOptions } = useECharts(chartRef as Ref<HTMLDivElement>);
 
   const planColumns = [
-    { title: '用户ID', dataIndex: 'userId', width: 180 },
+    {
+      title: '用户',
+      dataIndex: 'userId',
+      width: 180,
+      customRender: ({ text }) => resolveUserLabel(text),
+    },
     { title: '总数', dataIndex: 'total', width: 80 },
     { title: '已完成', dataIndex: 'completed', width: 80 },
     { title: '完成率%', dataIndex: 'rate', width: 90 },
@@ -93,6 +124,7 @@
   ];
 
   async function load() {
+    loadFailed.value = false;
     try {
       const res: any = await dashboardApi.planLearn({
         yearMonth: yearMonth.value,
@@ -123,11 +155,13 @@
         ],
       });
     } catch {
-      plan.value = { overallRate: 0, total: 0, completed: 0, byUser: [] };
-      learn.value = { totalRecords: 0, totalDurationMinutes: 0, activeUserCount: 0, trend: [], byCategory: [] };
-      setOptions({ title: { text: '暂无数据', left: 'center', top: 'center' } });
+      loadFailed.value = true;
+      createMessage.error('看板加载失败');
     }
   }
 
-  onMounted(load);
+  onMounted(async () => {
+    await loadUserOptions();
+    await load();
+  });
 </script>

@@ -9,22 +9,29 @@
 </template>
 
 <script lang="ts" name="homeai-bill-drawer" setup>
-  import { ref } from 'vue';
+  import { ref, onMounted } from 'vue';
   import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
   import { BasicForm, useForm } from '/@/components/Form';
   import { billApi } from '/@/api/homeai';
 import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import { useUserLabel } from '../hooks/useUserLabel';
 
   const emit = defineEmits(['success']);
   const { createMessage } = useMessage();
   const isUpdate = ref(false);
   const recordId = ref('');
+  const originalUserId = ref('');
   const categoryOptions = ref<{ label: string; value: string }[]>([]);
+  const { userOptions, loadUserOptions } = useUserLabel();
 
-  async function loadCategories() {
+  onMounted(() => {
+    loadUserOptions();
+  });
+
+  async function loadCategories(type?: string) {
     try {
-      const res = await billApi.categoryList({ pageNo: 1, pageSize: 200 });
+      const res = await billApi.categoryList({ pageNo: 1, pageSize: 200, type: type || undefined });
       const records = Array.isArray(res) ? res : res?.records || [];
       categoryOptions.value = records.map((c: HomeaiCategory) => ({
         label: c.name || c.id || '',
@@ -32,13 +39,38 @@ import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
       }));
     } catch {
       categoryOptions.value = [];
+      createMessage.warning('分类加载失败，请关闭后重试');
     }
   }
 
+  async function applyCategorySchema() {
+    updateSchema([
+      {
+        field: 'categoryId',
+        componentProps: {
+          options: categoryOptions.value,
+          allowClear: true,
+          showSearch: true,
+          optionFilterProp: 'label',
+          placeholder: '请选择分类',
+        },
+      },
+    ]);
+  }
+
+  async function handleTypeChange(type: string) {
+    await loadCategories(type);
+    await applyCategorySchema();
+    setFieldsValue({ categoryId: undefined });
+  }
+
   const [registerDrawer, { closeDrawer }] = useDrawerInner(async (data) => {
-    await loadCategories();
     isUpdate.value = data.isUpdate || false;
     recordId.value = data.record?.id || '';
+    originalUserId.value = data.record?.userId || '';
+    const type = data.record?.type || 'expense';
+    await loadCategories(type);
+    await applyCategorySchema();
     if (isUpdate.value && data.record) {
       setFieldsValue({ ...data.record });
     } else {
@@ -46,9 +78,22 @@ import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
     }
   });
 
-  const [registerForm, { setFieldsValue, resetFields, submit }] = useForm({
+  const [registerForm, { setFieldsValue, resetFields, submit, updateSchema }] = useForm({
     labelWidth: 100,
     schemas: [
+      {
+        field: 'userId',
+        label: '所属用户',
+        component: 'Select',
+        required: true,
+        dynamicDisabled: () => isUpdate.value && !!originalUserId.value,
+        componentProps: {
+          options: userOptions,
+          showSearch: true,
+          optionFilterProp: 'label',
+          placeholder: '请选择归属用户',
+        },
+      },
       { field: 'billDate', label: '日期', component: 'DatePicker', required: true, defaultValue: null },
       {
         field: 'type',
@@ -60,6 +105,7 @@ import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
             { label: '收入', value: 'income' },
             { label: '支出', value: 'expense' },
           ],
+          onChange: (val: string) => handleTypeChange(val),
         },
         defaultValue: 'expense',
       },
@@ -99,6 +145,17 @@ import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
   });
 
   async function handleSubmit(values: HomeaiPayload) {
+    if (!values.userId) {
+      createMessage.warning('请选择归属用户');
+      return false;
+    }
+    const amount = Number(values.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      createMessage.warning('请填写有效金额');
+      return false;
+    }
+    values.amount = Math.round(amount * 100) / 100;
+    if (values.remark != null) values.remark = String(values.remark).trim();
     try {
       if (isUpdate.value) {
         await billApi.edit(recordId.value, values);

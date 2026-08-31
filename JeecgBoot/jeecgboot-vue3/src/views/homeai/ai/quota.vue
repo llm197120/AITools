@@ -35,18 +35,18 @@
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'dailyUsage'">
           <a-progress
-            :percent="getPercent(record.dailyUsage, defaultQuota.dailyLimit)"
-            :stroke-color="getColor(record.dailyUsage, defaultQuota.dailyLimit)"
+            :percent="getPercent(record.dailyUsage, record.dailyLimit || defaultQuota.dailyLimit)"
+            :stroke-color="getColor(record.dailyUsage, record.dailyLimit || defaultQuota.dailyLimit)"
             size="small"
-            :format="() => `${record.dailyUsage || 0} / ${defaultQuota.dailyLimit || 10000}`"
+            :format="() => `${record.dailyUsage || 0} / ${record.dailyLimit || defaultQuota.dailyLimit || 10000}`"
           />
         </template>
         <template v-if="column.key === 'monthlyUsage'">
           <a-progress
-            :percent="getPercent(record.monthlyUsage, defaultQuota.monthlyLimit)"
-            :stroke-color="getColor(record.monthlyUsage, defaultQuota.monthlyLimit)"
+            :percent="getPercent(record.monthlyUsage, record.monthlyLimit || defaultQuota.monthlyLimit)"
+            :stroke-color="getColor(record.monthlyUsage, record.monthlyLimit || defaultQuota.monthlyLimit)"
             size="small"
-            :format="() => `${record.monthlyUsage || 0} / ${defaultQuota.monthlyLimit || 200000}`"
+            :format="() => `${record.monthlyUsage || 0} / ${record.monthlyLimit || defaultQuota.monthlyLimit || 200000}`"
           />
         </template>
       </template>

@@ -4,6 +4,17 @@
       <a-tab-pane key="list" tab="用户列表" />
       <a-tab-pane key="recycle" tab="回收站" />
     </a-tabs>
+    <a-alert
+      v-if="listFailed"
+      type="error"
+      show-icon
+      message="列表加载失败，当前可能不是最新数据"
+      style="margin-bottom: 12px"
+    >
+      <template #action>
+        <a-button size="small" @click="reload">重试</a-button>
+      </template>
+    </a-alert>
     <BasicTable @register="registerTable" :rowSelection="rowSelection">
       <template #tableTitle>
         <a-button v-if="activeTab === 'list'" preIcon="ant-design:plus-outlined" type="primary" @click="handleAdd">新增</a-button>
@@ -47,14 +58,15 @@
   import { useDrawer } from '/@/components/Drawer';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { useMethods } from '/@/hooks/system/useMethods';
-  import { useUserStore } from '/@/store/modules/user';
   import { userApi, familyApi } from '/@/api/homeai';
 import { toFamilySelectOptions } from '../utils/activeFamily';
   import type { HomeaiPageParams, HomeaiUser } from '/@/api/homeai';
   import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
+  import { useHomeaiListLoad } from '../hooks/useHomeaiListLoad';
   import UserDrawer from './UserDrawer.vue';
 
   const { createMessage, createConfirm } = useMessage();
+  const { listFailed, wrapListApi } = useHomeaiListLoad();
   const { handleExportXls, handleImportXls } = useMethods();
   const [registerDrawer, { openDrawer }] = useDrawer();
   const activeTab = ref('list');
@@ -66,7 +78,7 @@ import { toFamilySelectOptions } from '../utils/activeFamily';
       const res: any = await familyApi.list({ pageNo: 1, pageSize: 1000 });
       familyOptions.value = toFamilySelectOptions(res);
     } catch {
-      familyOptions.value = [];
+      createMessage.warning('家庭列表加载失败');
     }
   }
 
@@ -87,7 +99,8 @@ import { toFamilySelectOptions } from '../utils/activeFamily';
 
   const [registerTable, { reload }] = useTable({
     title: '微信用户列表',
-    api: (params: HomeaiPageParams) => activeTab.value === 'list' ? userApi.list(params) : userApi.recycleBin(params),
+    api: (params: HomeaiPageParams) =>
+      wrapListApi((p) => (activeTab.value === 'list' ? userApi.list(p) : userApi.recycleBin(p)))(params),
     columns: columns,
     useSearchForm: true,
     formConfig: {
@@ -181,8 +194,7 @@ import { toFamilySelectOptions } from '../utils/activeFamily';
   }
 
   function handleDownloadTemplate() {
-    const token = useUserStore().getToken;
-    window.open(`/jeecg-boot/homeai/user/exportTemplate?token=${encodeURIComponent(token)}`, '_blank');
+    handleExportXls('用户导入模板', userApi.exportTemplate);
   }
 
   async function handleToggleStatus(record: HomeaiUser) {

@@ -68,6 +68,12 @@
   });
 
   async function handleSubmit(values: any) {
+    const name = String(values?.name || '').trim();
+    if (!name) {
+      createMessage.warning('请输入家庭名称');
+      return;
+    }
+    values.name = name;
     try {
       if (record.value.id) {
         await familyApi.edit(record.value.id, values);

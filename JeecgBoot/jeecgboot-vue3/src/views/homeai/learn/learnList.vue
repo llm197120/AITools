@@ -4,6 +4,17 @@
       <a-tab-pane key="list" tab="学习资料列表" />
       <a-tab-pane key="recycle" tab="回收站" />
     </a-tabs>
+    <a-alert
+      v-if="listFailed"
+      type="error"
+      show-icon
+      message="列表加载失败，当前可能不是最新数据"
+      style="margin-bottom: 12px"
+    >
+      <template #action>
+        <a-button size="small" @click="reload">重试</a-button>
+      </template>
+    </a-alert>
     <BasicTable @register="registerTable" :rowSelection="rowSelection">
       <template #tableTitle>
         <a-button v-if="activeTab === 'list'" preIcon="ant-design:plus-outlined" type="primary" @click="handleAdd">新增</a-button>
@@ -42,15 +53,19 @@
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
   import { useMethods } from '/@/hooks/system/useMethods';
+  import { useMessage } from '/@/hooks/web/useMessage';
   import { learnApi } from '/@/api/homeai';
   import type { HomeaiCategory, HomeaiLearnMaterial, HomeaiPageParams } from '/@/api/homeai';
   import LearnDrawer from './LearnDrawer.vue';
   import HomeaiFilePreviewModal from '../components/HomeaiFilePreviewModal.vue';
   import { useUserLabel } from '../hooks/useUserLabel';
   import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
+  import { useHomeaiListLoad } from '../hooks/useHomeaiListLoad';
   import { downloadCsvTemplate } from '../utils/csvTemplate';
+  import { downloadHomeaiContent } from '../utils/homeaiFileContent';
 
   const { handleExportXls, handleImportXls } = useMethods();
+  const { createMessage } = useMessage();
   const [registerDrawer, { openDrawer }] = useDrawer();
   const { userOptions, loadUserOptions, resolveUserLabel } = useUserLabel();
   const activeTab = ref('list');
@@ -61,7 +76,7 @@
       const list: HomeaiCategory[] = (await learnApi.categories()) || [];
       categoryOptions.value = list.map((c) => ({ label: c.name, value: c.id }));
     } catch {
-      categoryOptions.value = [];
+      createMessage.warning('分类加载失败');
     }
   }
 
@@ -78,14 +93,16 @@
     { title: '创建时间', dataIndex: 'createTime', width: 160 },
   ];
 
+  const { listFailed, wrapListApi } = useHomeaiListLoad();
+
   const [registerTable, { reload }] = useTable({
     title: '学习资料管理',
-    api: (params: HomeaiPageParams) => activeTab.value === 'list' ? learnApi.list(params) : learnApi.recycleBin(params),
+    api: wrapListApi((params: HomeaiPageParams) => activeTab.value === 'list' ? learnApi.list(params) : learnApi.recycleBin(params)),
     columns: columns,
     useSearchForm: true,
     showTableSetting: true,
     showIndexColumn: true,
-    actionColumn: { width: 160, title: '操作', dataIndex: 'action', slots: { customRender: 'action' } },
+    actionColumn: { width: 200, title: '操作', dataIndex: 'action', slots: { customRender: 'action' } },
     formConfig: {
       labelWidth: 80,
       schemas: [
@@ -123,6 +140,7 @@
     }
     return [
       { icon: 'ant-design:eye-outlined', onClick: () => openPreview(record), title: '预览' },
+      { icon: 'ant-design:download-outlined', onClick: () => handleDownloadFile(record), title: '下载原文件' },
       { icon: 'ant-design:edit-outlined', onClick: () => openDrawer(true, { record, isUpdate: true }), title: '编辑' },
       { icon: 'ant-design:delete-outlined', onClick: () => handleMoveToRecycleBin(record), title: '移入回收站', color: 'error' },
     ];
@@ -132,6 +150,18 @@
   function openPreview(record: HomeaiLearnMaterial) {
     if (!record.id) return;
     previewModalRef.value?.open({ module: 'learn', id: record.id, title: record.title });
+  }
+
+  async function handleDownloadFile(record: HomeaiLearnMaterial) {
+    if (!record.id) {
+      createMessage.warning('无法下载：缺少资料编号');
+      return;
+    }
+    try {
+      await downloadHomeaiContent('learn', record.id, record.title);
+    } catch (e: any) {
+      createMessage.error(e?.message || '下载失败');
+    }
   }
 
   function handleAdd() {

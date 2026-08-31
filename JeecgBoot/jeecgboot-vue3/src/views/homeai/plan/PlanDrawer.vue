@@ -9,19 +9,26 @@
 </template>
 
 <script lang="ts" name="homeai-plan-drawer" setup>
-  import { ref } from 'vue';
+  import { ref, onMounted } from 'vue';
   import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
   import { BasicForm, useForm } from '/@/components/Form';
   import { planApi, recipeApi } from '/@/api/homeai';
   import type { HomeaiCategory, HomeaiPayload, HomeaiRecipe } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import { useUserLabel } from '../hooks/useUserLabel';
 
   const emit = defineEmits(['success']);
   const { createMessage } = useMessage();
   const isUpdate = ref(false);
   const recordId = ref('');
+  const originalUserId = ref('');
   const categoryOptions = ref<{ label: string; value: string }[]>([]);
   const recipeOptions = ref<{ label: string; value: string }[]>([]);
+  const { userOptions, loadUserOptions } = useUserLabel();
+
+  onMounted(() => {
+    loadUserOptions();
+  });
 
   const repeatRuleOptions = [
     { label: '不重复', value: 'none' },
@@ -36,6 +43,7 @@
       categoryOptions.value = list.map((c) => ({ label: c.name, value: c.name }));
     } catch {
       categoryOptions.value = [];
+      createMessage.warning('分类加载失败，请关闭后重试');
     }
   }
 
@@ -49,6 +57,7 @@
       }));
     } catch {
       recipeOptions.value = [];
+      createMessage.warning('菜谱列表加载失败，请关闭后重试');
     }
   }
 
@@ -76,6 +85,7 @@
     ]);
     isUpdate.value = data.isUpdate || false;
     recordId.value = data.record?.id || '';
+    originalUserId.value = data.record?.userId || '';
     if (isUpdate.value && data.record) {
       setFieldsValue({ ...data.record });
     } else {
@@ -86,6 +96,19 @@
   const [registerForm, { setFieldsValue, resetFields, submit, updateSchema }] = useForm({
     labelWidth: 100,
     schemas: [
+      {
+        field: 'userId',
+        label: '所属用户',
+        component: 'Select',
+        required: true,
+        dynamicDisabled: () => isUpdate.value && !!originalUserId.value,
+        componentProps: {
+          options: userOptions,
+          showSearch: true,
+          optionFilterProp: 'label',
+          placeholder: '请选择归属用户',
+        },
+      },
       { field: 'title', label: '标题', component: 'Input', required: true },
       { field: 'planDate', label: '日期', component: 'DatePicker', required: true, defaultValue: null },
       {
@@ -184,6 +207,16 @@
   });
 
   async function handleSubmit(values: HomeaiPayload) {
+    values.title = String(values.title || '').trim();
+    if (!values.title) {
+      createMessage.warning('请输入标题');
+      return false;
+    }
+    if (!values.userId) {
+      createMessage.warning('请选择归属用户');
+      return false;
+    }
+    if (values.content != null) values.content = String(values.content).trim();
     try {
       if (isUpdate.value) {
         await planApi.edit(recordId.value, values);

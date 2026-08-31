@@ -1,7 +1,21 @@
 <template>
   <PageWrapper contentFullHeight dense contentClass="!p-4 homeai-page-body">
     <a-card :bordered="false" style="margin-bottom: 16px">
-      <a-space>
+      <a-space direction="vertical" style="width: 100%">
+        <a-form layout="inline">
+          <a-form-item label="归属用户" required>
+            <a-select
+              v-model:value="importUserId"
+              :options="userOptions"
+              allow-clear
+              show-search
+              option-filter-prop="label"
+              placeholder="请选择账单归属用户"
+              style="min-width: 220px"
+            />
+          </a-form-item>
+        </a-form>
+        <a-space>
         <a-radio-group v-model:value="fileType">
           <a-radio-button value="wechat_csv">微信支付CSV</a-radio-button>
           <a-radio-button value="excel">Excel账单</a-radio-button>
@@ -12,6 +26,7 @@
         <a-button v-if="rows.length > 0" type="primary" danger :loading="importing" @click="confirmImport"
           >确认导入选中({{ checkedRows.length }})</a-button
         >
+        </a-space>
       </a-space>
     </a-card>
 
@@ -45,13 +60,20 @@
 
 <script lang="ts" name="homeai-bill-import" setup>
   import { PageWrapper } from '/@/components/Page';
-  import { ref, computed } from 'vue';
+  import { ref, computed, onMounted } from 'vue';
   import { BasicTable } from '/@/components/Table';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { defHttp } from '/@/utils/http/axios';
+  import { useUserLabel } from '../hooks/useUserLabel';
 
   const { createMessage, createConfirm } = useMessage();
+  const { userOptions, loadUserOptions } = useUserLabel();
   const fileType = ref('wechat_csv');
+  const importUserId = ref<string>();
+
+  onMounted(() => {
+    loadUserOptions();
+  });
 
   /** 导入预览行（后端解析结果） */
   interface BillImportRow {
@@ -127,13 +149,20 @@
       createMessage.warning('请先勾选要导入的记录');
       return;
     }
+    if (!importUserId.value) {
+      createMessage.warning('请选择账单归属用户');
+      return;
+    }
     createConfirm({
       title: '确认导入',
-      content: `确认导入 ${entries.length} 条账单记录？`,
+      content: `确认将 ${entries.length} 条账单导入到所选用户？`,
       onOk: async () => {
         importing.value = true;
         try {
-          const res: any = await defHttp.post({ url: '/homeai/bill/import/confirm', data: { entries } });
+          const res: any = await defHttp.post({
+            url: '/homeai/bill/import/confirm',
+            data: { entries, userId: importUserId.value },
+          });
           createMessage.success(res?.message || '导入完成');
           rows.value = [];
           checkedKeys.value = [];

@@ -137,7 +137,7 @@
       warnPercent.value = data?.warnPercent || 80;
       selectedRowKeys.value = selectedRowKeys.value.filter((id) => items.value.some((r) => r.familyId === id));
     } catch {
-      items.value = [];
+      createMessage.error('配额看板加载失败');
     } finally {
       loading.value = false;
     }
@@ -175,9 +175,16 @@
   }
 
   async function resetOne(record: HomeaiFamilyQuotaItem) {
-    await storageApi.clearFamilyStorageLimit(record.familyId);
-    createMessage.success('已恢复默认');
-    await load();
+    createConfirm({
+      iconType: 'warning',
+      title: '恢复默认配额',
+      content: `将「${record.familyName || '该家庭'}」恢复为默认家庭配额？`,
+      onOk: async () => {
+        await storageApi.clearFamilyStorageLimit(record.familyId);
+        createMessage.success('已恢复默认');
+        await load();
+      },
+    });
   }
 
   function batchReset() {

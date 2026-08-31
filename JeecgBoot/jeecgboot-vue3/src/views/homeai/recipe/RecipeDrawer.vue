@@ -61,32 +61,11 @@
   import type { HomeaiRecipeIngredient } from '/@/api/homeai/types';
   import HomeaiMediaUpload from '/@/views/homeai/components/HomeaiMediaUpload.vue';
   import { toFamilySelectOptions } from '../utils/activeFamily';
+  import { formatQuantityUnit, parseAmountToQuantityUnit } from '../utils/recipeIngredient';
 
   const emit = defineEmits(['success']);
   const { createMessage } = useMessage();
   const BASE = '/homeai';
-
-  /** 展示用量 → quantity/unit（与小程序 recipeIngredient 对齐，跨项目内联） */
-  function parseAmountToQuantityUnit(amount: string): { quantity?: number; unit?: string } {
-    const trimmed = (amount || '').trim();
-    if (!trimmed) return {};
-    const match = trimmed.match(/^(\d+(?:\.\d+)?)(.*)$/);
-    if (!match) return { unit: trimmed };
-    const quantity = Number(match[1]);
-    const unit = (match[2] || '').trim();
-    const result: { quantity?: number; unit?: string } = {};
-    if (!Number.isNaN(quantity)) result.quantity = quantity;
-    if (unit) result.unit = unit;
-    return result;
-  }
-
-  /** quantity/unit → 展示用量 */
-  function formatQuantityUnit(quantity?: number | string | null, unit?: string | null, amountFallback?: string): string {
-    const hasQuantity = quantity !== undefined && quantity !== null && quantity !== '';
-    if (hasQuantity) return `${quantity}${unit || ''}`;
-    if (unit) return String(unit);
-    return amountFallback || '';
-  }
 
   const isUpdate = ref(false);
   const recordId = ref('');
@@ -139,7 +118,7 @@
             ...data.record,
             coverUrl: d.coverUrl,
             videoUrl: d.videoUrl,
-            visibility: d.visibility || 'public',
+            visibility: d.visibility || 'family',
             familyId: d.familyId,
           });
         }
@@ -158,7 +137,7 @@
         createMessage.warning('菜谱详情加载失败，已使用列表数据');
       }
     } else {
-      setFieldsValue({ visibility: 'public' });
+      setFieldsValue({ visibility: 'family' });
     }
   });
 
@@ -201,7 +180,7 @@
             { label: '仅自己', value: 'private' },
           ],
         },
-        defaultValue: 'public',
+        defaultValue: 'family',
       },
       {
         field: 'familyId',
@@ -233,20 +212,25 @@
         createMessage.warning('家庭共享菜谱请选择所属家庭');
         return false;
       }
+      values.name = String(values.name || '').trim();
+      if (!values.name) {
+        createMessage.warning('请输入菜名');
+        return false;
+      }
       saving.value = true;
       const payload = {
         ...values,
         familyId: values.visibility === 'family' ? values.familyId : null,
         ingredients: ingredients.value
-          .filter((x: any) => x.name)
+          .filter((x: any) => String(x.name || '').trim())
           .map((x: any) => {
             const { quantity, unit } = parseAmountToQuantityUnit(x.amount || '');
-            return { name: x.name, quantity, unit };
+            return { name: String(x.name).trim(), quantity, unit };
           }),
         steps: steps.value
-          .filter((x: any) => x.description)
+          .filter((x: any) => String(x.description || '').trim())
           .map((x: any, i: number) => ({
-            description: x.description,
+            description: String(x.description).trim(),
             imageUrl: x.imageUrl || null,
             stepNum: i + 1,
           })),

@@ -32,11 +32,19 @@
       <div v-else class="hmu-file-preview">
         <Icon icon="ant-design:file-outlined" :size="28" color="#52c41a" />
         <div class="hmu-file-info">
-          <a :href="value" target="_blank" class="hmu-file-name" :title="value">{{ displayFileName }}</a>
+          <a
+            v-if="!canAuthDownload"
+            :href="value"
+            target="_blank"
+            rel="noopener"
+            class="hmu-file-name"
+            :title="value"
+          >{{ displayFileName }}</a>
+          <a v-else class="hmu-file-name" :title="displayFileName" @click.prevent="downloadFile">{{ displayFileName }}</a>
           <span v-if="tip" class="hmu-file-tip">{{ tip }}</span>
         </div>
         <div class="hmu-actions">
-          <a-button size="small" :href="value" target="_blank" :disabled="uploading">下载</a-button>
+          <a-button size="small" :disabled="uploading" @click="downloadFile">下载</a-button>
           <a-upload name="file" :accept="accept" :show-upload-list="false" :disabled="uploading || disabled" :custom-request="handleCustomRequest">
             <a-button size="small" :loading="uploading">更换</a-button>
           </a-upload>
@@ -87,6 +95,7 @@
   import { Icon } from '/@/components/Icon';
   import { defHttp } from '/@/utils/http/axios';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import { downloadHomeaiContent } from '../utils/homeaiFileContent';
   import type { PropType } from 'vue';
 
   const { createMessage } = useMessage();
@@ -110,6 +119,9 @@
     tip: { type: String, default: '' },
     /** 已上传文件名（file 模式展示用，缺省取地址末段） */
     fileName: { type: String, default: '' },
+    /** 有资料 id 时走鉴权 /content 下载 */
+    contentModule: { type: String as PropType<'learn' | 'storage'>, default: '' },
+    contentId: { type: String, default: '' },
     disabled: { type: Boolean, default: false },
   });
 
@@ -130,6 +142,8 @@
     if (props.mode === 'audio') return '点击或拖拽音频到此处上传';
     return '点击或拖拽文件到此处上传';
   });
+
+  const canAuthDownload = computed(() => !!(props.contentModule && props.contentId));
 
   const displayFileName = computed(() => {
     if (props.fileName) return props.fileName;
@@ -188,6 +202,20 @@
     } finally {
       uploading.value = false;
       progress.value = 0;
+    }
+  }
+
+  async function downloadFile() {
+    if (canAuthDownload.value) {
+      try {
+        await downloadHomeaiContent(props.contentModule as 'learn' | 'storage', props.contentId, props.fileName);
+      } catch (e: any) {
+        createMessage.error(e?.message || '下载失败');
+      }
+      return;
+    }
+    if (props.value) {
+      window.open(props.value, '_blank');
     }
   }
 
@@ -302,6 +330,7 @@
           text-overflow: ellipsis;
           white-space: nowrap;
           font-size: 13px;
+          cursor: pointer;
         }
 
         .hmu-file-tip {

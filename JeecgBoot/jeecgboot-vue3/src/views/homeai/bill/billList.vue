@@ -4,6 +4,17 @@
       <a-tab-pane key="list" tab="账单列表" />
       <a-tab-pane key="recycle" tab="回收站" />
     </a-tabs>
+    <a-alert
+      v-if="listFailed"
+      type="error"
+      show-icon
+      message="列表加载失败，当前可能不是最新数据"
+      style="margin-bottom: 12px"
+    >
+      <template #action>
+        <a-button size="small" @click="reload">重试</a-button>
+      </template>
+    </a-alert>
     <BasicTable @register="registerTable" :rowSelection="rowSelection">
       <template #tableTitle>
         <a-button v-if="activeTab === 'list'" preIcon="ant-design:plus-outlined" type="primary" @click="handleAdd">新增</a-button>
@@ -49,14 +60,17 @@
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useDrawer } from '/@/components/Drawer';
   import { useMethods } from '/@/hooks/system/useMethods';
+  import { useMessage } from '/@/hooks/web/useMessage';
   import { billApi } from '/@/api/homeai';
   import type { HomeaiBill, HomeaiCategory, HomeaiPageParams } from '/@/api/homeai';
   import { useUserLabel } from '../hooks/useUserLabel';
   import { useHomeaiRecycleBin } from '../hooks/useHomeaiRecycleBin';
+  import { useHomeaiListLoad } from '../hooks/useHomeaiListLoad';
   import { downloadCsvTemplate } from '../utils/csvTemplate';
   import BillDrawer from './BillDrawer.vue';
 
   const { handleExportXls, handleImportXls } = useMethods();
+  const { createMessage } = useMessage();
   const { userOptions, loadUserOptions, resolveUserLabel } = useUserLabel();
   const [registerDrawer, { openDrawer }] = useDrawer();
   const activeTab = ref('list');
@@ -71,7 +85,7 @@
         value: c.id || '',
       }));
     } catch {
-      categoryOptions.value = [];
+      createMessage.warning('分类加载失败');
     }
   }
 
@@ -86,9 +100,11 @@
     { title: '来源', dataIndex: 'source', width: 90 },
   ];
 
+  const { listFailed, wrapListApi } = useHomeaiListLoad();
+
   const [registerTable, { reload }] = useTable({
     title: '账单管理',
-    api: (params: HomeaiPageParams) => activeTab.value === 'list' ? billApi.list(params) : billApi.recycleBin(params),
+    api: wrapListApi((params: HomeaiPageParams) => activeTab.value === 'list' ? billApi.list(params) : billApi.recycleBin(params)),
     columns: columns,
     useSearchForm: true,
     showTableSetting: true,

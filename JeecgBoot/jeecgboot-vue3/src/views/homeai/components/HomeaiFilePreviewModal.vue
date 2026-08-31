@@ -22,15 +22,16 @@
         <div v-else-if="preview.kind === 'office'" class="hfp-empty">
           <p v-if="converting">正在转换为 PDF，请稍候…</p>
           <p v-else-if="preview.convertStatus === 'FAILED'">无法预览：{{ preview.errorMessage || '转换失败' }}</p>
-          <p v-else>Office 文档需先转为 PDF 再预览</p>
-          <a-button v-if="mediaUrl" type="link" @click="openRaw">下载原文件</a-button>
+          <p v-else>Office 文档需先转为 PDF 再预览，也可直接下载原文件</p>
         </div>
         <div v-else-if="preview.kind === 'link' && mediaUrl" class="hfp-empty">
           <a :href="mediaUrl" target="_blank" rel="noopener">打开链接</a>
         </div>
         <div v-else class="hfp-empty">
           <p>该类型不支持页内预览</p>
-          <a-button v-if="mediaUrl" type="primary" @click="openRaw">下载文件</a-button>
+        </div>
+        <div v-if="source && preview.kind !== 'link'" class="hfp-actions">
+          <a-button type="primary" :loading="downloading" @click="downloadRaw">下载原文件</a-button>
         </div>
       </template>
     </a-spin>
@@ -41,6 +42,7 @@
   import { computed, onBeforeUnmount, ref } from 'vue';
   import { defHttp } from '/@/utils/http/axios';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import { downloadHomeaiContent, readHomeaiContentText } from '../utils/homeaiFileContent';
 
   export type HomeaiPreviewSource =
     | { module: 'storage'; id: string; title?: string }
@@ -61,6 +63,7 @@
   const visible = ref(false);
   const loading = ref(false);
   const converting = ref(false);
+  const downloading = ref(false);
   const error = ref('');
   const textContent = ref('');
   const preview = ref<HomeaiFilePreview | null>(null);
@@ -96,10 +99,10 @@
     converting.value = false;
   }
 
-  async function loadText(url: string) {
+  async function loadText() {
+    if (!source.value) return;
     try {
-      const res = await fetch(url);
-      textContent.value = await res.text();
+      textContent.value = await readHomeaiContentText(source.value.module, source.value.id);
     } catch {
       textContent.value = '文本加载失败，请下载查看';
     }
@@ -107,8 +110,8 @@
 
   async function applyPreview(data: HomeaiFilePreview) {
     preview.value = data;
-    if (data.kind === 'text' && data.fileUrl) {
-      await loadText(data.fileUrl);
+    if (data.kind === 'text') {
+      await loadText();
     }
     if (data.kind === 'office' && !data.previewPdfUrl) {
       await startOfficeConvert();
@@ -163,8 +166,16 @@
     }
   }
 
-  function openRaw() {
-    if (mediaUrl.value) window.open(mediaUrl.value, '_blank');
+  async function downloadRaw() {
+    if (!source.value) return;
+    downloading.value = true;
+    try {
+      await downloadHomeaiContent(source.value.module, source.value.id, preview.value?.fileName || source.value.title);
+    } catch (e: any) {
+      createMessage.error(e?.message || '下载失败');
+    } finally {
+      downloading.value = false;
+    }
   }
 
   function close() {
@@ -209,5 +220,9 @@
     text-align: center;
     padding: 48px 16px;
     color: #666;
+  }
+  .hfp-actions {
+    text-align: center;
+    padding: 16px 0 8px;
   }
 </style>

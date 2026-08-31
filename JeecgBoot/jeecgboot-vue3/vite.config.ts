@@ -1,13 +1,24 @@
 import type { UserConfig, ConfigEnv } from 'vite';
 import pkg from './package.json';
 import dayjs from 'dayjs';
-import { loadEnv } from 'vite';
+import { createLogger, loadEnv } from 'vite';
 import { resolve } from 'path';
 import { generateModifyVars } from './build/generate/generateModifyVars';
 import { createProxy } from './build/vite/proxy';
 import { wrapperEnv } from './build/utils';
 import { createVitePlugins } from './build/vite/plugin';
 import { OUTPUT_DIR } from './build/constant';
+
+const viteLogger = createLogger();
+/** 发布构建时可忽略的 Jeecg 上游/已修复残留告警 */
+const BUILD_WARN_SKIP = [
+  "can't be bundled without type=\"module\"",
+  'defineExpose is a compiler macro',
+  'defineProps is a compiler macro',
+  'defineEmits is a compiler macro',
+  "'deep' is not recognized as a valid pseudo-class",
+  'Invalid output options',
+];
 
 function pathResolve(dir: string) {
   return resolve(process.cwd(), '.', dir);
@@ -107,9 +118,8 @@ export default async ({ command, mode }: ConfigEnv): Promise<UserConfig> => {
       // update-end--author:liaozhiyang---date:20260306---for:【QQYUN-14801】启动时预构建部分入口页面，访问时更快
     },
     build: {
-      // Vite 8 默认使用 Oxc minifier；'esbuild' 已 deprecated。
-      // 这里保留 minify=true 显式启用，并对 console/debugger 做 drop。
-      minify: true,
+      // Vite 8 默认 Oxc minifier；console/debugger 由 esbuild.drop 在 transform 阶段剔除
+      minify: isBuild ? 'oxc' : false,
       target: 'es2015',
       cssTarget: 'chrome80',
       outDir: OUTPUT_DIR,
@@ -142,15 +152,24 @@ export default async ({ command, mode }: ConfigEnv): Promise<UserConfig> => {
             return packageToChunk[pkgName];
           },
           // update-end--author:copilot---date:20260711---for:【vite8升级】rolldown不再支持对象形式的manualChunks，改为函数形式
-          // Vite 8 用 Oxc 替代 esbuild；原 esbuild.drop 迁移到这里。
-          // 详见 https://oxc.rs/docs/guide/usage/minifier/dead-code-elimination
-          minify: isBuild ? { compress: { drop: ['console', 'debugger'] } } : false,
         },
+      },
+      esbuild: {
+        drop: isBuild ? (['console', 'debugger'] as ('console' | 'debugger')[]) : [],
       },
       // 关闭brotliSize显示可以稍微减少打包时间
       reportCompressedSize: false,
       // 提高超大静态资源警告大小
       chunkSizeWarningLimit: 2000,
+    },
+    customLogger: {
+      ...viteLogger,
+      warn(msg, options) {
+        if (isBuild && BUILD_WARN_SKIP.some((token) => msg.includes(token))) {
+          return;
+        }
+        viteLogger.warn(msg, options);
+      },
     },
     define: {
       // setting vue-i18-next

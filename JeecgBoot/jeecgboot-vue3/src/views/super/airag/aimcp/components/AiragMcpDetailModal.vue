@@ -603,11 +603,11 @@ function handleToolEditSuccess() {
 .airag-mcp-detail-modal { 
   .jeecg-basic-modal-close > span { margin-left: 0 !important; }
   
-  :deep(.ant-modal-header) {
+  ::deep(.ant-modal-header) {
     padding: 16px 24px;
   }
   
-  :deep(.ant-modal-title) {
+  ::deep(.ant-modal-title) {
     width: 100%;
   }
 }

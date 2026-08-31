@@ -17,9 +17,11 @@
 </template>
 
 <script lang="ts" name="homeai-office-history" setup>
+  import { onMounted, onUnmounted } from 'vue';
   import { PageWrapper } from '/@/components/Page';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import { downloadByUrl } from '/@/utils/file/download';
   import { storageOfficeApi } from '/@/api/homeai';
   import type { HomeaiConvertTask, HomeaiPageParams } from '/@/api/homeai';
 
@@ -60,16 +62,28 @@
         icon: 'ant-design:download-outlined',
         title: '下载结果',
         onClick: () => {
-          if (record.resultFileUrl) {
-            window.open(record.resultFileUrl, '_blank');
-          } else {
+          if (!record.resultFileUrl) {
             createMessage.warning('该记录暂无结果文件');
+            return;
           }
+          const ok = downloadByUrl({
+            url: record.resultFileUrl,
+            fileName: `office-${record.targetFormat || 'result'}`,
+          });
+          if (!ok) createMessage.error('下载失败，请稍后重试');
         },
       },
       { icon: 'ant-design:delete-outlined', title: '删除', color: 'error', onClick: () => handleDelete(record) },
     ];
   }
+
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  onMounted(() => {
+    pollTimer = setInterval(() => reload(), 5000);
+  });
+  onUnmounted(() => {
+    if (pollTimer) clearInterval(pollTimer);
+  });
 
   function handleDelete(record: HomeaiConvertTask) {
     createConfirm({
