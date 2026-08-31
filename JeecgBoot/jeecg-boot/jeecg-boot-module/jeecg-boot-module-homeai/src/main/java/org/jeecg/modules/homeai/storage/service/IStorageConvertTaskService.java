@@ -1,5 +1,6 @@
 package org.jeecg.modules.homeai.storage.service;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.jeecg.modules.homeai.storage.entity.StorageConvertTask;
 
@@ -22,4 +23,8 @@ public interface IStorageConvertTaskService extends IService<StorageConvertTask>
 
     /** 获取用户的转换历史 */
     List<StorageConvertTask> getUserHistory(String userId);
+
+    //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R113】Office 历史可选分页---
+    IPage<StorageConvertTask> pageUserHistory(String userId, int pageNo, int pageSize);
+    //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R113】Office 历史可选分页---
 }

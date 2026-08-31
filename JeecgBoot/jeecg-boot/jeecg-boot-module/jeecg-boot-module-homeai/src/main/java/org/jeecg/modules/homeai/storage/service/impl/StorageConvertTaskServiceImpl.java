@@ -1,6 +1,8 @@
 package org.jeecg.modules.homeai.storage.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.jeecg.modules.homeai.storage.entity.StorageConvertTask;
@@ -72,4 +74,14 @@ public class StorageConvertTaskServiceImpl extends ServiceImpl<StorageConvertTas
                 .orderByDesc(StorageConvertTask::getCreateTime);
         return list(query);
     }
+
+    //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R113】Office 历史可选分页---
+    @Override
+    public IPage<StorageConvertTask> pageUserHistory(String userId, int pageNo, int pageSize) {
+        LambdaQueryWrapper<StorageConvertTask> query = new LambdaQueryWrapper<>();
+        query.eq(StorageConvertTask::getUserId, userId)
+                .orderByDesc(StorageConvertTask::getCreateTime);
+        return page(new Page<>(pageNo, pageSize), query);
+    }
+    //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R113】Office 历史可选分页---
 }

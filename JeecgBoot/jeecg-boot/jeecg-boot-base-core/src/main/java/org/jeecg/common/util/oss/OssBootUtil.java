@@ -2,10 +2,12 @@ package org.jeecg.common.util.oss;
 
 import com.aliyun.oss.ClientConfiguration;
 import com.aliyun.oss.ClientException;
+import com.aliyun.oss.HttpMethod;
 import com.aliyun.oss.OSSClient;
 import com.aliyun.oss.common.auth.DefaultCredentialProvider;
 import com.aliyun.oss.common.comm.Protocol;
 import com.aliyun.oss.model.CannedAccessControlList;
+import com.aliyun.oss.model.GeneratePresignedUrlRequest;
 import com.aliyun.oss.model.OSSObject;
 import com.aliyun.oss.model.ObjectMetadata;
 import com.aliyun.oss.model.PutObjectResult;
@@ -462,12 +464,35 @@ public class OssBootUtil {
      * 生成私有桶预签名访问 URL
      */
     public static String getPresignedUrl(String objectKey, long expireSeconds) {
+        return getPresignedUrl(objectKey, expireSeconds, null);
+    }
+
+    //update-begin---author:cursor---date:2026-08-22---for:【APP流量】预签名支持 OSS 图片处理---
+    /**
+     * 生成预签名 URL。process 非空时带上 x-oss-process（须参与签名，不能前端后拼）。
+     */
+    public static String getPresignedUrl(String objectKey, long expireSeconds, String process) {
         if (oConvertUtils.isEmpty(objectKey) || expireSeconds <= 0) {
             return null;
         }
         Date expires = new Date(System.currentTimeMillis() + expireSeconds * 1000L);
-        return getObjectUrl(bucketName, objectKey, expires);
+        if (oConvertUtils.isEmpty(process)) {
+            return getObjectUrl(bucketName, objectKey, expires);
+        }
+        initOss(endPoint, accessKeyId, accessKeySecret);
+        try {
+            String objectName = replacePrefix(objectKey, bucketName);
+            GeneratePresignedUrlRequest request = new GeneratePresignedUrlRequest(bucketName, objectName, HttpMethod.GET);
+            request.setExpiration(expires);
+            request.setProcess(process);
+            URL url = ossClient.generatePresignedUrl(request);
+            return url.toString();
+        } catch (Exception e) {
+            log.info("带图片处理的预签名失败，回退原图: {}", e.getMessage());
+            return getObjectUrl(bucketName, objectKey, expires);
+        }
     }
+    //update-end---author:cursor---date:2026-08-22---for:【APP流量】预签名支持 OSS 图片处理---
 
     /**
      * 删除 OSS 对象（按 objectKey）

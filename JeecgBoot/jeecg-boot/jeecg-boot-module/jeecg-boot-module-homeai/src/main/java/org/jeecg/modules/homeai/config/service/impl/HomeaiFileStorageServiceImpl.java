@@ -5,6 +5,7 @@ import org.jeecg.common.constant.CommonConstant;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.common.util.oss.OssBootUtil;
 import org.jeecg.modules.homeai.config.HomeaiFileUrlUtil;
+import org.jeecg.modules.homeai.config.HomeaiImageProcess;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.storage.entity.StorageFile;
 import org.springframework.beans.factory.annotation.Value;
@@ -110,9 +111,16 @@ public class HomeaiFileStorageServiceImpl implements IHomeaiFileStorageService {
 
     @Override
     public String resolveAccessUrl(String storedReference) {
+        return resolveAccessUrl(storedReference, null);
+    }
+
+    //update-begin---author:cursor---date:2026-08-22---for:【APP流量】展示图走 OSS 压缩，下载仍用原图---
+    @Override
+    public String resolveAccessUrl(String storedReference, String imageProcess) {
         if (oConvertUtils.isEmpty(storedReference) || storedReference.startsWith("data:")) {
             return storedReference;
         }
+        String process = HomeaiImageProcess.isProcessableImage(storedReference) ? imageProcess : null;
         if (!isOssEnabled()) {
             if (storedReference.startsWith("http://") || storedReference.startsWith("https://")) {
                 return storedReference;
@@ -124,15 +132,23 @@ public class HomeaiFileStorageServiceImpl implements IHomeaiFileStorageService {
         }
         if (isPrivateOssBucket()) {
             String objectKey = extractObjectKey(storedReference);
-            String signed = OssBootUtil.getPresignedUrl(objectKey, presignExpireSeconds);
+            String signed = OssBootUtil.getPresignedUrl(objectKey, presignExpireSeconds, process);
             if (oConvertUtils.isEmpty(signed)) {
                 log.warn("预签名 URL 生成失败: {}", storedReference);
                 return storedReference;
             }
             return signed;
         }
-        return toPublicOssUrl(extractObjectKey(storedReference));
+        return appendOssProcess(toPublicOssUrl(extractObjectKey(storedReference)), process);
     }
+
+    private String appendOssProcess(String url, String process) {
+        if (oConvertUtils.isEmpty(url) || oConvertUtils.isEmpty(process)) {
+            return url;
+        }
+        return url + (url.contains("?") ? "&" : "?") + "x-oss-process=" + process;
+    }
+    //update-end---author:cursor---date:2026-08-22---for:【APP流量】展示图走 OSS 压缩，下载仍用原图---
 
     @Override
     public void applyAccessUrl(StorageFile file) {
@@ -140,12 +156,17 @@ public class HomeaiFileStorageServiceImpl implements IHomeaiFileStorageService {
         if (file == null) {
             return;
         }
+        //update-begin---author:cursor---date:2026-08-22---for:【APP流量】列表/预览图压缩，下载走 access-url 原图---
         if (oConvertUtils.isNotEmpty(file.getFileUrl())) {
-            file.setFileUrl(resolveAccessUrl(file.getFileUrl()));
+            String process = HomeaiImageProcess.isProcessableImage(file.getFileUrl())
+                    || HomeaiImageProcess.isProcessableImage(file.getExtension())
+                    ? HomeaiImageProcess.DISPLAY : null;
+            file.setFileUrl(resolveAccessUrl(file.getFileUrl(), process));
         }
         if (oConvertUtils.isNotEmpty(file.getThumbnailUrl())) {
-            file.setThumbnailUrl(resolveAccessUrl(file.getThumbnailUrl()));
+            file.setThumbnailUrl(resolveAccessUrl(file.getThumbnailUrl(), HomeaiImageProcess.THUMB));
         }
+        //update-end---author:cursor---date:2026-08-22---for:【APP流量】列表/预览图压缩，下载走 access-url 原图---
         //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】预览 PDF URL 同步签名-----------
         if (oConvertUtils.isNotEmpty(file.getPreviewPdfUrl())) {
             file.setPreviewPdfUrl(resolveAccessUrl(file.getPreviewPdfUrl()));

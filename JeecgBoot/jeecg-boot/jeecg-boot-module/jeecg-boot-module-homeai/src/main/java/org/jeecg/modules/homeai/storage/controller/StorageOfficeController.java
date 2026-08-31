@@ -10,14 +10,25 @@ import org.jeecg.common.api.vo.Result;
 import org.jeecg.common.aspect.annotation.AutoLog;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.common.system.query.QueryGenerator;
+import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.ai.constant.HomeaiAiQuotaScene;
 import org.jeecg.modules.homeai.ai.service.IHomeaiAiQuotaPrecheckService;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiPlanConfigService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
+import org.jeecg.modules.homeai.family.entity.Family;
+import org.jeecg.modules.homeai.family.service.IFamilyService;
 import org.jeecg.modules.homeai.storage.entity.StorageConvertTask;
+import org.jeecg.modules.homeai.storage.entity.StorageFile;
+import org.jeecg.modules.homeai.storage.entity.StorageFolder;
 import org.jeecg.modules.homeai.storage.service.IStorageConvertTaskService;
+import org.jeecg.modules.homeai.storage.service.IStorageFileService;
+import org.jeecg.modules.homeai.storage.service.IStorageFolderService;
+import org.jeecg.modules.homeai.storage.service.IStorageResourceFamilyService;
+import org.jeecg.modules.homeai.storage.util.StorageAccessUtil;
+import org.jeecg.modules.homeai.user.entity.WxUser;
+import org.jeecg.modules.homeai.user.service.IWxUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -47,14 +58,70 @@ public class StorageOfficeController {
     @Autowired
     private IHomeaiFileStorageService fileStorageService;
 
+    @Autowired
+    private IStorageFileService fileService;
+
+    @Autowired
+    private IStorageFolderService folderService;
+
+    @Autowired
+    private IStorageResourceFamilyService resourceFamilyService;
+
+    @Autowired
+    private IFamilyService familyService;
+
+    @Autowired
+    private IWxUserService wxUserService;
+
     /**
      * 从 Token 解析用户ID（管理端控制台 JWT 或 HomeAI APP JWT）
      */
     private String getUserId(HttpServletRequest request) {
-        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
-        return securityUtil.getCurrentUserId(request);
-        //update-end---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
+        //update-begin---author:cursor---date:2026-08-22---for:【审查B】APP 业务归属优先 HomeAI 用户-----------
+        String wxUserId = securityUtil.getWxUserId(request);
+        if (wxUserId != null) {
+            return wxUserId;
+        }
+        if (securityUtil.isConsoleAuthenticated(request)) {
+            return securityUtil.getCurrentUserId(request);
+        }
+        return null;
+        //update-end---author:cursor---date:2026-08-22---for:【审查B】APP 业务归属优先 HomeAI 用户-----------
     }
+
+    //update-begin---author:cursor---date:2026-08-22---for:【审查A】转换/生成提交须可读且未软删---
+    /** 无 fileId 的 AI 生成（仅指令）跳过；管理端控制台可操作任意未删文件 */
+    private void assertSourceFileReadable(String userId, String fileId, HttpServletRequest request) {
+        if (oConvertUtils.isEmpty(fileId)) {
+            return;
+        }
+        StorageFile file = fileService.getById(fileId);
+        if (!StorageAccessUtil.isActiveFile(file)) {
+            throw new JeecgBootException("文件不存在或已删除");
+        }
+        if (securityUtil.isConsoleAuthenticated(request)) {
+            return;
+        }
+        StorageFolder folder = oConvertUtils.isNotEmpty(file.getFolderId())
+                ? folderService.getById(file.getFolderId()) : null;
+        String familyId = resolveUserFamilyId(userId);
+        if (!StorageAccessUtil.canAccessFile(userId, familyId, file, folder, resourceFamilyService)) {
+            throw new JeecgBootException("无权操作该文件");
+        }
+    }
+
+    private String resolveUserFamilyId(String userId) {
+        if (oConvertUtils.isEmpty(userId)) {
+            return null;
+        }
+        Family family = familyService.getByUserId(userId);
+        if (family != null && oConvertUtils.isNotEmpty(family.getId())) {
+            return family.getId();
+        }
+        WxUser user = wxUserService.getById(userId);
+        return user != null ? user.getFamilyId() : null;
+    }
+    //update-end---author:cursor---date:2026-08-22---for:【审查A】转换/生成提交须可读且未软删---
 
     /**
      * 提交格式转换任务
@@ -66,6 +133,11 @@ public class StorageOfficeController {
                                    HttpServletRequest request) {
         String userId = getUserId(request);
         if (userId == null) return Result.error("未登录");
+        try {
+            assertSourceFileReadable(userId, fileId, request);
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
         StorageConvertTask task = taskService.submitConvertTask(userId, fileId, sourceFormat, targetFormat);
         return Result.OK(task);
     }
@@ -79,6 +151,11 @@ public class StorageOfficeController {
                                     HttpServletRequest request) {
         String userId = getUserId(request);
         if (userId == null) return Result.error("未登录");
+        try {
+            assertSourceFileReadable(userId, fileId, request);
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
         //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R25】Office 生成走统一预检-----------
         if (planConfigService.isAiDocPolishEnabled()) {
             try {
@@ -130,11 +207,26 @@ public class StorageOfficeController {
 
     /**
      * 用户处理历史
+     * 传入 pageNo+pageSize 时返回分页；否则保持全量 List（兼容旧客户端）
      */
     @GetMapping("/history")
-    public Result<?> getHistory(HttpServletRequest request) {
+    public Result<?> getHistory(
+            @RequestParam(required = false) Integer pageNo,
+            @RequestParam(required = false) Integer pageSize,
+            HttpServletRequest request) {
         String userId = getUserId(request);
         if (userId == null) return Result.error("未登录");
+        //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R113】Office 历史可选分页---
+        if (pageNo != null && pageSize != null) {
+            IPage<StorageConvertTask> page = taskService.pageUserHistory(userId, pageNo, pageSize);
+            if (page.getRecords() != null) {
+                for (StorageConvertTask task : page.getRecords()) {
+                    resolveResultUrl(task);
+                }
+            }
+            return Result.OK(page);
+        }
+        //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R113】Office 历史可选分页---
         List<StorageConvertTask> history = taskService.getUserHistory(userId);
         if (history != null) {
             for (StorageConvertTask task : history) {

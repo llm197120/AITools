@@ -38,7 +38,8 @@ public class HomeaiFileUrlUtil {
         }
         String base = resolveBaseUrl();
         if (oConvertUtils.isEmpty(base)) {
-            log.warn("无法解析文件访问根地址，保留相对地址: {}", relativeUrl);
+            // 无请求上下文/配置时保留相对路径（单测与离线脚本常见），不必告警
+            log.debug("无法解析文件访问根地址，保留相对地址: {}", relativeUrl);
             return relativeUrl;
         }
         return trimTrailingSlash(base) + relativeUrl;

@@ -148,6 +148,33 @@ public final class StorageAccessUtil {
 
     }
 
+    //update-begin---author:cursor---date:2026-08-22---for:【审查A】软删文件不可用；家庭可见只能选自己的家---
+    /** 未软删才可转换/生成 */
+    public static boolean isActiveFile(StorageFile file) {
+        if (file == null) {
+            return false;
+        }
+        if (file.getDeletedAt() != null) {
+            return false;
+        }
+        return file.getDelFlag() == null || file.getDelFlag() == 0;
+    }
+
+    /**
+     * APP 只能保留自己所在家庭；管理端不裁剪。
+     * 无家庭或结果为空时返回空列表，由调用方抛业务异常。
+     */
+    public static List<String> retainAssignableFamilies(List<String> requested, String userFamilyId) {
+        if (requested == null || requested.isEmpty() || oConvertUtils.isEmpty(userFamilyId)) {
+            return List.of();
+        }
+        return requested.stream()
+                .filter(userFamilyId::equals)
+                .distinct()
+                .toList();
+    }
+    //update-end---author:cursor---date:2026-08-22---for:【审查A】软删文件不可用；家庭可见只能选自己的家---
+
 }
 
 

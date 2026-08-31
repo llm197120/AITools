@@ -84,6 +84,12 @@ public class StorageFile implements Serializable {
     @Schema(description = "更新时间")
     private Date updateTime;
 
+    //update-begin---author:cursor---date:2026-08-22---for:【审查D】资料不用 TableLogic，回收站靠手写 del_flag---
+    /**
+     * 删除状态。故意不加 {@code @TableLogic}：回收站按 del_flag=1 / deleted_at 查原生 SQL，
+     * 加上后 getById 读不到回收站行，恢复会断。配额 SUM 等查询须手写 eq(del_flag,0)。
+     */
+    //update-end---author:cursor---date:2026-08-22---for:【审查D】资料不用 TableLogic，回收站靠手写 del_flag---
     @Schema(description = "删除状态")
     private Integer delFlag;
 

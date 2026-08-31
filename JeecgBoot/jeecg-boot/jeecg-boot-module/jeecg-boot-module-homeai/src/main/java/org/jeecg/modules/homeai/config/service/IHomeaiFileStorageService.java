@@ -33,6 +33,12 @@ public interface IHomeaiFileStorageService {
     /** 将持久化引用转为客户端可访问 URL（私有 OSS 返回预签名 URL） */
     String resolveAccessUrl(String storedReference);
 
+    /**
+     * 可访问 URL。imageProcess 为阿里云图片处理（如 {@link org.jeecg.modules.homeai.config.HomeaiImageProcess#THUMB}），
+     * 非图片或 process 为空时与 {@link #resolveAccessUrl(String)} 相同。
+     */
+    String resolveAccessUrl(String storedReference, String imageProcess);
+
     void applyAccessUrl(StorageFile file);
 
     void applyAccessUrls(List<StorageFile> files);

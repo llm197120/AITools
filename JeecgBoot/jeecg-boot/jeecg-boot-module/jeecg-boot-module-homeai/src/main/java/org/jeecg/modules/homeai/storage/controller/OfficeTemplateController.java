@@ -8,16 +8,21 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.jeecg.common.api.vo.Result;
 import org.jeecg.common.aspect.annotation.AutoLog;
+import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.system.query.QueryGenerator;
 import io.swagger.v3.oas.annotations.Operation;
+import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
+import org.jeecg.modules.homeai.config.service.IHomeaiFileWhitelistService;
 import org.jeecg.modules.homeai.storage.entity.OfficeTemplate;
 import org.jeecg.modules.homeai.storage.service.IOfficeTemplateService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -33,6 +38,13 @@ public class OfficeTemplateController {
 
     @Autowired
     private IHomeaiFileStorageService fileStorageService;
+
+    @Autowired
+    private IHomeaiFileWhitelistService whitelistService;
+
+    private static final Set<String> TEMPLATE_EXTENSIONS = Set.of(
+            "doc", "docx", "xls", "xlsx", "ppt", "pptx", "pdf");
+    private static final long MAX_TEMPLATE_BYTES = 20L * 1024 * 1024;
 
     /** 模板列表 */
     @GetMapping("/list")
@@ -138,12 +150,34 @@ public class OfficeTemplateController {
     }
 
     private String saveTemplateFile(String id, MultipartFile file) throws Exception {
+        validateTemplateFile(file);
         String original = file.getOriginalFilename();
         String ext = original != null && original.contains(".")
-                ? original.substring(original.lastIndexOf(".")) : "";
-        String fileName = UUID.randomUUID().toString().replace("-", "") + ext;
+                ? original.substring(original.lastIndexOf(".") + 1).toLowerCase() : "";
+        String fileName = UUID.randomUUID().toString().replace("-", "") + "." + ext;
         return fileStorageService.storeMultipart(file, "homeai/template/" + fileName);
     }
+
+    //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R118】Office 模板上传魔数与白名单校验---
+    private void validateTemplateFile(MultipartFile file) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new JeecgBootException("请选择要上传的模板文件");
+        }
+        if (file.getSize() > MAX_TEMPLATE_BYTES) {
+            throw new JeecgBootException("模板文件不能超过 20MB");
+        }
+        String original = file.getOriginalFilename();
+        String ext = original != null && original.contains(".")
+                ? original.substring(original.lastIndexOf(".") + 1).toLowerCase() : "";
+        if (ext.isEmpty() || !TEMPLATE_EXTENSIONS.contains(ext)) {
+            throw new JeecgBootException("仅支持 doc/docx/xls/xlsx/ppt/pptx/pdf 模板");
+        }
+        if (!whitelistService.isAllowedExtension(ext)) {
+            throw new JeecgBootException("不支持上传该文件类型");
+        }
+        HomeaiFileMagicUtil.validate(file, ext);
+    }
+    //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R118】Office 模板上传魔数与白名单校验---
 
     /** 获取启用的模板（小程序端） */
     @GetMapping("/enabled")

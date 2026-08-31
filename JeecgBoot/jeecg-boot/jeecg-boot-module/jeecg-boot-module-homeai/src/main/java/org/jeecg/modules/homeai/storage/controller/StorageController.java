@@ -38,6 +38,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.servlet.http.HttpServletResponse;
+import org.jeecg.modules.homeai.config.HomeaiHttpDeny;
+import org.jeecg.modules.homeai.preview.HomeaiFileMime;
+
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -93,9 +98,16 @@ public class StorageController {
      * 从 Token 解析用户ID：管理端控制台 JWT 或 HomeAI APP JWT（含手机号 userId claim）
      */
     private String getUserId(HttpServletRequest request) {
-        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
-        return securityUtil.getCurrentUserId(request);
-        //update-end---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
+        //update-begin---author:cursor---date:2026-08-22---for:【审查B】APP 业务归属优先 HomeAI 用户-----------
+        String wxUserId = securityUtil.getWxUserId(request);
+        if (wxUserId != null) {
+            return wxUserId;
+        }
+        if (isStorageAdmin(request)) {
+            return securityUtil.getCurrentUserId(request);
+        }
+        return null;
+        //update-end---author:cursor---date:2026-08-22---for:【审查B】APP 业务归属优先 HomeAI 用户-----------
     }
 
     /** 管理端/具备资料存储权限的角色可查看全部资源 */
@@ -118,7 +130,7 @@ public class StorageController {
         }
     }
 
-    private List<String> resolveFamilyIds(String visibility, String familyIdsParam, String userFamilyId) {
+    private List<String> resolveFamilyIds(String visibility, String familyIdsParam, String userFamilyId, boolean admin) {
         if (!StorageVisibility.FAMILY.equals(visibility)) {
             return List.of();
         }
@@ -126,11 +138,26 @@ public class StorageController {
         if (ids.isEmpty() && oConvertUtils.isNotEmpty(userFamilyId)) {
             ids.add(userFamilyId);
         }
-        if (ids.isEmpty()) {
+        return restrictFamilyIds(ids, userFamilyId, admin);
+    }
+
+    //update-begin---author:cursor---date:2026-08-22---for:【审查A】APP 不可把资料共享到自己未加入的家庭---
+    private List<String> restrictFamilyIds(List<String> ids, String userFamilyId, boolean admin) {
+        if (!admin) {
+            if (oConvertUtils.isEmpty(userFamilyId)) {
+                throw new JeecgBootException("加入家庭后才能设为家庭可见");
+            }
+            ids = StorageAccessUtil.retainAssignableFamilies(ids, userFamilyId);
+            if (ids.isEmpty()) {
+                throw new JeecgBootException("只能共享到自己所在的家庭");
+            }
+        }
+        if (ids == null || ids.isEmpty()) {
             throw new JeecgBootException("家庭可见至少选择一个家庭");
         }
         return ids;
     }
+    //update-end---author:cursor---date:2026-08-22---for:【审查A】APP 不可把资料共享到自己未加入的家庭---
 
     private List<String> parseFamilyIdsFromBody(Object raw) {
         if (raw == null) {
@@ -252,7 +279,7 @@ public class StorageController {
         try {
             validateVisibility(visibility);
             String userFamilyId = resolveUserFamilyId(userId);
-            List<String> assignedFamilies = resolveFamilyIds(visibility, familyIds, userFamilyId);
+            List<String> assignedFamilies = resolveFamilyIds(visibility, familyIds, userFamilyId, isStorageAdmin(request));
             StorageFolder folder = folderService.createFolder(userId, userFamilyId, parentId, name, visibility);
             applyFolderVisibility(folder, visibility, assignedFamilies);
             folder.setUpdateTime(new Date());
@@ -313,7 +340,7 @@ public class StorageController {
         }
         try {
             validateVisibility(visibility);
-            List<String> assignedFamilies = resolveFamilyIds(visibility, familyIds, resolveUserFamilyId(userId));
+            List<String> assignedFamilies = resolveFamilyIds(visibility, familyIds, resolveUserFamilyId(userId), isStorageAdmin(request));
             applyFolderVisibility(folder, visibility, assignedFamilies);
             folder.setUpdateTime(new Date());
             folderService.updateById(folder);
@@ -374,11 +401,15 @@ public class StorageController {
                 List<String> assignedFamilies;
                 if (body.get("familyIds") != null) {
                     assignedFamilies = parseFamilyIdsFromBody(body.get("familyIds"));
-                    if (StorageVisibility.FAMILY.equals(visibility) && assignedFamilies.isEmpty()) {
-                        assignedFamilies = resolveFamilyIds(visibility, null, resolveUserFamilyId(userId));
+                    if (StorageVisibility.FAMILY.equals(visibility)) {
+                        if (assignedFamilies.isEmpty()) {
+                            assignedFamilies = resolveFamilyIds(visibility, null, resolveUserFamilyId(userId), isStorageAdmin(request));
+                        } else {
+                            assignedFamilies = restrictFamilyIds(assignedFamilies, resolveUserFamilyId(userId), isStorageAdmin(request));
+                        }
                     }
                 } else {
-                    assignedFamilies = resolveFamilyIds(visibility, null, resolveUserFamilyId(userId));
+                    assignedFamilies = resolveFamilyIds(visibility, null, resolveUserFamilyId(userId), isStorageAdmin(request));
                 }
                 applyFolderVisibility(folder, visibility, assignedFamilies);
             } catch (JeecgBootException e) {
@@ -512,7 +543,7 @@ public class StorageController {
             validateVisibility(visibility);
             String userFamilyId = resolveUserFamilyId(userId);
             StorageFolder folder = null;
-            List<String> assignedFamilies = resolveFamilyIds(visibility, familyIds, userFamilyId);
+            List<String> assignedFamilies = resolveFamilyIds(visibility, familyIds, userFamilyId, isStorageAdmin(request));
             if (oConvertUtils.isNotEmpty(folderId)) {
                 folder = folderService.getById(folderId);
                 //update-begin---author:cursor---date:2026-08-20---for:【审查修复】上传到指定文件夹须校验写权限---
@@ -527,6 +558,9 @@ public class StorageController {
                         assignedFamilies = resourceFamilyService.getFolderFamilyIds(folder.getId());
                         if (assignedFamilies.isEmpty() && oConvertUtils.isNotEmpty(folder.getFamilyId())) {
                             assignedFamilies = List.of(folder.getFamilyId());
+                        }
+                        if (!isStorageAdmin(request)) {
+                            assignedFamilies = restrictFamilyIds(assignedFamilies, userFamilyId, false);
                         }
                     } else {
                         assignedFamilies = List.of();
@@ -563,7 +597,7 @@ public class StorageController {
         }
         try {
             validateVisibility(visibility);
-            List<String> assignedFamilies = resolveFamilyIds(visibility, familyIds, resolveUserFamilyId(userId));
+            List<String> assignedFamilies = resolveFamilyIds(visibility, familyIds, resolveUserFamilyId(userId), isStorageAdmin(request));
             applyFileVisibility(sf, visibility, assignedFamilies);
             sf.setUpdateTime(new Date());
             fileService.updateById(sf);
@@ -769,6 +803,39 @@ public class StorageController {
         return Result.OK("彻底删除成功");
     }
 
+    //update-begin---author:cursor---date:2026-08-22---for:【审查B】APP 查看个人/家庭存储用量-----------
+    @GetMapping("/my/usage")
+    @Operation(summary = "资料存储-我的用量")
+    public Result<?> myUsage(HttpServletRequest request) {
+        String userId = securityUtil.getWxUserId(request);
+        if (userId == null) {
+            return Result.error("未登录");
+        }
+        long usedBytes = fileService.sumUsedBytesByUser(userId);
+        long limitBytes = storageConfigService.getDefaultUserLimitBytes();
+        int warnPercent = storageConfigService.getWarnPercent();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("usedBytes", usedBytes);
+        data.put("limitBytes", limitBytes);
+        data.put("usedPercent", limitBytes > 0 ? Math.min(100.0, usedBytes * 100.0 / limitBytes) : 0);
+        data.put("overWarn", limitBytes > 0 && usedBytes * 100.0 / limitBytes >= warnPercent);
+        data.put("warnPercent", warnPercent);
+        String familyId = resolveUserFamilyId(userId);
+        if (oConvertUtils.isNotEmpty(familyId)) {
+            Family family = familyService.getById(familyId);
+            long familyUsed = fileService.sumUsedBytesByFamily(familyId);
+            long familyLimit = storageConfigService.getFamilyLimitBytes(familyId);
+            data.put("familyId", familyId);
+            data.put("familyName", family != null ? family.getName() : null);
+            data.put("familyUsedBytes", familyUsed);
+            data.put("familyLimitBytes", familyLimit);
+            data.put("familyUsedPercent", familyLimit > 0 ? Math.min(100.0, familyUsed * 100.0 / familyLimit) : 0);
+            data.put("familyOverWarn", familyLimit > 0 && familyUsed * 100.0 / familyLimit >= warnPercent);
+        }
+        return Result.OK(data);
+    }
+    //update-end---author:cursor---date:2026-08-22---for:【审查B】APP 查看个人/家庭存储用量-----------
+
     private List<String> filterOwnedFileIds(List<String> ids, String userId) {
         List<String> owned = new ArrayList<>();
         if (ids == null) {
@@ -925,6 +992,29 @@ public class StorageController {
         return Result.OK(fileStorageService.resolveAccessUrl(sf.getFileUrl()));
     }
 
+    //update-begin---author:cursor---date:2026-08-22---for:【HomeAI-R81】APP 鉴权下载原文件-----------
+    @GetMapping("/files/{id}/content")
+    @Operation(summary = "资料文件-下载原文件")
+    public void downloadFileContent(@PathVariable String id, HttpServletRequest request,
+                                    HttpServletResponse response) throws java.io.IOException {
+        StorageFile sf = fileService.getById(id);
+        Result<?> denied = assertCanReadFile(sf, request);
+        if (denied != null) {
+            HomeaiHttpDeny.write(response, denied);
+            return;
+        }
+        try {
+            Path path = fileStorageService.resolveLocalPath(sf.getFileUrl());
+            HomeaiFileMime.writeLocalFile(response, path, sf.getOriginalName(), sf.getExtension());
+        } catch (Exception e) {
+            log.warn("资料文件下载失败 id={}", id, e);
+            if (!response.isCommitted()) {
+                response.sendError(HttpServletResponse.SC_BAD_GATEWAY, "文件读取失败");
+            }
+        }
+    }
+    //update-end---author:cursor---date:2026-08-22---for:【HomeAI-R81】APP 鉴权下载原文件-----------
+
     //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】文件预览-----------
     @GetMapping("/files/{id}/preview")
     @Operation(summary = "资料文件-预览描述")
@@ -963,6 +1053,7 @@ public class StorageController {
         }
         return null;
     }
+
     //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R63】文件预览-----------
 
     /**
