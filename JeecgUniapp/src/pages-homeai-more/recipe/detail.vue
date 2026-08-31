@@ -3,7 +3,16 @@
 </route>
 
 <template>
-  <view class="hai-page hai-page--flush">
+  <view v-if="loading" class="hai-page"><HomeSkeleton variant="card" /></view>
+  <HomeEmpty
+    v-else-if="loadFailed"
+    title="菜谱加载失败"
+    hint="请检查网络后重试"
+    action-text="重试"
+    :card="true"
+    @action="loadDetail"
+  />
+  <view v-else class="hai-page hai-page--flush">
     <image class="cover" :src="recipe.coverUrl || '/static/default-food.png'" mode="aspectFill"/>
     <view class="header-info hai-card">
       <text class="name">{{ recipe.name }}</text>
@@ -31,15 +40,23 @@
       <video class="video" :src="recipe.videoUrl" controls></video>
     </view>
     <view class="section-head"><text class="hai-section-title">食材清单</text></view>
-    <view class="list-card hai-card">
+    <view v-if="ingredients.length" class="list-card hai-card">
       <view class="ingredient" v-for="i in ingredients" :key="i.id"><text>{{ i.name }}</text><text class="amt">{{ i.amount }}</text></view>
     </view>
+    <view v-else class="empty-sec hai-card">
+      <text>暂无食材</text>
+      <text v-if="canEdit" class="empty-link" @click="goEdit">去补充</text>
+    </view>
     <view class="section-head"><text class="hai-section-title">烹饪步骤</text></view>
-    <view class="list-card hai-card">
+    <view v-if="steps.length" class="list-card hai-card">
       <view class="step" v-for="s in steps" :key="s.id">
         <text class="step-num">{{ s.stepNum }}</text>
         <view class="step-body"><image v-if="s.imageUrl" :src="s.imageUrl" mode="aspectFill" class="step-img"/><text>{{ s.description }}</text></view>
       </view>
+    </view>
+    <view v-else class="empty-sec hai-card">
+      <text>暂无步骤</text>
+      <text v-if="canEdit" class="empty-link" @click="goEdit">去补充</text>
     </view>
     <view v-if="recipe.tips" class="tips-card hai-card">
       <text class="hai-section-title">小贴士</text>
@@ -54,26 +71,32 @@
     </view>
     <view class="dialog-footer">
       <wd-button block @click="deleteVisible = false">取消</wd-button>
-      <wd-button type="error" block @click="doDelete">确认删除</wd-button>
+      <wd-button type="error" block :loading="deleting" @click="doDelete">确认删除</wd-button>
     </view>
   </wd-popup>
 </template>
 
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
-import { get as getApi, post as postApi } from '../../pages-homeai/api/request'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { recipeApi } from '../../pages-homeai/api/recipe'
-import { useUserStore } from '../../pages-homeai/stores/user'
 import { formatQuantityUnit } from '../../pages-homeai/utils/recipeIngredient'
+import HomeEmpty from '../../components/HomeEmpty.vue'
+import HomeSkeleton from '../../components/HomeSkeleton.vue'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+
+useHomeaiPageGuard()
 const recipe = ref<any>({})
 const ingredients = ref<any[]>([])
 const steps = ref<any[]>([])
-const userStore = useUserStore()
 const canEdit = ref(false)
 const isFavorited = ref(false)
 const recipeId = ref('')
+const loading = ref(true)
+const loadFailed = ref(false)
 const deleteVisible = ref(false)
+const favoriting = ref(false)
+const deleting = ref(false)
 const deleteHint = computed(() => {
   if (recipe.value.visibility === 'family') {
     return '删除后家庭成员将无法再看到这道菜，确定继续？'
@@ -89,15 +112,12 @@ function visibilityLabel(v?: string) {
   if (v === 'family') return '家庭共享'
   return '仅自己'
 }
-onLoad(async (opts: any) => {
-  const id = opts?.id
-  if (!id) {
-    uni.showToast({ title: '参数错误', icon: 'none' })
-    return
-  }
-  recipeId.value = id
+async function loadDetail(silent = false) {
+  if (!recipeId.value) return
+  if (!silent) loading.value = true
+  loadFailed.value = false
   try {
-    const res = await getApi(`/recipe/${id}`)
+    const res = await recipeApi.detail(recipeId.value)
     recipe.value = res.recipe
     ingredients.value = (res.ingredients || []).map((x: any) => ({
       ...x,
@@ -106,16 +126,40 @@ onLoad(async (opts: any) => {
     steps.value = res.steps || []
     isFavorited.value = !!res.isFavorited
     canEdit.value = res.canModify === true
-      || (!!res.recipe && res.recipe.userId === userStore.userInfo?.id)
   } catch {
-    // request 层已 toast
+    if (!recipe.value.id) loadFailed.value = true
+  } finally {
+    loading.value = false
   }
+}
+
+onLoad(async (opts: any) => {
+  const id = opts?.id
+  if (!id) {
+    loading.value = false
+    loadFailed.value = true
+    uni.showToast({ title: '参数错误', icon: 'none' })
+    return
+  }
+  recipeId.value = id
+  await loadDetail()
+})
+
+onShow(() => {
+  if (!recipeId.value || loading.value) return
+  loadDetail(true)
 })
 
 async function toggleFavorite() {
-  const res: any = await postApi(`/recipe/${recipeId.value}/favorite`)
-  isFavorited.value = !!res?.favorited
-  uni.showToast({ title: isFavorited.value ? '已收藏' : '已取消收藏', icon: 'none' })
+  if (favoriting.value) return
+  favoriting.value = true
+  try {
+    const res: any = await recipeApi.toggleFavorite(recipeId.value)
+    isFavorited.value = !!res?.favorited
+    uni.showToast({ title: isFavorited.value ? '已收藏' : '已取消收藏', icon: 'none' })
+  } finally {
+    favoriting.value = false
+  }
 }
 
 function goEdit() {
@@ -123,7 +167,8 @@ function goEdit() {
 }
 
 async function doDelete() {
-  if (!recipeId.value) return
+  if (!recipeId.value || deleting.value) return
+  deleting.value = true
   try {
     await recipeApi.remove(recipeId.value)
     deleteVisible.value = false
@@ -131,6 +176,8 @@ async function doDelete() {
     setTimeout(() => uni.navigateBack(), 600)
   } catch {
     // request 层已 toast
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -200,6 +247,16 @@ function copyIngredients() {
   margin: 0 32rpx 24rpx;
   overflow: hidden;
 }
+.empty-sec {
+  margin: 0 32rpx 24rpx;
+  padding: 28rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 26rpx;
+  color: var(--hai-text-muted);
+}
+.empty-link { color: var(--hai-primary); }
 .ingredient {
   display: flex;
   justify-content: space-between;

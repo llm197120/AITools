@@ -4,6 +4,7 @@
   style: {
     navigationStyle: 'custom',
     navigationBarTitleText: '家庭AI小工具',
+    enablePullDownRefresh: true,
   },
 }
 </route>
@@ -72,13 +73,14 @@
           <wd-icon name="arrow-right" size="12px" color="#8A857C"></wd-icon>
         </view>
       </view>
-      <view class="plan-card" @click="goModule('plan')">
+      <view class="plan-card" @click="onPlanCardClick">
         <view class="plan-icon-wrap">
           <wd-icon name="clock" size="28px" color="#1B4F8A"></wd-icon>
         </view>
         <view class="plan-info">
           <text class="plan-title">今日待办安排</text>
-          <text class="plan-desc" v-if="todayTodo > 0">今日有 {{ todayTodo }} 项待办，点击查看</text>
+          <text class="plan-desc" v-if="planLoadFailed">计划加载失败，点此重试</text>
+          <text class="plan-desc" v-else-if="todayTodo > 0">今日有 {{ todayTodo }} 项待办，点击查看</text>
           <text class="plan-desc" v-else>暂无待办，安排一条计划开始今天</text>
         </view>
         <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
@@ -98,10 +100,10 @@
       </view>
       <view class="dual-card dual-learn" @click="goModule('learn')">
         <text class="dual-tag tag-cool">持续学习</text>
-        <text class="dual-title">学习模块</text>
-        <text class="dual-desc">资料与打卡，攒一点小小进步</text>
+        <text class="dual-title">{{ learnTitle }}</text>
+        <text class="dual-desc">{{ learnDesc }}</text>
         <view class="dual-cta cta-cool">
-          <text>去学习</text>
+          <text>{{ learnCta }}</text>
         </view>
         <text class="dual-more">查看更多 ›</text>
       </view>
@@ -134,30 +136,48 @@ import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '../../pages-homeai/stores/user'
 import { useFamilyStore } from '../../pages-homeai/stores/family'
 import { get as getApi } from '../../pages-homeai/api/request'
+import { learnApi } from '../../pages-homeai/api/learn'
 import { ensureLoginForAction, ensureProfileWhenGuest, openAuthPage } from '../../pages-homeai/utils/homeaiAuth'
 import { localDateStr } from '../../pages-homeai/utils/date'
+import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
+import { useFamilyPoll } from '../../pages-homeai/utils/useFamilyPoll'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
 const todayTodo = ref(0)
+const planLoadFailed = ref(false)
 const todayCookPlans = ref<{ recipeId?: string; recipeName?: string; title?: string }[]>([])
+const learnGoal = ref<{ todayMinutes?: number; goalMinutes?: number; reached?: boolean } | null>(null)
 /** 首次进入首页时展示骨架，避免家庭/计划数据未到齐时闪屏 */
 const booting = ref(true)
 
 const todayCookTitle = computed(() => {
+  if (planLoadFailed.value) return '今日下厨'
   const first = todayCookPlans.value[0]
   if (first?.recipeName) return first.recipeName
   if (first?.title) return first.title
   return '烹饪指南'
 })
 const todayCookDesc = computed(() => {
+  if (planLoadFailed.value) return '计划加载失败，点此重试'
   const n = todayCookPlans.value.length
   if (n > 1) return `今日还有 ${n - 1} 道关联菜谱`
   if (n === 1) return '来自今日计划的关联菜谱'
   return '家里想吃什么，从这里找灵感'
 })
-const todayCookCta = computed(() => (todayCookPlans.value.length ? '去烹饪' : '去看看'))
+const todayCookCta = computed(() => {
+  if (planLoadFailed.value) return '重试'
+  return todayCookPlans.value.length ? '去烹饪' : '去看看'
+})
+const learnTitle = computed(() => (learnGoal.value ? '今日学习' : '学习模块'))
+const learnDesc = computed(() => {
+  const g = learnGoal.value
+  if (!g) return '资料与打卡，攒一点小小进步'
+  if (g.reached) return '今日目标已达成'
+  return `已学 ${g.todayMinutes || 0} / ${g.goalMinutes || 30} 分钟`
+})
+const learnCta = computed(() => (learnGoal.value?.reached ? '再学一会' : '去打卡'))
 
 const sys = uni.getSystemInfoSync()
 const statusBarPx = sys.statusBarHeight || 20
@@ -191,26 +211,60 @@ const familyLabel = computed(() => {
   return '加入家庭'
 })
 
+async function reloadHome() {
+  await familyStore.fetchFamilyInfo()
+  await reloadPlans()
+  if (userStore.isLogin) await reloadLearnGoal()
+}
+
+useHomeaiPullRefresh(async () => {
+  if (!userStore.isLogin) return
+  await reloadHome()
+})
+
+const { start: startFamilyPoll, stop: stopFamilyPoll } = useFamilyPoll()
+
 onShow(async () => {
   if (!ensureProfileWhenGuest()) {
     booting.value = false
+    stopFamilyPoll()
     return
   }
   try {
-    await familyStore.fetchFamilyInfo()
-    try {
-      const list = await getApi(`/plan/date/${localDateStr()}`)
-      const arr = Array.isArray(list) ? list : []
-      todayTodo.value = arr.filter((p: any) => p.status === 'pending').length
-      todayCookPlans.value = arr.filter((p: any) => p.recipeId)
-    } catch {
-      todayTodo.value = 0
-      todayCookPlans.value = []
-    }
+    await reloadHome()
   } finally {
     booting.value = false
   }
+  startFamilyPoll()
 })
+
+async function reloadLearnGoal() {
+  try {
+    learnGoal.value = (await learnApi.goal()) || learnGoal.value
+  } catch {
+    // 目标失败不挡首页
+  }
+}
+
+async function reloadPlans() {
+  planLoadFailed.value = false
+  try {
+    const list = await getApi(`/plan/date/${localDateStr()}`)
+    const arr = Array.isArray(list) ? list : []
+    todayTodo.value = arr.filter((p: any) => p.status === 'pending').length
+    todayCookPlans.value = arr.filter((p: any) => p.recipeId)
+  } catch {
+    planLoadFailed.value = true
+  }
+}
+
+function onPlanCardClick() {
+  if (planLoadFailed.value) {
+    reloadPlans()
+    return
+  }
+  goModule('plan')
+}
 
 function goAgreement() {
   uni.navigateTo({ url: '/pages/agreement/index' })
@@ -231,6 +285,10 @@ function onFamilyClick() {
 
 function goTodayCook() {
   if (!ensureLoginForAction()) return
+  if (planLoadFailed.value) {
+    reloadPlans()
+    return
+  }
   const first = todayCookPlans.value[0]
   if (first?.recipeId) {
     uni.navigateTo({ url: `/pages-homeai-more/recipe/detail?id=${first.recipeId}` })

@@ -4,7 +4,7 @@ export const recipeApi = {
   list: (params?: Record<string, string>) => get<any>('/recipe/list', params),
   detail: (id: string) => get<any>(`/recipe/${id}`),
   categories: () => get<any[]>('/recipe/category/all'),
-  favorites: () => get<any[]>('/recipe/favorites'),
+  favorites: (params?: Record<string, string>) => get<any>('/recipe/favorites', params),
   hot: (limit = 20) => get<any[]>('/recipe/hot', { limit: String(limit) }),
   recommend: (limit = 8, season = 'auto') =>
     get<any[]>('/recipe/recommend', { limit: String(limit), season }),

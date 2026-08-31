@@ -59,6 +59,7 @@
     "build:quickapp-webview-huawei": "uni build -p quickapp-webview-huawei",
     "build:quickapp-webview-union": "uni build -p quickapp-webview-union",
     "type-check": "vue-tsc --noEmit",
+    "test:utils": "vitest run --config vitest.config.ts",
     "release": "standard-version",
     "cz": "czg",
     "openapi-ts-request": "openapi-ts"
@@ -166,6 +167,7 @@
     "unocss-applet": "^0.7.8",
     "unplugin-auto-import": "^0.17.8",
     "vite": "5.2.8",
+    "vitest": "2.1.9",
     "vite-plugin-mock": "^3.0.2",
     "vite-plugin-restart": "^0.4.2",
     "vitepress": "^1.5.0",

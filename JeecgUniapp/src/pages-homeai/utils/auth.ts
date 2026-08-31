@@ -19,7 +19,13 @@ export function removeToken() {
 
 export function getUser(): any | null {
   const raw = uni.getStorageSync(USER_KEY)
-  return raw ? JSON.parse(raw) : null
+  if (!raw) return null
+  if (typeof raw === 'object') return raw
+  try {
+    return JSON.parse(String(raw))
+  } catch {
+    return null
+  }
 }
 
 export function setUser(user: any) {

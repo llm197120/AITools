@@ -16,7 +16,8 @@ import {
   pickStorageVisibilityChange,
   type StorageVisibility,
 } from './storageVisibility'
-import { previewFile } from './filePreview'
+import { isOfficeExt, previewFile } from './filePreview'
+import { fileSaveActionName } from './contentUrl'
 import { downloadStorageFile } from './fileDownload'
 
 export type StorageSheetAction = { name: string; key: string; color?: string }
@@ -25,6 +26,7 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
   const folderTree = ref<StorageFolderNode[]>([])
   const files = ref<any[]>([])
   const loading = ref(false)
+  const loadFailed = ref(false)
   const currentFolder = ref<StorageFolderNode | null>(null)
   const PAGE_SIZE = 20
   const pageNo = ref(1)
@@ -58,6 +60,8 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
   const confirmKind = ref<'deleteFolder' | 'deleteFile'>('deleteFolder')
   const confirmFolder = ref<StorageFolderNode | null>(null)
   const confirmFile = ref<any>(null)
+  const nameBusy = ref(false)
+  const confirmBusy = ref(false)
 
   function unwrapFilePage(page: any): { records: any[]; total?: number } {
     if (!page) return { records: [] }
@@ -85,13 +89,22 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
       } else {
         hasMore.value = normalized.length >= PAGE_SIZE
       }
+    } catch {
+      if (reset) {
+        files.value = []
+        throw new Error('文件列表加载失败')
+      }
+      uni.showToast({ title: '加载更多失败', icon: 'none' })
     } finally {
       loadingMore.value = false
     }
   }
 
-  async function refresh() {
-    loading.value = true
+  async function refresh(silent = false) {
+    const hasContent =
+      files.value.length > 0 || getChildFolders(folderTree.value, getFolderId()).length > 0
+    if (!silent || !hasContent) loading.value = true
+    loadFailed.value = false
     try {
       folderTree.value = (await storageApi.folders()) || []
       const fid = getFolderId()
@@ -99,6 +112,10 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
       pageNo.value = 1
       hasMore.value = true
       await fetchFiles(true)
+    } catch {
+      const empty = files.value.length === 0 && getChildFolders(folderTree.value, getFolderId()).length === 0
+      loadFailed.value = empty
+      if (!empty) uni.showToast({ title: '资料加载失败', icon: 'none' })
     } finally {
       loading.value = false
     }
@@ -197,11 +214,13 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
   }
 
   async function submitNamePopup() {
+    if (nameBusy.value) return
     const name = namePopupValue.value.trim()
     if (!name) {
       uni.showToast({ title: '请输入名称', icon: 'none' })
       return
     }
+    nameBusy.value = true
     namePopupVisible.value = false
     try {
       if (namePopupKind.value === 'createFolder') {
@@ -227,6 +246,8 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
       await refresh()
     } catch (e: any) {
       uni.showToast({ title: e.message || '操作失败', icon: 'none' })
+    } finally {
+      nameBusy.value = false
     }
   }
 
@@ -272,6 +293,8 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
   }
 
   async function submitConfirm() {
+    if (confirmBusy.value) return
+    confirmBusy.value = true
     confirmVisible.value = false
     try {
       if (confirmKind.value === 'deleteFolder' && confirmFolder.value) {
@@ -284,6 +307,8 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
       await refresh()
     } catch (e: any) {
       uni.showToast({ title: e.message || '删除失败', icon: 'none' })
+    } finally {
+      confirmBusy.value = false
     }
   }
 
@@ -313,7 +338,12 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
         })
         uni.showToast({ title: `上传成功：${fileName || '文件'}`, icon: 'success' })
       } catch (e: any) {
-        uni.showToast({ title: e.message || '上传失败', icon: 'none' })
+        const msg = String(e?.message || '上传失败')
+        uni.showToast({
+          title: msg,
+          icon: 'none',
+          duration: msg.includes('存储空间') ? 3500 : 2000,
+        })
       } finally {
         pendingUploads--
         if (pendingUploads === 0) {
@@ -351,9 +381,13 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
   function showFileActions(file: any) {
     const actions: StorageSheetAction[] = [
       { name: '预览', key: 'preview' },
-      { name: '下载', key: 'download' },
+      { name: fileSaveActionName(file.extension), key: 'download' },
       { name: '收藏/取消', key: 'favorite' },
     ]
+    const ext = String(file.extension || '').replace(/^\./, '').toLowerCase()
+    if (isOfficeExt(ext)) {
+      actions.push({ name: '格式转换', key: 'convert' })
+    }
     if (canDeleteFile(file)) {
       actions.push({ name: '重命名', key: 'rename' })
       actions.push({ name: '删除', key: 'delete', color: '#e74c3c' })
@@ -369,6 +403,12 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
     if (!file || !action) return
     if (action.key === 'preview') openFile(file)
     else if (action.key === 'download') downloadFile(file)
+    else if (action.key === 'convert') {
+      const ext = String(file.extension || '').replace(/^\./, '').toLowerCase()
+      uni.navigateTo({
+        url: `/pages-homeai-more/storage/office-convert?fileId=${file.id}&format=${encodeURIComponent(ext)}&name=${encodeURIComponent(getStorageDisplayName(file))}`,
+      })
+    }
     else if (action.key === 'favorite') {
       await storageApi.toggleFavorite(file.id)
       await refresh()
@@ -380,6 +420,7 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
     folderTree,
     files,
     loading,
+    loadFailed,
     currentFolder,
     subFolders,
     breadcrumbs,
@@ -414,9 +455,11 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
     namePopupPlaceholder,
     namePopupValue,
     submitNamePopup,
+    nameBusy,
     confirmVisible,
     confirmTitle,
     confirmMessage,
     submitConfirm,
+    confirmBusy,
   }
 }

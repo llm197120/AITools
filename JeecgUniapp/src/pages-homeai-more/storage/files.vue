@@ -4,6 +4,7 @@
     navigationBarTitleText: '文件夹',
     navigationBarBackgroundColor: '#F3F2EE',
     onReachBottomDistance: 80,
+    enablePullDownRefresh: true,
   },
 }
 </route>
@@ -18,11 +19,19 @@ import { onLoad, onShow, onReachBottom } from '@dcloudio/uni-app'
 import { useUserStore } from '../../pages-homeai/stores/user'
 import { preloadWhitelist } from '../../pages-homeai/utils/fileWhitelist'
 import StorageBrowser from './StorageBrowser.vue'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
+
+useHomeaiPageGuard()
+useHomeaiPullRefresh(async () => {
+  await userStore.refreshUserInfo()
+  browserRef.value?.refresh?.()
+})
 
 const userStore = useUserStore()
 const userId = computed(() => userStore.userInfo?.id)
 const folderId = ref<string | null>(null)
-const browserRef = ref<{ refresh: () => void; loadMore: () => void } | null>(null)
+const browserRef = ref<{ refresh: (silent?: boolean) => void; loadMore: () => void } | null>(null)
 
 onLoad((options: any) => {
   folderId.value = options?.folderId || null
@@ -34,7 +43,7 @@ onLoad((options: any) => {
 onShow(async () => {
   preloadWhitelist()
   await userStore.refreshUserInfo()
-  browserRef.value?.refresh?.()
+  browserRef.value?.refresh?.(true)
 })
 
 onReachBottom(() => {

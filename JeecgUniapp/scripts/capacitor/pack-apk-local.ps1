@@ -12,6 +12,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\..\android-offline\common.ps1"
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+. (Join-Path $repoRoot 'docs\deploy\common.ps1')
+Set-HomeaiBuildQuietEnv
 
 $uniRoot = Get-UniappRoot
 $cfgPath = Join-Path $uniRoot 'android-pack.local.json'
@@ -98,7 +101,7 @@ $initAliyun = Join-Path $PSScriptRoot 'init-aliyun.gradle'
 Write-Host 'Gradle assembleRelease'
 Push-Location $androidDir
 try {
-    & $gradlew ':app:assembleRelease' --no-daemon --init-script $initAliyun
+    & $gradlew ':app:assembleRelease' --no-daemon --warning-mode none --init-script $initAliyun
     if ($LASTEXITCODE -ne 0) { throw "Gradle failed, exit=$LASTEXITCODE" }
 } finally {
     Pop-Location

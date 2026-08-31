@@ -8,7 +8,16 @@
 </route>
 
 <template>
-  <HomeFormCard>
+  <view v-if="editId && loading" class="hai-page"><HomeSkeleton variant="card" /></view>
+  <HomeEmpty
+    v-else-if="editId && loadFailed"
+    title="菜谱加载失败"
+    hint="请检查网络后重试"
+    action-text="重试"
+    :card="true"
+    @action="retryEdit"
+  />
+  <HomeFormCard v-else>
     <!-- 封面 -->
     <HomeMediaUpload
       v-model="form.coverUrl"
@@ -33,6 +42,7 @@
           :columns="categoryColumns"
           :filterable="categoryColumns.length > 8"
         />
+        <text v-if="catFailed" class="cat-fail" @click="loadCategories">分类加载失败，点此重试</text>
         <wd-cell title="难度" title-width="180rpx">
           <view class="radio-group">
             <view :class="'radio '+(form.difficulty==='1'?'active':'')" @click="form.difficulty='1'">入门</view>
@@ -50,9 +60,9 @@
         </wd-cell>
         <wd-cell title="可见性" title-width="180rpx">
           <view class="radio-group">
-            <view :class="'radio '+(form.visibility==='private'?'active':'')" @click="form.visibility='private'">仅自己</view>
-            <view :class="'radio '+(form.visibility==='family'?'active':'')" @click="form.visibility='family'">家庭共享</view>
-            <view :class="'radio '+(form.visibility==='public'?'active':'')" @click="form.visibility='public'">公开</view>
+            <view :class="'radio '+(form.visibility==='private'?'active':'')" @click="setVisibility('private')">仅自己</view>
+            <view :class="'radio '+(form.visibility==='family'?'active':'')" @click="setVisibility('family')">家庭共享</view>
+            <view :class="'radio '+(form.visibility==='public'?'active':'')" @click="setVisibility('public')">公开</view>
           </view>
         </wd-cell>
       </wd-cell-group>
@@ -121,15 +131,25 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { get as getApi, post as postApi, put as putApi } from '../../pages-homeai/api/request'
+import { recipeApi } from '../../pages-homeai/api/recipe'
+import { useFamilyStore } from '../../pages-homeai/stores/family'
 import { formatQuantityUnit, parseAmountToQuantityUnit } from '../../pages-homeai/utils/recipeIngredient'
 import HomeFormCard from '../../components/HomeFormCard.vue'
 import HomeMediaUpload from '../../pages-homeai/components/HomeMediaUpload.vue'
 import HomePickerCell from '../../pages-homeai/components/HomePickerCell.vue'
+import HomeEmpty from '../../components/HomeEmpty.vue'
+import HomeSkeleton from '../../components/HomeSkeleton.vue'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+
+useHomeaiPageGuard()
 
 const editId = ref('')
 const saving = ref(false)
+const loadFailed = ref(false)
+const loading = ref(false)
+const catFailed = ref(false)
 const categories = ref<any[]>([])
+const familyStore = useFamilyStore()
 
 const form = ref<any>({
   name: '',
@@ -151,18 +171,53 @@ const categoryColumns = computed(() =>
     .map((c: any) => ({ label: String(c.name), value: String(c.id) })),
 )
 
+function setVisibility(v: string) {
+  if (v === 'family' && !familyStore.hasFamily) {
+    uni.showToast({ title: '加入家庭后才能共享菜谱', icon: 'none' })
+    return
+  }
+  if (v === 'public' && form.value.visibility !== 'public') {
+    uni.showModal({
+      title: '设为公开',
+      content: '公开后所有登录用户都能看到这道菜，确定？',
+      success: (r) => {
+        if (r.confirm) form.value.visibility = 'public'
+      },
+    })
+    return
+  }
+  form.value.visibility = v
+}
+
 async function loadCategories() {
+  catFailed.value = false
   try {
-    const res: any = await getApi('/recipe/category/all')
+    const res: any = await recipeApi.categories()
     categories.value = Array.isArray(res) ? res : []
   } catch {
-    categories.value = []
+    catFailed.value = categories.value.length === 0
+    uni.showToast({ title: '分类加载失败', icon: 'none' })
   }
 }
 
+async function retryEdit() {
+  if (editId.value) await loadDetail(editId.value)
+}
+
 async function loadDetail(id: string) {
-  const res: any = await getApi(`/recipe/${id}`)
-  if (!res || !res.recipe) return
+  loading.value = true
+  loadFailed.value = false
+  try {
+  const res: any = await recipeApi.detail(id)
+  if (!res || !res.recipe) {
+    loadFailed.value = true
+    return
+  }
+  if (res.canModify !== true) {
+    uni.showToast({ title: '无权编辑该菜谱', icon: 'none' })
+    setTimeout(() => uni.navigateBack(), 400)
+    return
+  }
   const r = res.recipe
   form.value = {
     name: r.name || '',
@@ -181,12 +236,23 @@ async function loadDetail(id: string) {
   }))
   ingredients.value.push({ name: '', amount: '' })
   steps.value = (res.steps || []).map((x: any) => ({ description: x.description, imageUrl: x.imageUrl }))
+  } catch {
+    loadFailed.value = true
+  } finally {
+    loading.value = false
+  }
 }
 
 onLoad(async (opts: any) => {
+  await familyStore.fetchFamilyInfo()
+  if (!opts?.id && !familyStore.hasFamily) {
+    form.value.visibility = 'private'
+  }
   await loadCategories()
+  if (opts?.categoryId && !opts?.id) form.value.categoryId = opts.categoryId
   if (opts?.id) {
     editId.value = opts.id
+    loading.value = true
     uni.setNavigationBarTitle({ title: '编辑菜谱' })
     await loadDetail(opts.id)
   }
@@ -205,6 +271,7 @@ function moveStep(i: number, dir: number) {
 }
 
 async function submit() {
+  if (saving.value) return
   if (!form.value.name.trim()) {
     uni.showToast({ title: '请输入菜名', icon: 'none' })
     return
@@ -213,26 +280,46 @@ async function submit() {
     uni.showToast({ title: '请选择分类', icon: 'none' })
     return
   }
+  if (form.value.visibility === 'family' && !familyStore.hasFamily) {
+    uni.showToast({ title: '加入家庭后才能共享菜谱', icon: 'none' })
+    return
+  }
+  const cookTime = parseInt(String(form.value.cookTime), 10)
+  const servings = parseInt(String(form.value.servings), 10)
+  if (!Number.isFinite(cookTime) || cookTime <= 0) {
+    uni.showToast({ title: '烹饪时间请填写大于 0 的分钟数', icon: 'none' })
+    return
+  }
+  if (!Number.isFinite(servings) || servings <= 0) {
+    uni.showToast({ title: '份数请填写大于 0 的数字', icon: 'none' })
+    return
+  }
   saving.value = true
   const data = {
     ...form.value,
-    cookTime: parseInt(String(form.value.cookTime)) || 30,
-    servings: parseInt(String(form.value.servings)) || 2,
+    name: form.value.name.trim(),
+    difficulty: Number(form.value.difficulty) || 3,
+    cookTime,
+    servings,
     ingredients: ingredients.value
-      .filter((x: any) => x.name)
+      .filter((x: any) => String(x.name || '').trim())
       .map((x: any) => {
         const { quantity, unit } = parseAmountToQuantityUnit(x.amount || '')
-        return { name: x.name, quantity, unit }
+        return { name: String(x.name).trim(), quantity, unit }
       }),
     steps: steps.value
-      .filter((x: any) => x.description)
-      .map((x: any, i: number) => ({ description: x.description, imageUrl: x.imageUrl || null, stepNum: i + 1 })),
+      .filter((x: any) => String(x.description || '').trim())
+      .map((x: any, i: number) => ({
+        description: String(x.description).trim(),
+        imageUrl: x.imageUrl || null,
+        stepNum: i + 1,
+      })),
   }
   try {
     if (editId.value) {
-      await putApi('/recipe', { data: { id: editId.value, ...data } })
+      await recipeApi.update({ id: editId.value, ...data })
     } else {
-      const created: any = await postApi('/recipe', { data })
+      const created: any = await recipeApi.create(data)
       editId.value = created.id
     }
     uni.showToast({ title: '保存成功', icon: 'success' })
@@ -248,6 +335,12 @@ async function submit() {
 </script>
 
 <style scoped>
+.cat-fail {
+  display: block;
+  padding: 8rpx 24rpx 16rpx;
+  font-size: 22rpx;
+  color: var(--hai-danger);
+}
 .form-card {
   background: var(--hai-card);
   border-radius: var(--hai-radius);

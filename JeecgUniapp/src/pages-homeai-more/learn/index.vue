@@ -4,6 +4,7 @@
     navigationBarTitleText: '学习模块',
     navigationBarBackgroundColor: '#F3F2EE',
     onReachBottomDistance: 80,
+    enablePullDownRefresh: true,
   },
 }
 </route>
@@ -39,7 +40,7 @@
         <text class="learn-bar-title">正在学习：{{ activeSession.materialTitle }}</text>
         <text class="learn-bar-time">{{ formatElapsed(displayElapsed) }}</text>
       </view>
-      <view class="learn-bar-stop" @click="stopLearn">结束</view>
+      <view class="learn-bar-stop" @click="stopLearn">结束并保存</view>
     </view>
 
     <view class="tab-bar">
@@ -58,29 +59,49 @@
         <text v-for="w in weekLabels" :key="w" class="w">{{ w }}</text>
       </view>
       <view class="grid">
-        <view v-for="(cell, i) in calendarCells" :key="i" class="cell" :class="{ empty: !cell.date, studied: cell.studied }">
+        <view
+          v-for="(cell, i) in calendarCells"
+          :key="i"
+          class="cell"
+          :class="{ empty: !cell.date, studied: cell.studied }"
+          @click="cell.date && goRecordDay(cell.date)"
+        >
           <text v-if="cell.date">{{ cell.day }}</text>
         </view>
       </view>
-      <text class="cal-tip">绿色日期表示当天有学习记录</text>
+      <text class="cal-tip">点日期查看当天学习记录</text>
     </view>
 
     <template v-else>
-      <view class="material-item" v-for="m in materials" :key="m.id" @click="openDetail(m)">
-        <view class="mat-icon">{{ getTypeIcon(m.type) }}</view>
-        <view class="mat-info">
-          <text class="mat-title">{{ m.title }}</text>
-          <text class="mat-cat">{{ m.category }} · {{ m.type }}</text>
-        </view>
-        <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
+      <view class="search-bar">
+        <input class="search-input" v-model="keyword" placeholder="搜索资料标题" confirm-type="search" @confirm="searchMaterials" />
+        <text v-if="keyword" class="search-clear" @click="clearSearch">清除</text>
       </view>
+      <view v-if="loading"><HomeSkeleton variant="list" :rows="4" /></view>
       <HomeEmpty
-        v-if="materials.length === 0 && !loadingMore"
-        title="暂无学习资料"
-        hint="添加资料后即可开始计时学习"
-        action-text="添加资料"
-        @action="goAdd"
+        v-else-if="loadFailed"
+        title="资料加载失败"
+        hint="请检查网络后重试"
+        action-text="重试"
+        @action="keyword.trim() ? searchMaterials() : retryMaterials()"
       />
+      <template v-else>
+        <view class="material-item" v-for="m in materials" :key="m.id" @click="openDetail(m)">
+          <view class="mat-icon">{{ getTypeIcon(m.type) }}</view>
+          <view class="mat-info">
+            <text class="mat-title">{{ m.title }}</text>
+            <text class="mat-cat">{{ m.category }} · {{ m.type }}</text>
+          </view>
+          <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
+        </view>
+        <HomeEmpty
+          v-if="materials.length === 0 && !loadingMore"
+          :title="keyword.trim() ? '未找到相关资料' : '暂无学习资料'"
+          :hint="keyword.trim() ? '换个词试试，或清空搜索' : '添加资料后即可开始计时学习'"
+          :action-text="keyword.trim() ? '清空搜索' : '添加资料'"
+          @action="keyword.trim() ? clearSearch() : goAdd()"
+        />
+      </template>
       <!-- 底部加载更多：配合 onReachBottom，部分端页面滚动不触发时可用按钮兜底 -->
       <view v-if="materials.length > 0" class="load-more-wrap">
         <view v-if="loadingMore" class="load-more-tip">加载中...</view>
@@ -104,14 +125,21 @@
 <script lang="ts" setup>
 import { computed, ref, onUnmounted } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
+import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
 import { learnApi, configApi } from '../../pages-homeai/api/index'
 import { preloadWhitelist } from '../../pages-homeai/utils/fileWhitelist'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
 import { scheduleLearnGoalRemind } from '../../pages-homeai/utils/push'
 import { isStandaloneApp } from '../../pages-homeai/platform/runtime'
 import HomeEmpty from '../../components/HomeEmpty.vue'
+import HomeSkeleton from '../../components/HomeSkeleton.vue'
+import { confirmStopLearn } from '../../pages-homeai/utils/learnSession'
 
 useHomeaiPageGuard()
+useHomeaiPullRefresh(async () => {
+  await loadData(true)
+  if (activeTab.value === 'calendar') await loadCalendar()
+})
 
 const remindHint = isStandaloneApp()
   ? '每晚 20:00 未达标将发本地通知（进程被杀时可能收不到）'
@@ -129,7 +157,10 @@ const activeSession = ref<any>({})
 const displayElapsed = ref(0)
 const pageNo = ref(1)
 const hasMore = ref(true)
+const loading = ref(false)
 const loadingMore = ref(false)
+const loadFailed = ref(false)
+const keyword = ref('')
 let timerHandle: ReturnType<typeof setInterval> | null = null
 const weekLabels = ['日', '一', '二', '三', '四', '五', '六']
 const GOAL_OPTIONS = [15, 30, 45, 60, 90]
@@ -191,14 +222,32 @@ async function loadActiveSession() {
 }
 
 /** 拉取一页资料；reset=true 时重置为第一页 */
-async function fetchMaterials(reset = false) {
-  if (loadingMore.value) return
+function retryMaterials() {
+  fetchMaterials(true)
+}
+
+function searchMaterials() {
+  fetchMaterials(true)
+}
+
+function clearSearch() {
+  keyword.value = ''
+  fetchMaterials(true)
+}
+
+async function fetchMaterials(reset = false, silent = false) {
+  if (loadingMore.value || loading.value) return
   if (!reset && !hasMore.value) return
 
-  loadingMore.value = true
+  if (reset) {
+    loading.value = !silent && materials.value.length === 0
+    loadFailed.value = false
+  } else {
+    loadingMore.value = true
+  }
   try {
     const nextPage = reset ? 1 : pageNo.value + 1
-    const page: any = await learnApi.materials(nextPage, PAGE_SIZE)
+    const page: any = await learnApi.materials(nextPage, PAGE_SIZE, undefined, keyword.value)
     const records: any[] = page?.records || (Array.isArray(page) ? page : [])
     if (reset) {
       materials.value = records
@@ -213,7 +262,16 @@ async function fetchMaterials(reset = false) {
     } else {
       hasMore.value = records.length >= PAGE_SIZE
     }
+  } catch {
+    if (reset) {
+      loadFailed.value = materials.value.length === 0
+      if (loadFailed.value) materials.value = []
+      else uni.showToast({ title: '刷新失败', icon: 'none' })
+    } else {
+      uni.showToast({ title: '加载更多失败', icon: 'none' })
+    }
   } finally {
+    loading.value = false
     loadingMore.value = false
   }
 }
@@ -255,6 +313,8 @@ async function onGoalSelect({ index }: { index: number }) {
   await requestLearnSubscribe()
   goal.value = (await learnApi.setGoal(minutes)) || goal.value
   scheduleLearnGoalRemind(goal.value)
+  lastStatsAt = 0
+  await loadData(true)
   uni.showToast({ title: '目标已更新', icon: 'success' })
 }
 
@@ -262,14 +322,18 @@ async function onGoalSelect({ index }: { index: number }) {
 const LEARN_STATS_TTL = 30 * 1000
 let lastStatsAt = 0
 
-async function loadData() {
+async function loadData(forceStats = false, silent = false) {
   pageNo.value = 1
   hasMore.value = true
-  await fetchMaterials(true)
-  if (Date.now() - lastStatsAt >= LEARN_STATS_TTL) {
-    stats.value = (await learnApi.statistics()) || {}
-    await loadGoal()
-    lastStatsAt = Date.now()
+  await fetchMaterials(true, silent)
+  if (forceStats || Date.now() - lastStatsAt >= LEARN_STATS_TTL) {
+    try {
+      stats.value = (await learnApi.statistics()) || {}
+      await loadGoal()
+      lastStatsAt = Date.now()
+    } catch {
+      // 统计/目标失败不阻断资料列表与计时条
+    }
   }
   await loadActiveSession()
 }
@@ -280,7 +344,11 @@ async function loadMore() {
 }
 
 async function loadCalendar() {
-  studyDates.value = (await learnApi.calendar(yearMonthParam.value)) || []
+  try {
+    studyDates.value = (await learnApi.calendar(yearMonthParam.value)) || []
+  } catch {
+    uni.showToast({ title: '日历加载失败', icon: 'none' })
+  }
 }
 
 function switchCalendar() {
@@ -302,13 +370,21 @@ function openDetail(m: any) {
   uni.navigateTo({ url: `/pages-homeai-more/learn/detail?id=${m.id}` })
 }
 
+const stopping = ref(false)
+
 async function stopLearn() {
-  if (!activeSession.value.materialId) return
-  await learnApi.stop(activeSession.value.materialId)
-  uni.showToast({ title: '已记录学习时长', icon: 'success' })
-  activeSession.value = {}
-  clearTimer()
-  await loadData()
+  if (!activeSession.value.materialId || stopping.value) return
+  if (!(await confirmStopLearn())) return
+  stopping.value = true
+  try {
+    await learnApi.stop(activeSession.value.materialId)
+    uni.showToast({ title: '已记录学习时长', icon: 'success' })
+    activeSession.value = {}
+    clearTimer()
+    await loadData(true)
+  } finally {
+    stopping.value = false
+  }
 }
 
 function goAdd() {
@@ -319,9 +395,13 @@ function goRecord() {
   uni.navigateTo({ url: '/pages-homeai-more/learn/record' })
 }
 
+function goRecordDay(date: string) {
+  uni.navigateTo({ url: `/pages-homeai-more/learn/record?date=${date}` })
+}
+
 onShow(() => {
   preloadWhitelist()
-  loadData()
+  loadData(false, materials.value.length > 0)
 })
 
 onReachBottom(() => {
@@ -333,6 +413,9 @@ onUnmounted(() => clearTimer())
 
 <style scoped>
 /* page shell: .hai-page */
+.search-bar{position:relative;padding:8rpx 0 16rpx}
+.search-input{height:72rpx;padding:0 88rpx 0 28rpx;background:var(--hai-card);border-radius:999rpx;font-size:28rpx;box-shadow:var(--hai-shadow)}
+.search-clear{position:absolute;right:28rpx;top:50%;transform:translateY(-50%);font-size:24rpx;color:var(--hai-primary)}
 .learn-bar { display: flex; align-items: center; justify-content: space-between; background: var(--hai-success); color: var(--hai-on-primary); border-radius: 28rpx; padding: 24rpx 28rpx; margin-bottom: 16rpx; box-shadow: var(--hai-shadow); }
 .learn-bar-info { flex: 1; }
 .learn-bar-title { display: block; font-size: 26rpx; margin-bottom: 6rpx; }

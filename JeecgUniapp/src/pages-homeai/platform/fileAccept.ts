@@ -165,6 +165,28 @@ export function buildAccept(opts?: {
   return '*/*'
 }
 
+/** 原生 ACTION_OPEN_DOCUMENT 的 MIME 过滤；无扩展名且 type=all 时用通配 MIME 打开完整文件管理 */
+export function mimeTypesForPick(opts?: {
+  extension?: string[]
+  type?: 'all' | 'file' | 'video' | 'image'
+}): string[] {
+  const exts = (opts?.extension || []).map(normalizeExt).filter(Boolean)
+  if (exts.length) {
+    const mimes = [...new Set(exts.map((e) => EXT_MIME[e]).filter(Boolean))]
+    if (isAudioExts(exts) && !mimes.includes('audio/*')) {
+      mimes.unshift('audio/*')
+    }
+    if (mimes.length && mimes.every((m) => m.startsWith('video/')) && !mimes.includes('video/*')) {
+      mimes.unshift('video/*')
+    }
+    return mimes.length ? mimes : ['*/*']
+  }
+  if (opts?.type === 'image') return ['image/*']
+  if (opts?.type === 'video') return ['video/*']
+  if (opts?.type === 'file') return ['application/*', 'text/*', 'audio/*']
+  return ['*/*']
+}
+
 /** APP-PLUS chooseFile：Android 上 type=file 不展示音频，音频白名单改走 all */
 export function resolveAppChooseType(
   type: 'all' | 'file' | 'video' | 'image' | undefined,

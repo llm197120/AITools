@@ -59,6 +59,10 @@
 </template>
 
 <script lang="ts" setup>
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+
+useHomeaiPageGuard()
+
 /** 与 --hai-primary / --hai-text-tertiary 对齐（组件 color 属性需实色） */
 const haiPrimary = '#1B4F8A'
 const haiTertiary = '#C4BFB6'

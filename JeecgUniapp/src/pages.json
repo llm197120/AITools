@@ -85,7 +85,8 @@
       "type": "page",
       "style": {
         "navigationBarTitleText": "我的家庭",
-        "navigationBarBackgroundColor": "#F3F2EE"
+        "navigationBarBackgroundColor": "#F3F2EE",
+        "enablePullDownRefresh": true
       }
     },
     {
@@ -94,7 +95,8 @@
       "layout": "default",
       "style": {
         "navigationStyle": "custom",
-        "navigationBarTitleText": "家庭AI小工具"
+        "navigationBarTitleText": "家庭AI小工具",
+        "enablePullDownRefresh": true
       }
     },
     {
@@ -102,7 +104,8 @@
       "type": "page",
       "style": {
         "navigationBarTitleText": "个人中心",
-        "navigationBarBackgroundColor": "#F3F2EE"
+        "navigationBarBackgroundColor": "#F3F2EE",
+        "enablePullDownRefresh": true
       }
     },
     {
@@ -131,7 +134,9 @@
           "type": "page",
           "style": {
             "navigationBarTitleText": "AI对话",
-            "navigationBarBackgroundColor": "#F3F2EE"
+            "navigationBarBackgroundColor": "#F3F2EE",
+            "enablePullDownRefresh": true,
+            "onReachBottomDistance": 80
           }
         }
       ]
@@ -184,7 +189,9 @@
           "type": "page",
           "style": {
             "navigationBarTitleText": "账单",
-            "navigationBarBackgroundColor": "#F3F2EE"
+            "navigationBarBackgroundColor": "#F3F2EE",
+            "enablePullDownRefresh": true,
+            "onReachBottomDistance": 80
           }
         },
         {
@@ -192,7 +199,8 @@
           "type": "page",
           "style": {
             "navigationBarTitleText": "统计分析",
-            "navigationBarBackgroundColor": "#F3F2EE"
+            "navigationBarBackgroundColor": "#F3F2EE",
+            "enablePullDownRefresh": true
           }
         },
         {
@@ -217,7 +225,8 @@
           "style": {
             "navigationBarTitleText": "学习模块",
             "navigationBarBackgroundColor": "#F3F2EE",
-            "onReachBottomDistance": 80
+            "onReachBottomDistance": 80,
+            "enablePullDownRefresh": true
           }
         },
         {
@@ -225,7 +234,8 @@
           "type": "page",
           "style": {
             "navigationBarTitleText": "学习记录",
-            "navigationBarBackgroundColor": "#F3F2EE"
+            "navigationBarBackgroundColor": "#F3F2EE",
+            "enablePullDownRefresh": true
           }
         },
         {
@@ -249,7 +259,8 @@
           "type": "page",
           "style": {
             "navigationBarTitleText": "日常计划",
-            "navigationBarBackgroundColor": "#F3F2EE"
+            "navigationBarBackgroundColor": "#F3F2EE",
+            "enablePullDownRefresh": true
           }
         },
         {
@@ -265,7 +276,9 @@
           "type": "page",
           "style": {
             "navigationBarTitleText": "分类浏览",
-            "navigationBarBackgroundColor": "#F3F2EE"
+            "navigationBarBackgroundColor": "#F3F2EE",
+            "onReachBottomDistance": 80,
+            "enablePullDownRefresh": true
           }
         },
         {
@@ -282,7 +295,8 @@
           "style": {
             "navigationBarTitleText": "烹饪指南",
             "navigationBarBackgroundColor": "#F3F2EE",
-            "onReachBottomDistance": 80
+            "onReachBottomDistance": 80,
+            "enablePullDownRefresh": true
           }
         },
         {
@@ -291,7 +305,8 @@
           "style": {
             "navigationBarTitleText": "文件夹",
             "navigationBarBackgroundColor": "#F3F2EE",
-            "onReachBottomDistance": 80
+            "onReachBottomDistance": 80,
+            "enablePullDownRefresh": true
           }
         },
         {
@@ -300,7 +315,8 @@
           "style": {
             "navigationBarTitleText": "资料存储",
             "navigationBarBackgroundColor": "#F3F2EE",
-            "onReachBottomDistance": 80
+            "onReachBottomDistance": 80,
+            "enablePullDownRefresh": true
           }
         },
         {
@@ -324,7 +340,9 @@
           "type": "page",
           "style": {
             "navigationBarTitleText": "处理历史",
-            "navigationBarBackgroundColor": "#F3F2EE"
+            "navigationBarBackgroundColor": "#F3F2EE",
+            "enablePullDownRefresh": true,
+            "onReachBottomDistance": 80
           }
         },
         {
@@ -340,7 +358,9 @@
           "type": "page",
           "style": {
             "navigationBarTitleText": "回收站",
-            "navigationBarBackgroundColor": "#F3F2EE"
+            "navigationBarBackgroundColor": "#F3F2EE",
+            "enablePullDownRefresh": true,
+            "onReachBottomDistance": 80
           }
         },
         {
@@ -348,7 +368,8 @@
           "type": "page",
           "style": {
             "navigationBarTitleText": "搜索文件",
-            "navigationBarBackgroundColor": "#F3F2EE"
+            "navigationBarBackgroundColor": "#F3F2EE",
+            "enablePullDownRefresh": true
           }
         },
         {

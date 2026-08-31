@@ -1,6 +1,15 @@
 <route lang="json5">{ style: { navigationBarTitleText: '新增计划', navigationBarBackgroundColor: '#F3F2EE' } }</route>
 <template>
-  <HomeFormCard>
+  <view v-if="editing && loading" class="hai-page"><HomeSkeleton variant="card" /></view>
+  <HomeEmpty
+    v-else-if="editing && loadFailed"
+    title="计划加载失败"
+    hint="请检查网络后重试"
+    action-text="重试"
+    :card="true"
+    @action="loadExisting"
+  />
+  <HomeFormCard v-else>
     <input class="home-form-input" v-model="form.title" placeholder="计划标题..." />
     <textarea class="home-form-textarea" v-model="form.content" placeholder="详细内容（可选）" />
 
@@ -20,6 +29,7 @@
           placeholder="请选择分类"
           :columns="categoryColumns"
         />
+        <text v-if="catFailed" class="cat-fail" @click="loadCategories">分类加载失败，点此重试</text>
         <wd-cell title="全天" title-width="180rpx" center>
           <wd-switch v-model="allDay" active-color="#1B4F8A" size="22px" />
         </wd-cell>
@@ -45,11 +55,12 @@
           :columns="recipeColumns"
           :filterable="recipeColumns.length > 8"
         />
+        <text v-if="recipeFailed" class="cat-fail" @click="loadRecipes">菜谱加载失败，点此重试</text>
       </wd-cell-group>
     </view>
     <text v-if="editing" class="edit-hint">编辑会更新整条计划的标题、内容和提醒；日期与重复规则保持不变。</text>
 
-    <wd-button class="home-form-save" size="large" type="primary" block round @click="save">
+    <wd-button class="home-form-save" size="large" type="primary" block round :loading="saving" @click="save">
       {{ editing ? '保存修改' : '保存' }}
     </wd-button>
   </HomeFormCard>
@@ -64,6 +75,11 @@ import HomePickerCell from '../../pages-homeai/components/HomePickerCell.vue'
 import HomeDateCell from '../../pages-homeai/components/HomeDateCell.vue'
 import HomeTimeCell from '../../pages-homeai/components/HomeTimeCell.vue'
 import { scheduleTodayPlanReminds } from '../../pages-homeai/utils/push'
+import HomeEmpty from '../../components/HomeEmpty.vue'
+import HomeSkeleton from '../../components/HomeSkeleton.vue'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+
+useHomeaiPageGuard()
 
 const priorityColumns = [
   { label: '普通', value: 'normal' },
@@ -87,6 +103,11 @@ const categoryColumns = ref<{ label: string; value: string }[]>([])
 const recipes = ref<any[]>([])
 const editing = ref(false)
 const instanceId = ref('')
+const loadFailed = ref(false)
+const loading = ref(false)
+const catFailed = ref(false)
+const recipeFailed = ref(false)
+const saving = ref(false)
 
 const form = ref({
   title: '',
@@ -143,21 +164,38 @@ function toHm(v: any): string {
   return '09:00'
 }
 
-onLoad(async (options: any) => {
-  if (options?.planDate) form.value.planDate = options.planDate
-  if (options?.id) {
-    editing.value = true
-    instanceId.value = options.id
-    uni.setNavigationBarTitle({ title: '编辑计划' })
-  }
-  const list = (await planApi.categories()) || []
-  categoryColumns.value = list.map((c: any) => ({ label: c.name, value: c.name }))
+async function loadRecipes() {
+  recipeFailed.value = false
   try {
     const page: any = await recipeApi.list({ pageNo: '1', pageSize: '50' })
     recipes.value = page?.records || (Array.isArray(page) ? page : [])
   } catch {
-    recipes.value = []
+    recipeFailed.value = recipes.value.length === 0
+    uni.showToast({ title: '菜谱加载失败', icon: 'none' })
   }
+}
+
+async function loadCategories() {
+  catFailed.value = false
+  try {
+    const list = (await planApi.categories()) || []
+    categoryColumns.value = list.map((c: any) => ({ label: c.name, value: c.name }))
+  } catch {
+    catFailed.value = categoryColumns.value.length === 0
+    uni.showToast({ title: '分类加载失败', icon: 'none' })
+  }
+}
+
+onLoad(async (options: any) => {
+  if (options?.planDate) form.value.planDate = options.planDate
+  if (options?.id) {
+    editing.value = true
+    loading.value = true
+    instanceId.value = options.id
+    uni.setNavigationBarTitle({ title: '编辑计划' })
+  }
+  await loadCategories()
+  await loadRecipes()
   if (editing.value) {
     await loadExisting()
     return
@@ -168,9 +206,12 @@ onLoad(async (options: any) => {
 })
 
 async function loadExisting() {
+  loading.value = true
+  loadFailed.value = false
   try {
     const inst: any = await planApi.instance(instanceId.value)
     if (!inst) {
+      loadFailed.value = true
       uni.showToast({ title: '计划不存在', icon: 'none' })
       return
     }
@@ -185,7 +226,9 @@ async function loadExisting() {
     form.value.repeatRule = inst.repeatRule || 'none'
     form.value.recipeId = inst.recipeId || ''
   } catch {
-    // request 层已 toast
+    loadFailed.value = true
+  } finally {
+    loading.value = false
   }
 }
 
@@ -212,7 +255,8 @@ async function requestPlanSubscribe() {
 }
 
 async function save() {
-  if (!form.value.title) {
+  if (saving.value) return
+  if (!form.value.title.trim()) {
     uni.showToast({ title: '请输入标题', icon: 'none' })
     return
   }
@@ -220,11 +264,24 @@ async function save() {
     uni.showToast({ title: '设置提醒请先选择开始时间', icon: 'none' })
     return
   }
+  if (!editing.value && form.value.planDate && form.value.planDate < localDateStr()) {
+    const ok = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '日期已过',
+        content: '这是过去的日期，确定仍要创建？',
+        success: (r) => resolve(!!r.confirm),
+      })
+    })
+    if (!ok) return
+  }
   const payload = {
     ...form.value,
+    title: form.value.title.trim(),
+    content: String(form.value.content || '').trim(),
     startTime: allDay.value ? null : form.value.startTime,
     remindMinutes: allDay.value ? 0 : form.value.remindMinutes,
   }
+  saving.value = true
   try {
     await requestPlanSubscribe()
     if (editing.value) {
@@ -239,6 +296,8 @@ async function save() {
     setTimeout(() => uni.navigateBack(), 800)
   } catch {
     // request 层已 toast
+  } finally {
+    saving.value = false
   }
 }
 </script>
@@ -249,5 +308,11 @@ async function save() {
   font-size: 22rpx;
   color: var(--hai-text-muted);
   line-height: 1.5;
+}
+.cat-fail {
+  display: block;
+  padding: 8rpx 24rpx 16rpx;
+  font-size: 22rpx;
+  color: var(--hai-danger);
 }
 </style>

@@ -11,13 +11,16 @@
   <view class="page">
     <view class="form-card">
       <view class="form-group">
-        <input class="field-input" v-model="oldPassword" :password="true" maxlength="20" placeholder="请输入原密码" />
+        <input class="field-input" v-model="oldPassword" :password="!showPassword" maxlength="20" placeholder="请输入原密码" />
+        <text class="pwd-toggle" @tap="showPassword = !showPassword">{{ showPassword ? '隐藏' : '显示' }}</text>
       </view>
       <view class="form-group">
-        <input class="field-input" v-model="newPassword" :password="true" maxlength="20" placeholder="请输入新密码（至少6位）" />
+        <input class="field-input" v-model="newPassword" :password="!showPassword" maxlength="20" placeholder="请输入新密码（至少6位）" />
+        <text class="pwd-toggle" @tap="showPassword = !showPassword">{{ showPassword ? '隐藏' : '显示' }}</text>
       </view>
       <view class="form-group">
-        <input class="field-input" v-model="confirmPassword" :password="true" maxlength="20" placeholder="请再次输入新密码" />
+        <input class="field-input" v-model="confirmPassword" :password="!showPassword" maxlength="20" placeholder="请再次输入新密码" />
+        <text class="pwd-toggle" @tap="showPassword = !showPassword">{{ showPassword ? '隐藏' : '显示' }}</text>
       </view>
       <wd-button size="large" type="primary" block round :loading="loading" @click="submit">保存</wd-button>
     </view>
@@ -28,10 +31,14 @@
 import { ref } from 'vue'
 import { changePassword } from '../../pages-homeai/platform/auth'
 import { useUserStore } from '../../pages-homeai/stores/user'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+
+useHomeaiPageGuard()
 
 const oldPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
+const showPassword = ref(false)
 const loading = ref(false)
 
 async function submit() {
@@ -81,14 +88,23 @@ async function submit() {
   box-shadow: var(--hai-shadow);
 }
 .form-group {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
   padding: 24rpx 28rpx;
   background: var(--hai-bg);
   border-radius: 20rpx;
   margin-bottom: 24rpx;
 }
 .field-input {
+  flex: 1;
   font-size: 30rpx;
   color: var(--hai-text);
   height: 48rpx;
+}
+.pwd-toggle {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: var(--hai-primary, #1b4f8a);
 }
 </style>

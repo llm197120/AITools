@@ -2,8 +2,10 @@
  * 资料存储可见性：private / family / public
  */
 import { storageApi } from '../api/storage'
+import { visibilityFromTapIndex, type StorageVisibility } from './storageVisibilityKind'
 
-export type StorageVisibility = 'private' | 'family' | 'public'
+export type { StorageVisibility }
+export { visibilityFromTapIndex }
 
 export type AssignableFamily = { id: string; name: string }
 
@@ -14,11 +16,11 @@ export type VisibilityPickResult = {
 
 const VIS_LABELS = ['仅自己可见（私有）', '家庭可见', '公开（所有人可见）']
 
-export async function loadAssignableFamilies(): Promise<AssignableFamily[]> {
+export async function loadAssignableFamilies(): Promise<AssignableFamily[] | null> {
   try {
     return (await storageApi.assignableFamilies()) || []
   } catch {
-    return []
+    return null
   }
 }
 
@@ -30,15 +32,19 @@ export function pickStorageVisibility(
     uni.showActionSheet({
       itemList: VIS_LABELS,
       success: async (res) => {
-        const visibility: StorageVisibility =
-          res.tapIndex === 2 ? 'public' : res.tapIndex === 1 ? 'family' : 'private'
+        const visibility = visibilityFromTapIndex(res.tapIndex)
         if (visibility !== 'family') {
           resolve({ visibility })
           return
         }
         const families = await loadAssignableFamilies()
+        if (!families) {
+          uni.showToast({ title: '家庭列表加载失败', icon: 'none' })
+          resolve(null)
+          return
+        }
         if (families.length === 0) {
-          uni.showToast({ title: '暂无可分配家庭', icon: 'none' })
+          uni.showToast({ title: '暂无可分配家庭，请先加入家庭', icon: 'none' })
           resolve(null)
           return
         }

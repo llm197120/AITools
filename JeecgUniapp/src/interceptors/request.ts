@@ -42,18 +42,23 @@ const httpInterceptor = {
       // #endif
       // TIPS: 如果需要对接多个后端服务，也可以在这里处理，拼接成所需要的地址
     }
-    // 1. 请求超时
-    options.timeout = 10000 // 10s
+    // 1. 默认超时；HomeAI 对话/上传会自己设更长，不要覆盖
+    if (options.timeout === undefined) {
+      options.timeout = 10000
+    }
     // 2. （可选）添加小程序端请求头标识
     options.header = {
       platform, // 可选，与 uniapp 定义的平台一致，告诉后台来源
       ...options.header,
     }
-    // 3. 添加 token 请求头标识
-    const userStore = useUserStore()
-    const { token } = userStore.userInfo as unknown as IUserInfo
-    if (token) {
-      options.header.Authorization = `${token}`
+    // 3. 添加 token 请求头标识。HomeAI 已带 X-Access-Token，不再塞 Authorization
+    const alreadyHomeai = !!(options.header['X-Access-Token'] || options.header['x-access-token'])
+    if (!alreadyHomeai) {
+      const userStore = useUserStore()
+      const { token } = userStore.userInfo as unknown as IUserInfo
+      if (token) {
+        options.header.Authorization = `${token}`
+      }
     }
   },
 }

@@ -50,9 +50,28 @@ export async function renderPdfPage(data: ArrayBuffer, canvas: HTMLCanvasElement
 }
 
 export async function fetchPdfBuffer(url: string): Promise<ArrayBuffer> {
+  const { isCapacitorNative } = await import('../platform/runtime')
+  if (isCapacitorNative()) {
+    const { capacitorDownloadToTemp, capacitorReadBase64, base64ToArrayBuffer } = await import(
+      '../platform/capDownload'
+    )
+    const path = await capacitorDownloadToTemp(url, `preview-${Date.now()}.pdf`)
+    return base64ToArrayBuffer(await capacitorReadBase64(path))
+  }
+  const { accessTokenHeaders } = await import('../platform/accessToken')
+  const headers = accessTokenHeaders(url)
+  if (typeof fetch === 'function') {
+    try {
+      const res = await fetch(url, headers ? { headers } : undefined)
+      if (res.ok) return await res.arrayBuffer()
+    } catch {
+      // CORS 时回退 uni.downloadFile
+    }
+  }
   const temp = await new Promise<string>((resolve, reject) => {
     uni.downloadFile({
       url,
+      header: headers,
       success: (res) => {
         if (res.statusCode === 200 && res.tempFilePath) resolve(res.tempFilePath)
         else reject(new Error('PDF 下载失败'))

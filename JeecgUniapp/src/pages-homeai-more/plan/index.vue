@@ -1,5 +1,5 @@
 <route lang="json5">
-{ style: { navigationBarTitleText: '日常计划', navigationBarBackgroundColor: '#F3F2EE' } }
+{ style: { navigationBarTitleText: '日常计划', navigationBarBackgroundColor: '#F3F2EE', enablePullDownRefresh: true } }
 </route>
 
 <template>
@@ -26,14 +26,19 @@
       </view>
     </view>
 
+    <view class="search-bar">
+      <input class="search-input" v-model="keyword" placeholder="搜索当日计划标题" confirm-type="search" />
+      <text v-if="keyword" class="search-clear" @click="keyword = ''">清除</text>
+    </view>
+
     <view class="list-header">
-      <text>{{ selectedDate }} · {{ plans.length }} 项计划</text>
+      <text>{{ selectedDate }} · {{ displayedPlans.length }} 项计划</text>
       <text class="add-link" @click="goAdd">+ 新增</text>
     </view>
 
     <view
       class="plan-item"
-      v-for="p in plans"
+      v-for="p in displayedPlans"
       :key="p.id"
       :class="{ done: p.status === 'completed', expired: p.status === 'expired' }"
       @click="goDetail(p)"
@@ -50,12 +55,20 @@
       <view class="priority-dot" :class="p.priority || 'normal'"></view>
     </view>
 
+    <view v-if="loading && plans.length === 0"><HomeSkeleton variant="list" :rows="3" /></view>
     <HomeEmpty
-      v-if="plans.length === 0"
-      title="当日暂无计划"
-      hint="安排一条计划，开始今天"
-      action-text="+ 新增"
-      @action="goAdd"
+      v-else-if="loadFailed"
+      title="计划加载失败"
+      hint="请检查网络后重试"
+      action-text="重试"
+      @action="reloadDay"
+    />
+    <HomeEmpty
+      v-else-if="!loading && displayedPlans.length === 0"
+      :title="keyword.trim() ? '未找到相关计划' : '当日暂无计划'"
+      :hint="keyword.trim() ? '换个词试试，或清空搜索' : '安排一条计划，开始今天'"
+      :action-text="keyword.trim() ? '清空搜索' : '+ 新增'"
+      @action="keyword.trim() ? (keyword = '') : goAdd()"
     />
   </view>
 </template>
@@ -64,11 +77,17 @@
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { planApi } from '../../pages-homeai/api/index'
-import { localDateStr } from '../../pages-homeai/utils/date'
+import { localDateStr, toDateStr } from '../../pages-homeai/utils/date'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
 import HomeEmpty from '../../components/HomeEmpty.vue'
+import HomeSkeleton from '../../components/HomeSkeleton.vue'
 
 useHomeaiPageGuard()
+useHomeaiPullRefresh(async () => {
+  await loadCalendar()
+  await loadPlans()
+})
 
 const weekLabels = ['日', '一', '二', '三', '四', '五', '六']
 const selectedDate = ref(localDateStr())
@@ -78,6 +97,14 @@ const planDates = ref<string[]>([])
 const expiredDates = ref<string[]>([])
 const pendingDates = ref<string[]>([])
 const plans = ref<any[]>([])
+const keyword = ref('')
+const loadFailed = ref(false)
+const loading = ref(true)
+const displayedPlans = computed(() => {
+  const kw = keyword.value.trim()
+  if (!kw) return plans.value
+  return plans.value.filter((p) => String(p.title || '').includes(kw))
+})
 
 const yearMonthLabel = computed(() => `${viewYear.value}年${viewMonth.value}月`)
 const yearMonthParam = computed(() => `${viewYear.value}-${String(viewMonth.value).padStart(2, '0')}`)
@@ -108,20 +135,42 @@ function statusLabel(s: string) {
 }
 
 async function loadCalendar() {
-  const res: any = await planApi.calendar(yearMonthParam.value)
-  if (Array.isArray(res)) {
-    planDates.value = res.map((d: any) => (typeof d === 'string' ? d : String(d).substring(0, 10)))
-    expiredDates.value = []
-    pendingDates.value = []
-    return
+  try {
+    const res: any = await planApi.calendar(yearMonthParam.value)
+    if (Array.isArray(res)) {
+      planDates.value = res.map((d: any) => toDateStr(d)).filter(Boolean)
+      expiredDates.value = []
+      pendingDates.value = []
+      return
+    }
+    planDates.value = (res?.dates || []).map((d: any) => toDateStr(d)).filter(Boolean)
+    expiredDates.value = (res?.expiredDates || []).map((d: any) => toDateStr(d)).filter(Boolean)
+    pendingDates.value = (res?.pendingDates || []).map((d: any) => toDateStr(d)).filter(Boolean)
+  } catch {
+    uni.showToast({ title: '日历加载失败', icon: 'none' })
   }
-  planDates.value = (res?.dates || []).map((d: any) => String(d).substring(0, 10))
-  expiredDates.value = (res?.expiredDates || []).map((d: any) => String(d).substring(0, 10))
-  pendingDates.value = (res?.pendingDates || []).map((d: any) => String(d).substring(0, 10))
 }
 
 async function loadPlans() {
-  plans.value = (await planApi.byDate(selectedDate.value)) || []
+  const silent = plans.value.length > 0
+  if (!silent) loading.value = true
+  loadFailed.value = false
+  try {
+    plans.value = (await planApi.byDate(selectedDate.value)) || []
+  } catch {
+    if (!silent) plans.value = []
+    loadFailed.value = plans.value.length === 0
+    if (silent && plans.value.length > 0) {
+      uni.showToast({ title: '刷新失败', icon: 'none' })
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+async function reloadDay() {
+  await loadCalendar()
+  await loadPlans()
 }
 
 function selectDate(date: string) {
@@ -145,14 +194,24 @@ function nextMonth() {
   loadCalendar()
 }
 
+const togglingId = ref('')
+
 async function togglePlan(p: any) {
   if (p.status === 'expired') {
     uni.showToast({ title: '已过期计划不可切换', icon: 'none' })
     return
   }
-  await planApi.toggle(p.id)
-  await loadPlans()
-  await loadCalendar()
+  if (togglingId.value) return
+  togglingId.value = p.id
+  try {
+    await planApi.toggle(p.id)
+    await loadPlans()
+    await loadCalendar()
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '操作失败', icon: 'none' })
+  } finally {
+    togglingId.value = ''
+  }
 }
 
 function goAdd() {
@@ -173,6 +232,9 @@ onShow(async () => {
 
 <style scoped>
 /* page shell: .hai-page */
+.search-bar{position:relative;padding:8rpx 0 16rpx}
+.search-input{height:72rpx;padding:0 88rpx 0 28rpx;background:var(--hai-card);border-radius:999rpx;font-size:28rpx;box-shadow:var(--hai-shadow)}
+.search-clear{position:absolute;right:28rpx;top:50%;transform:translateY(-50%);font-size:24rpx;color:var(--hai-primary)}
 .month-bar { display: flex; align-items: center; justify-content: center; gap: 40rpx; padding: 8rpx 0 24rpx; }
 .nav-btn { font-size: 40rpx; color: var(--hai-primary); padding: 0 20rpx; }
 .month-label { font-family: var(--hai-serif); font-size: 32rpx; font-weight: 700; color: var(--hai-text); }

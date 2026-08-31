@@ -161,3 +161,29 @@ export function shouldBlockHomeaiNavigate(path: string): boolean {
   const userStore = useUserStore()
   return !userStore.isLogin && isHomeaiFeaturePath(path)
 }
+
+export function isHomeaiUnauthorizedPayload(statusCode?: number, data?: any): boolean {
+  if (statusCode === 401) return true
+  const code = data?.code
+  return code === 401 || code === '401'
+}
+
+/** 401：清本地会话并回登录。上传 / 对话等旁路请求与 request.ts 共用。 */
+export function handleHomeaiUnauthorized() {
+  useUserStore().clearLocalSession()
+  jumpToGuestAuth(undefined, getCurrentFullPath())
+}
+
+export function consumeHomeaiUnauthorized(statusCode?: number, raw?: any): boolean {
+  let data = raw
+  if (typeof raw === 'string') {
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      data = undefined
+    }
+  }
+  if (!isHomeaiUnauthorizedPayload(statusCode, data)) return false
+  handleHomeaiUnauthorized()
+  return true
+}

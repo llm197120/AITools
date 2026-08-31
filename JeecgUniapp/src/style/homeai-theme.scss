@@ -83,6 +83,11 @@ page {
   z-index: 20;
 }
 
+.hai-fab.disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .hai-bottom-bar {
   position: fixed;
   left: 32rpx;

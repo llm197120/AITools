@@ -16,6 +16,7 @@
       </view>
     </view>
 
+    <text v-if="catLoadFailed" class="cat-fail" @click="loadCategories(form.type)">分类加载失败，点此重试</text>
     <view class="category-grid">
       <view
         class="cat-item"
@@ -44,7 +45,7 @@
       </wd-cell-group>
     </view>
 
-    <wd-button class="home-form-save" size="large" type="primary" block round @click="save">保存</wd-button>
+    <wd-button class="home-form-save" size="large" type="primary" block round :loading="saving" @click="save">保存</wd-button>
   </HomeFormCard>
 </template>
 
@@ -56,6 +57,9 @@ import { localDateStr } from '../../pages-homeai/utils/date'
 import HomeFormCard from '../../components/HomeFormCard.vue'
 import HomePickerCell from '../../pages-homeai/components/HomePickerCell.vue'
 import HomeDateCell from '../../pages-homeai/components/HomeDateCell.vue'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+
+useHomeaiPageGuard()
 
 const form = ref({
   type: 'expense',
@@ -66,6 +70,8 @@ const form = ref({
   remark: '',
 })
 const categories = ref<any[]>([])
+const saving = ref(false)
+const catLoadFailed = ref(false)
 const payColumns = [
   { label: '微信', value: '微信' },
   { label: '支付宝', value: '支付宝' },
@@ -75,9 +81,16 @@ const payColumns = [
 ]
 
 async function loadCategories(type: string) {
-  categories.value = (await billApi.categories(type)) || []
-  if (categories.value.length && !categories.value.find((c) => c.id === form.value.categoryId)) {
-    form.value.categoryId = categories.value[0].id
+  catLoadFailed.value = false
+  try {
+    categories.value = (await billApi.categories(type)) || []
+    if (categories.value.length && !categories.value.find((c) => c.id === form.value.categoryId)) {
+      form.value.categoryId = categories.value[0].id
+    }
+  } catch {
+    categories.value = []
+    catLoadFailed.value = true
+    uni.showToast({ title: '分类加载失败', icon: 'none' })
   }
 }
 
@@ -92,17 +105,37 @@ onLoad(async (opts: any) => {
 })
 
 async function save() {
-  const amount = parseFloat(form.value.amount)
+  if (saving.value) return
+  const raw = String(form.value.amount || '').trim()
+  if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
+    uni.showToast({ title: '请填写有效金额（最多两位小数）', icon: 'none' })
+    return
+  }
+  const amount = parseFloat(raw)
   if (!form.value.categoryId || !Number.isFinite(amount) || amount <= 0) {
     uni.showToast({ title: '请填写有效金额和分类', icon: 'none' })
     return
   }
+  if (form.value.billDate > localDateStr()) {
+    const ok = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '日期未到',
+        content: '这是未来的日期，确定仍要记账？',
+        success: (r) => resolve(!!r.confirm),
+      })
+    })
+    if (!ok) return
+  }
+  form.value.remark = String(form.value.remark || '').trim()
+  saving.value = true
   try {
     await billApi.create({ ...form.value, amount, source: 'manual' })
     uni.showToast({ title: '保存成功', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 1000)
   } catch {
     // request 层已 toast
+  } finally {
+    saving.value = false
   }
 }
 </script>
@@ -152,6 +185,13 @@ async function save() {
   border-bottom: 2rpx solid var(--hai-border);
   margin-left: 12rpx;
   color: var(--hai-text);
+}
+.cat-fail {
+  display: block;
+  text-align: center;
+  font-size: 24rpx;
+  color: var(--hai-danger, #c45c4a);
+  padding: 12rpx 0 20rpx;
 }
 .category-grid {
   display: flex;

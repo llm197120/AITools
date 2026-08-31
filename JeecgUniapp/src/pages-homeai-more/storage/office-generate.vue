@@ -25,20 +25,24 @@
     <view class="template-area">
       <text class="section-title">选择模板（可选）：</text>
       <scroll-view scroll-x class="template-scroll">
+        <text v-if="!templates.length" class="tpl-empty">暂无模板，可不选直接生成</text>
         <view class="template-item" v-for="tpl in templates" :key="tpl.id" @click="selectedTemplate = tpl.id">
           <text :class="{ selected: selectedTemplate === tpl.id }">{{ tpl.name }}</text>
         </view>
       </scroll-view>
     </view>
-    <wd-button size="large" type="primary" :disabled="quotaBlocked" @click="generate">开始生成</wd-button>
+    <wd-button size="large" type="primary" :disabled="quotaBlocked" :loading="generating" @click="generate">开始生成</wd-button>
   </view>
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi } from '../../pages-homeai/api/request'
 import { storageApi } from '../../pages-homeai/api/index'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+
+useHomeaiPageGuard()
 
 const docType = ref('word')
 const instruction = ref('')
@@ -47,10 +51,25 @@ const selectedTemplate = ref('')
 const sourceFileId = ref('')
 const quotaHint = ref('')
 const quotaBlocked = ref(false)
+const generating = ref(false)
+
+async function loadTemplates() {
+  try {
+    templates.value = (await getApi('/storage/template/enabled', { params: { type: docType.value } })) || []
+  } catch {
+    templates.value = []
+    uni.showToast({ title: '模板加载失败', icon: 'none' })
+  }
+}
+
+watch(docType, () => {
+  selectedTemplate.value = ''
+  loadTemplates()
+})
 
 onLoad(async (opts: any) => {
   sourceFileId.value = opts?.fileId || ''
-  templates.value = await getApi('/storage/template/enabled', { params: { type: docType.value } })
+  await loadTemplates()
   await refreshQuota()
 })
 
@@ -71,12 +90,12 @@ async function refreshQuota() {
       quotaHint.value = q.message
     }
   } catch {
-    quotaHint.value = ''
-    quotaBlocked.value = false
+    quotaHint.value = '额度查询失败，提交时将再校验'
   }
 }
 
 async function generate() {
+  if (generating.value) return
   if (!instruction.value.trim()) {
     uni.showToast({ title: '请描述需求', icon: 'none' })
     return
@@ -86,6 +105,7 @@ async function generate() {
     uni.showToast({ title: quotaHint.value || 'Token 额度不足', icon: 'none' })
     return
   }
+  generating.value = true
   uni.showLoading({ title: '提交中...' })
   try {
     await postApi('/storage/office/generate', {
@@ -98,9 +118,14 @@ async function generate() {
     })
     uni.hideLoading()
     uni.showToast({ title: '生成任务已提交', icon: 'success' })
+    setTimeout(() => {
+      uni.redirectTo({ url: '/pages-homeai-more/storage/office-history' })
+    }, 400)
   } catch (e: any) {
     uni.hideLoading()
     uni.showToast({ title: e?.message || '提交失败', icon: 'none' })
+  } finally {
+    generating.value = false
   }
 }
 </script>
@@ -114,6 +139,7 @@ async function generate() {
 .type-btn.active { background: var(--hai-primary); color: var(--hai-on-primary); }
 .desc-input { width: 100%; min-height: 200rpx; padding: 24rpx; background: var(--hai-card); border-radius: 28rpx; font-size: 28rpx; margin-bottom: 30rpx; color: var(--hai-text); box-shadow: var(--hai-shadow); box-sizing: border-box; }
 .template-scroll { white-space: nowrap; margin-bottom: 40rpx; }
+.tpl-empty { font-size: 24rpx; color: var(--hai-text-muted); }
 .template-item { display: inline-block; padding: 16rpx 30rpx; background: var(--hai-card); border-radius: 24rpx; margin-right: 16rpx; font-size: 26rpx; color: var(--hai-text-secondary); box-shadow: var(--hai-shadow); }
 .template-item .selected { color: var(--hai-primary); font-weight: 600; }
 </style>

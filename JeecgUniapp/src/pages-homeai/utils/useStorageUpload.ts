@@ -4,6 +4,7 @@
  */
 import { getServerBaseUrl } from '../api/request'
 import { getToken } from './auth'
+import { consumeHomeaiUnauthorized } from './homeaiAuth'
 import { validateUploadFile } from './fileWhitelist'
 import { resolveOriginalFileName } from './resolveOriginalFileName'
 import { useHomeaiFilePick } from './useHomeaiFilePick'
@@ -37,8 +38,13 @@ export async function uploadStorageFile(
         familyIds: options.familyIds?.length ? options.familyIds.join(',') : '',
       },
       header: { 'X-Access-Token': getToken() || '' },
+      timeout: 120000,
       success: (res) => {
         try {
+          if (consumeHomeaiUnauthorized(res.statusCode, res.data)) {
+            reject(new Error('登录已过期'))
+            return
+          }
           const data = JSON.parse(res.data)
           if (data.success) resolve(data.result)
           else reject(new Error(data.message || '上传失败'))

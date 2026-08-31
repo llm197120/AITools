@@ -139,4 +139,16 @@ if (Test-Path -LiteralPath $appGradle) {
     Write-Utf8NoBom -Path $appGradle -Content $g
 }
 
+# 出包时抑制 Gradle 已知噪音（flatDir / SDK XML 版本等）
+$gradleProps = Join-Path $AndroidDir 'gradle.properties'
+$props = if (Test-Path -LiteralPath $gradleProps) {
+    Get-Content -LiteralPath $gradleProps -Raw -Encoding UTF8
+} else {
+    ''
+}
+if ($props -notmatch 'org\.gradle\.warning\.mode') {
+    $props = $props.TrimEnd() + "`r`norg.gradle.warning.mode=none`r`n"
+    Write-Utf8NoBom -Path $gradleProps -Content $props
+}
+
 Write-Host "patched Capacitor Android ($VersionName / $VersionCode)"

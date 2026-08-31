@@ -11,6 +11,32 @@
   <view class="chat-page">
     <!-- 消息列表 -->
     <scroll-view class="message-list" scroll-y :scroll-into-view="scrollToId" scroll-with-animation>
+      <view v-if="msgFailed && messages.length === 0 && !isStreaming" class="empty-chat">
+        <HomeEmpty
+          icon-name="chat"
+          title="消息加载失败"
+          hint="请检查网络后重试"
+          action-text="重试"
+          :card="false"
+          @action="loadMessages"
+        />
+      </view>
+      <view v-else-if="messages.length === 0 && !isStreaming" class="empty-chat">
+        <HomeEmpty
+          icon-name="chat"
+          title="开始对话"
+          hint="点下方示例填入，或直接输入问题"
+          :card="false"
+        >
+          <template #actions>
+            <view class="empty-actions">
+              <view class="example-topic hai-press" @click="fillExample('帮我写一份食谱')">帮我写一份食谱</view>
+              <view class="example-topic hai-press" @click="fillExample('今天晚餐推荐')">今天晚餐推荐</view>
+              <view class="example-topic hai-press" @click="fillExample('帮我解释一下什么是量子计算')">帮我解释一下量子计算</view>
+            </view>
+          </template>
+        </HomeEmpty>
+      </view>
       <view class="message-item" v-for="(msg, i) in messages" :key="msg.id || i"
         :id="'msg-' + i"
         :class="msg.role === 'user' ? 'user-msg' : 'assistant-msg'">
@@ -42,6 +68,7 @@
       <text class="reconnect-link" @click="resendLastMessage">点击继续</text>
     </view>
 
+    <view v-if="quotaHint" class="quota-bar">{{ quotaHint }}</view>
     <!-- 输入区域 -->
     <view class="input-area">
       <view class="preview-images" v-if="selectedImages.length > 0">
@@ -60,8 +87,8 @@
       <view class="input-row">
         <wd-icon name="attachment" size="22px" color="#8A857C" class="attach-btn" @click="showAttachmentPicker"></wd-icon>
         <input class="text-input" v-model="inputText" type="text" placeholder="输入消息..."
-          :disabled="quotaExhausted" confirm-type="send" @confirm="sendMessage" />
-        <wd-button v-if="!quotaExhausted" size="medium" type="primary" :disabled="!inputText.trim() || isStreaming"
+          :disabled="quotaExhausted" confirm-type="send" @confirm="sendMessage" @blur="refreshQuota" />
+        <wd-button v-if="!quotaExhausted" size="medium" type="primary" :disabled="!canSend || isStreaming"
           @click="sendMessage">发送</wd-button>
         <wd-button v-else size="medium" disabled>已用完</wd-button>
       </view>
@@ -70,30 +97,53 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, nextTick } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
+import { computed, ref, nextTick } from 'vue'
+import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi, del as delApi, getServerBaseUrl } from '../../pages-homeai/api/request'
 import { validateUploadFile } from '../../pages-homeai/utils/fileWhitelist'
 import { useHomeaiFilePick } from '../../pages-homeai/utils/useHomeaiFilePick'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+import { consumeHomeaiUnauthorized } from '../../pages-homeai/utils/homeaiAuth'
+import HomeEmpty from '../../components/HomeEmpty.vue'
 
 useHomeaiPageGuard()
 
 const { preload: preloadFilePick, showPickMenu } = useHomeaiFilePick()
 
 const conversationId = ref('')
+const hasQueryTitle = ref(false)
 const messages = ref<any[]>([])
 const inputText = ref('')
 const isStreaming = ref(false)
 const scrollToId = ref('')
 const quotaExhausted = ref(false)
+const quotaHint = ref('')
 const showReconnect = ref(false)
 
 const selectedImages = ref<string[]>([])
 const selectedFiles = ref<any[]>([])
+const msgFailed = ref(false)
+const canSend = computed(() =>
+  !!inputText.value.trim() || selectedImages.value.length > 0 || selectedFiles.value.length > 0,
+)
+
+function applyNavTitle(raw?: string) {
+  const clean = String(raw || '').replace(/[\n\r]+/g, ' ').trim()
+  if (!clean || clean === '新对话' || clean === '[图片]' || clean === '[附件]') return
+  const title = clean.length > 16 ? `${clean.slice(0, 16)}…` : clean
+  uni.setNavigationBarTitle({ title })
+}
 
 onLoad(async (options: any) => {
   conversationId.value = options?.id || ''
+  if (options?.title) {
+    hasQueryTitle.value = true
+    try {
+      applyNavTitle(decodeURIComponent(options.title))
+    } catch {
+      applyNavTitle(options.title)
+    }
+  }
   if (conversationId.value) {
     await loadMessages()
   }
@@ -104,15 +154,54 @@ onLoad(async (options: any) => {
   }
 })
 
+const UNFINISHED_KEY = 'homeai_chat_unfinished'
+
 onShow(() => {
   preloadFilePick()
+  refreshQuota()
+  const unfinished = uni.getStorageSync(UNFINISHED_KEY)
+  if (unfinished && unfinished === conversationId.value) {
+    showReconnect.value = true
+    uni.removeStorageSync(UNFINISHED_KEY)
+  }
 })
 
+function fillExample(text: string) {
+  inputText.value = text
+}
+
+async function refreshQuota() {
+  try {
+    const text = inputText.value.trim()
+    const quota: any = await getApi('/ai/quota/precheck', {
+      scene: 'chat',
+      ...(text ? { text } : {}),
+    })
+    if (!quota) return
+    const daily = quota.remainingDaily
+    const monthly = quota.remainingMonthly
+    quotaHint.value = `今日剩余 ${daily ?? '-'} Token · 本月剩余 ${monthly ?? '-'}`
+    quotaExhausted.value = quota.allowed === false
+    if (quotaExhausted.value && quota.message) {
+      quotaHint.value = quota.message
+    }
+  } catch {
+    if (!quotaHint.value) quotaHint.value = '额度查询失败，提交时将再校验'
+  }
+}
+
 async function loadMessages() {
+  if (!conversationId.value) return
   try {
     messages.value = await getApi(`/ai/conversations/${conversationId.value}/messages`)
+    msgFailed.value = false
+    if (!hasQueryTitle.value) {
+      const firstUser = messages.value.find((m: any) => m.role === 'user' && m.content)
+      if (firstUser) applyNavTitle(firstUser.content)
+    }
   } catch {
-    messages.value = []
+    msgFailed.value = messages.value.length === 0
+    if (!msgFailed.value) uni.showToast({ title: '消息刷新失败', icon: 'none' })
   }
   scrollToBottom()
 }
@@ -231,11 +320,37 @@ async function reloadAssistantFromServer(aiMsgIdx: number): Promise<boolean> {
   return false
 }
 
+function encodeChatForm(data: Record<string, unknown>): string {
+  const parts: string[] = []
+  const append = (key: string, value: unknown) => {
+    if (value == null || value === '') return
+    parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+  }
+  append('conversationId', data.conversationId)
+  append('content', data.content)
+  const images = data.images
+  if (Array.isArray(images)) images.forEach((u) => append('images', u))
+  const files = data.files
+  if (Array.isArray(files)) files.forEach((u) => append('files', u))
+  return parts.join('&')
+}
+
+function supportsFetchStream(): boolean {
+  // #ifdef MP-WEIXIN
+  return false
+  // #endif
+  try {
+    return typeof fetch === 'function' && typeof ReadableStream !== 'undefined'
+  } catch {
+    return false
+  }
+}
+
 /**
  * SSE 降级策略：
- * 1. 优先检测 RequestTask.onChunkReceived（或 wx.canIUse）是否可用；
- * 2. 支持则 enableChunked=true 流式拼接；不支持则 enableChunked=false，依赖 success 整包解析；
- * 3. 若流式请求 fail 且错误像「不支持 chunked」，自动用同一条占位消息（aiMsgIdx）重试一次非流式，避免重复插入用户/AI 消息。
+ * 1. H5 / Capacitor 用 fetch + ReadableStream 读 SSE，边到边出字；
+ * 2. 小程序优先 RequestTask.onChunkReceived；
+ * 3. 都不支持则 enableChunked=false，依赖 success 整包解析。
  */
 function supportsChunkedTransfer(): boolean {
   try {
@@ -274,6 +389,7 @@ function finishAssistantMessage(aiMsgIdx: number) {
     messages.value[aiMsgIdx].isStreaming = false
   }
   isStreaming.value = false
+  refreshQuota()
 }
 
 async function handleChatSuccess(
@@ -283,6 +399,11 @@ async function handleChatSuccess(
   usedChunked: boolean,
 ) {
   const statusCode = res?.statusCode
+  if (consumeHomeaiUnauthorized(statusCode, res?.data)) {
+    finishAssistantMessage(aiMsgIdx)
+    messages.value[aiMsgIdx].content = '登录已过期，请重新登录'
+    return
+  }
   if (statusCode && statusCode >= 400) {
     finishAssistantMessage(aiMsgIdx)
     messages.value[aiMsgIdx].content = '请求失败，请检查登录状态或稍后重试'
@@ -324,6 +445,85 @@ async function handleChatSuccess(
 // 停止生成用的请求句柄（需在 startChatRequest 之前声明，供降级重试更新）
 const currentTask = ref<any>(null)
 
+function startFetchChatRequest(
+  requestData: Record<string, unknown>,
+  token: string,
+  aiMsgIdx: number,
+) {
+  const sseBufferRef = { value: '' }
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 180000)
+
+  fetch(getAppBaseUrl() + '/homeai/ai/chat/send', {
+    method: 'POST',
+    headers: {
+      'X-Access-Token': token,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'text/event-stream',
+    },
+    body: encodeChatForm(requestData),
+    signal: controller.signal,
+  })
+    .then(async (res) => {
+      if (res.status === 401 || !res.ok) {
+        const peek = await res.text().catch(() => '')
+        if (consumeHomeaiUnauthorized(res.status, peek || undefined)) {
+          finishAssistantMessage(aiMsgIdx)
+          messages.value[aiMsgIdx].content = '登录已过期，请重新登录'
+          return
+        }
+        if (!res.ok) {
+          finishAssistantMessage(aiMsgIdx)
+          messages.value[aiMsgIdx].content = '请求失败，请检查登录状态或稍后重试'
+          return
+        }
+      }
+      const reader = res.body?.getReader()
+      if (!reader) {
+        const body = await res.text().catch(() => '')
+        await handleChatSuccess({ statusCode: res.status, data: body }, aiMsgIdx, sseBufferRef, false)
+        return
+      }
+      const decoder = new TextDecoder()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value, { stream: true })
+        if (!chunk) continue
+        sseBufferRef.value += chunk
+        sseBufferRef.value = consumeSseBuffer(sseBufferRef.value, aiMsgIdx)
+        scrollToBottom()
+      }
+      sseBufferRef.value = consumeSseBuffer(sseBufferRef.value + '\n\n', aiMsgIdx)
+      finishAssistantMessage(aiMsgIdx)
+      if (!messages.value[aiMsgIdx].content) {
+        const loaded = await reloadAssistantFromServer(aiMsgIdx)
+        if (!loaded) {
+          messages.value[aiMsgIdx].content = '未收到 AI 回复，请检查 AI 密钥配置或稍后重试'
+        }
+      }
+      scrollToBottom()
+    })
+    .catch((err) => {
+      if (controller.signal.aborted) {
+        finishAssistantMessage(aiMsgIdx)
+        return
+      }
+      console.error('请求失败', err)
+      showReconnect.value = true
+      finishAssistantMessage(aiMsgIdx)
+    })
+    .finally(() => {
+      clearTimeout(timeoutId)
+    })
+
+  return {
+    abort() {
+      controller.abort()
+    },
+  }
+}
+
 /** 发起一次聊天请求；allowRetryNonChunked 为 true 时，流式失败可降级重试一次 */
 function startChatRequest(
   requestData: Record<string, unknown>,
@@ -332,6 +532,9 @@ function startChatRequest(
   enableChunked: boolean,
   allowRetryNonChunked: boolean,
 ) {
+  if (supportsFetchStream()) {
+    return startFetchChatRequest(requestData, token, aiMsgIdx)
+  }
   const sseBufferRef = { value: '' }
   let retriedNonChunked = false
 
@@ -343,6 +546,7 @@ function startChatRequest(
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     data: requestData,
+    timeout: 180000,
     enableChunked,
     responseType: 'text',
     ...(enableChunked
@@ -392,13 +596,17 @@ function startChatRequest(
 
 async function sendMessage() {
   const content = inputText.value.trim()
+    || (selectedImages.value.length ? '[图片]' : '')
+    || (selectedFiles.value.length ? '[附件]' : '')
   if (!content) return
+  const isFirstMessage = messages.value.length === 0
 
   // Token 预检（R25：按场景 + 文本长度估算）
   const quota = await getApi('/ai/quota/precheck', { scene: 'chat', text: content })
   if (!quota.allowed) {
     uni.showToast({ title: quota.message || 'Token 不足', icon: 'none' })
     quotaExhausted.value = true
+    if (quota.message) quotaHint.value = quota.message
     return
   }
 
@@ -423,6 +631,7 @@ async function sendMessage() {
   inputText.value = ''
   isStreaming.value = true
   showReconnect.value = false
+  if (isFirstMessage) applyNavTitle(content)
   scrollToBottom()
 
   try {
@@ -443,7 +652,14 @@ async function sendMessage() {
           filePath: img,
           name: 'file',
           header: { 'X-Access-Token': token },
+          timeout: 120000,
         })
+        if (consumeHomeaiUnauthorized(up.statusCode, up.data)) {
+          inputText.value = content
+          messages.value.splice(messages.value.length - 2, 2)
+          isStreaming.value = false
+          return
+        }
         const d = JSON.parse(up.data)
         if (d && d.result) {
           const stored = d.result.storedUrl || d.result.url
@@ -484,20 +700,50 @@ async function sendMessage() {
   selectedFiles.value = []
 }
 
+function abortLocalStream(opts?: { discardEmpty?: boolean }) {
+  if (currentTask.value) {
+    try {
+      currentTask.value.abort()
+    } catch {
+      /* ignore */
+    }
+    currentTask.value = null
+  }
+  const last = messages.value[messages.value.length - 1]
+  if (last && last.role === 'assistant' && last.isStreaming) {
+    if (opts?.discardEmpty && !String(last.content || '').trim()) {
+      messages.value.pop()
+    } else {
+      last.isStreaming = false
+    }
+  }
+  isStreaming.value = false
+}
+
+function notifyServerStop() {
+  if (!conversationId.value) return
+  postApi('/ai/chat/stop', { params: { conversationId: conversationId.value } }).catch(() => {})
+}
+
+function stopOnLeave() {
+  if (!isStreaming.value && !currentTask.value) return
+  if (conversationId.value) {
+    uni.setStorageSync(UNFINISHED_KEY, conversationId.value)
+  }
+  notifyServerStop()
+  abortLocalStream()
+}
+
+onUnload(() => {
+  stopOnLeave()
+})
+
 async function stopGeneration() {
   try {
     await postApi('/ai/chat/stop', { params: { conversationId: conversationId.value } })
   } catch (e) { /* ignore */ }
-  if (currentTask.value) {
-    currentTask.value.abort()
-    currentTask.value = null
-  }
-  // 标记最后一条 AI 消息停止流式
-  const last = messages.value[messages.value.length - 1]
-  if (last && last.isStreaming) {
-    last.isStreaming = false
-  }
-  isStreaming.value = false
+  abortLocalStream({ discardEmpty: true })
+  uni.removeStorageSync(UNFINISHED_KEY)
 }
 
 function resendLastMessage() {
@@ -520,6 +766,7 @@ function showAttachmentPicker() {
     async (files, source) => {
       if (source === 'file') {
         for (const file of files) {
+          if (!(await validateUploadFile(file.path, file.name))) continue
           try {
             const token = uni.getStorageSync('homeai_token')
             const uploadRes = await uni.uploadFile({
@@ -527,7 +774,11 @@ function showAttachmentPicker() {
               filePath: file.path,
               name: 'file',
               header: { 'X-Access-Token': token },
+              timeout: 120000,
             })
+            if (consumeHomeaiUnauthorized(uploadRes.statusCode, uploadRes.data)) {
+              return
+            }
             const data = JSON.parse(uploadRes.data)
             const url = data && data.result ? data.result.storedUrl || data.result.url : ''
             if (url) {
@@ -729,5 +980,31 @@ function getAppBaseUrl(): string {
   border-radius: 40rpx;
   font-size: 28rpx;
   color: var(--hai-text);
+}
+.empty-chat {
+  padding: 48rpx 16rpx 24rpx;
+}
+.empty-actions {
+  padding-top: 28rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+.example-topic {
+  padding: 24rpx 30rpx;
+  background: var(--hai-card);
+  border-radius: var(--hai-radius-md);
+  font-size: 26rpx;
+  color: var(--hai-text);
+  box-shadow: var(--hai-shadow);
+  text-align: left;
+}
+.quota-bar {
+  font-size: 22rpx;
+  color: var(--hai-text-muted);
+  text-align: center;
+  padding: 10rpx 20rpx;
+  background: var(--hai-card);
+  border-top: 1rpx solid var(--hai-border);
 }
 </style>

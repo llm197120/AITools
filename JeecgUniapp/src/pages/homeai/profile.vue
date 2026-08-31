@@ -3,6 +3,7 @@
   style: {
     navigationBarTitleText: '个人中心',
     navigationBarBackgroundColor: '#F3F2EE',
+    enablePullDownRefresh: true,
   },
 }
 </route>
@@ -19,8 +20,8 @@
         <text class="edit-hint" v-if="userStore.isLogin">点击编辑昵称与头像</text>
       </view>
       <view class="auth-actions" v-if="!userStore.isLogin">
-        <view class="login-btn" @click.stop="handleLogin">
-          <text>登录</text>
+        <view class="login-btn" :class="{ disabled: loginLoading }" @click.stop="handleLogin">
+          <text>{{ loginLoading ? '登录中…' : '登录' }}</text>
         </view>
         <view v-if="phoneLoginApp" class="login-btn register-btn" @click.stop="handleRegister">
           <text>注册</text>
@@ -35,6 +36,7 @@
         <text class="stat-label">{{ s.label }}</text>
       </view>
     </view>
+    <text v-if="userStore.isLogin && statsFailed" class="stats-fail" @click="retryStats">统计加载失败，点此重试</text>
 
     <!-- 菜单列表 -->
     <view class="menu-group" v-if="userStore.isLogin">
@@ -100,7 +102,7 @@
       </view>
       <view class="dialog-footer">
         <wd-button block @click="apiBaseVisible = false">取消</wd-button>
-        <wd-button type="primary" block @click="saveApiBase">保存</wd-button>
+        <wd-button type="primary" block :loading="apiBaseSaving" @click="saveApiBase">保存</wd-button>
       </view>
     </wd-popup>
   </view>
@@ -110,6 +112,7 @@
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '../../pages-homeai/stores/user'
+import { useFamilyStore } from '../../pages-homeai/stores/family'
 import { billApi } from '../../pages-homeai/api/bill'
 import { learnApi } from '../../pages-homeai/api/learn'
 import { get as getApi } from '../../pages-homeai/api/request'
@@ -117,11 +120,15 @@ import { localMonthStr } from '../../pages-homeai/utils/date'
 import { displayNickname } from '../../pages-homeai/utils/displayName'
 import { openAuthPage, jumpToGuestAuth, usesPhoneLogin, wechatLogin } from '../../pages-homeai/utils/homeaiAuth'
 import { getServerBaseUrl, setAppBaseUrl, pingAppBaseUrl } from '../../pages-homeai/platform/env'
+import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
+import { useFamilyPoll } from '../../pages-homeai/utils/useFamilyPoll'
 
 const userStore = useUserStore()
+const familyStore = useFamilyStore()
 const loginLoading = ref(false)
 const apiBaseVisible = ref(false)
 const apiBaseInput = ref('')
+const apiBaseSaving = ref(false)
 const phoneLoginApp = usesPhoneLogin()
 
 const showChangePassword = computed(() => {
@@ -134,29 +141,47 @@ const stats = ref([
   { label: '学习', count: 0, path: '/pages-homeai-more/learn/index' },
   { label: '账单', count: 0, path: '/pages-homeai-more/bill/index' },
 ])
-
-// 统计短 TTL 缓存：避免频繁切 Tab 重复拉取 3 个统计接口
-const STATS_TTL = 30 * 1000
-let lastStatsAt = 0
+const statsFailed = ref(false)
 
 async function loadStats() {
-  try {
-    const learnStats: any = await learnApi.statistics()
-    const month = localMonthStr()
-    const entries = (await billApi.entries(month)) || []
-    const convs = (await getApi('/ai/conversations/mine')) || []
-    stats.value = [
-      { label: '对话', count: Array.isArray(convs) ? convs.length : 0, path: '/pages-homeai-ai/ai/conversations' },
-      { label: '学习', count: learnStats?.totalRecords ?? 0, path: '/pages-homeai-more/learn/index' },
-      { label: '账单', count: entries.length, path: '/pages-homeai-more/bill/index' },
-    ]
-    lastStatsAt = Date.now()
-  } catch {
-    // 统计加载失败不影响页面
+  const month = localMonthStr()
+  const [learnRes, billRes, convRes] = await Promise.allSettled([
+    learnApi.statistics(),
+    billApi.summary(month),
+    getApi('/ai/conversations/mine', { pageNo: '1', pageSize: '1' }),
+  ])
+  const next = [...stats.value]
+  if (learnRes.status === 'fulfilled') {
+    next[1] = { ...next[1], count: (learnRes.value as any)?.totalRecords ?? 0 }
   }
+  if (billRes.status === 'fulfilled') {
+    next[2] = { ...next[2], count: Number((billRes.value as any)?.count ?? 0) }
+  }
+  if (convRes.status === 'fulfilled') {
+    const convs = convRes.value
+    next[0] = {
+      ...next[0],
+      count: Array.isArray(convs) ? convs.length : Number((convs as any)?.total ?? 0),
+    }
+  }
+  stats.value = next
+  statsFailed.value = [learnRes, billRes, convRes].every((r) => r.status === 'rejected')
 }
 
+function retryStats() {
+  loadStats()
+}
+
+useHomeaiPullRefresh(async () => {
+  if (!userStore.isLogin) return
+  await userStore.refreshUserInfo()
+  await loadStats()
+})
+
+const { start: startFamilyPoll, stop: stopFamilyPoll } = useFamilyPoll()
+
 onShow(async () => {
+  stopFamilyPoll()
   if (!userStore.isLogin) {
     stats.value = [
       { label: '对话', count: 0, path: '/pages-homeai-ai/ai/conversations' },
@@ -166,10 +191,9 @@ onShow(async () => {
     return
   }
   await userStore.refreshUserInfo()
-  if (Date.now() - lastStatsAt < STATS_TTL && stats.value.some((s) => s.count > 0)) {
-    return
-  }
+  await familyStore.fetchFamilyInfo()
   await loadStats()
+  startFamilyPoll()
 })
 
 function goFamily() {
@@ -231,20 +255,28 @@ async function saveApiBase() {
     uni.showToast({ title: '请输入 http(s) 地址', icon: 'none' })
     return
   }
-  setAppBaseUrl(url)
-  const ok = await pingAppBaseUrl(url)
-  apiBaseVisible.value = false
-  uni.showToast({
-    title: ok ? '已保存，后续请求走新地址' : '已保存，但当前探测未通，请确认电脑与手机同网',
-    icon: 'none',
-    duration: 2500,
-  })
+  if (apiBaseSaving.value) return
+  apiBaseSaving.value = true
+  try {
+    setAppBaseUrl(url)
+    const ok = await pingAppBaseUrl(url)
+    apiBaseVisible.value = false
+    uni.showToast({
+      title: ok ? '已保存，后续请求走新地址' : '已保存，但当前探测未通，请确认电脑与手机同网',
+      icon: 'none',
+      duration: 2500,
+    })
+  } finally {
+    apiBaseSaving.value = false
+  }
 }
 
 function showAbout() {
+  const sys = uni.getSystemInfoSync()
+  const ver = sys.appVersion || sys.appWgtVersion || '1.0.1'
   uni.showModal({
     title: '关于',
-    content: '家庭AI小工具 v1.0\n面向家庭的记账、菜谱、学习与 AI 助手',
+    content: `家庭AI小工具 v${ver}\n面向家庭的记账、菜谱、学习与 AI 助手`,
   })
 }
 
@@ -326,6 +358,9 @@ function handleLogout() {
   font-size: 26rpx;
   font-weight: 600;
 }
+.login-btn.disabled {
+  opacity: 0.6;
+}
 
 .register-btn {
   background: transparent;
@@ -333,6 +368,13 @@ function handleLogout() {
   border: 2rpx solid var(--hai-primary);
 }
 
+.stats-fail {
+  display: block;
+  margin-top: 12rpx;
+  padding: 0 8rpx;
+  font-size: 24rpx;
+  color: var(--hai-danger);
+}
 .stats-card {
   display: flex;
   margin-top: 24rpx;

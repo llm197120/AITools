@@ -2,7 +2,16 @@
 { style: { navigationBarTitleText: '添加学习资料', navigationBarBackgroundColor: '#F3F2EE' } }
 </route>
 <template>
-  <HomeFormCard>
+  <view v-if="editing && loading" class="hai-page"><HomeSkeleton variant="card" /></view>
+  <HomeEmpty
+    v-else-if="editing && loadFailed"
+    title="资料加载失败"
+    hint="请检查网络后重试"
+    action-text="重试"
+    :card="true"
+    @action="retryEdit"
+  />
+  <HomeFormCard v-else>
     <input class="home-form-input" v-model="form.title" placeholder="资料标题" />
 
     <view class="home-form-group">
@@ -20,6 +29,7 @@
           placeholder="请选择分类"
           :columns="categoryColumns"
         />
+        <text v-if="catFailed" class="cat-fail" @click="loadCategories">分类加载失败，点此重试</text>
       </wd-cell-group>
     </view>
 
@@ -51,6 +61,12 @@ import { learnApi } from '../../pages-homeai/api/index'
 import HomeFormCard from '../../components/HomeFormCard.vue'
 import HomeMediaUpload from '../../pages-homeai/components/HomeMediaUpload.vue'
 import HomePickerCell from '../../pages-homeai/components/HomePickerCell.vue'
+import HomeEmpty from '../../components/HomeEmpty.vue'
+import HomeSkeleton from '../../components/HomeSkeleton.vue'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+import { useUserStore } from '../../pages-homeai/stores/user'
+
+useHomeaiPageGuard()
 
 const typeColumns = [
   { label: '视频', value: 'video' },
@@ -67,13 +83,15 @@ const categoryColumns = ref<{ label: string; value: string }[]>([])
 const saving = ref(false)
 const editing = ref(false)
 const materialId = ref('')
+const loadFailed = ref(false)
+const loading = ref(false)
+const catFailed = ref(false)
 
 const form = ref({
   title: '',
   type: 'note',
   categoryId: '',
   fileUrl: '',
-  visibility: 'private',
 })
 
 const uploadMode = computed(() => {
@@ -114,6 +132,7 @@ const uploadPlaceholder = computed(() => {
 onLoad((opts: any) => {
   if (opts?.id) {
     editing.value = true
+    loading.value = true
     materialId.value = opts.id
     uni.setNavigationBarTitle({ title: '编辑学习资料' })
   }
@@ -129,9 +148,19 @@ watch(
   { flush: 'sync' },
 )
 
+async function loadCategories() {
+  catFailed.value = false
+  try {
+    const list = (await learnApi.categories()) || []
+    categoryColumns.value = list.map((c: any) => ({ label: c.name, value: c.id }))
+  } catch {
+    catFailed.value = categoryColumns.value.length === 0
+    uni.showToast({ title: '分类加载失败', icon: 'none' })
+  }
+}
+
 onMounted(async () => {
-  const list = (await learnApi.categories()) || []
-  categoryColumns.value = list.map((c: any) => ({ label: c.name, value: c.id }))
+  await loadCategories()
   if (editing.value && materialId.value) {
     await loadDetail(materialId.value)
     return
@@ -141,31 +170,60 @@ onMounted(async () => {
   }
 })
 
+async function retryEdit() {
+  if (materialId.value) await loadDetail(materialId.value)
+}
+
 async function loadDetail(id: string) {
-  const m = await learnApi.materialById(id)
-  if (!m) {
-    uni.showToast({ title: '资料不存在', icon: 'none' })
-    return
+  loading.value = true
+  loadFailed.value = false
+  try {
+    const m = await learnApi.materialById(id)
+    if (!m) {
+      loadFailed.value = true
+      uni.showToast({ title: '资料不存在', icon: 'none' })
+      return
+    }
+    const uid = useUserStore().userInfo?.id
+    if (m.userId && uid && m.userId !== uid) {
+      uni.showToast({ title: '无权编辑该资料', icon: 'none' })
+      setTimeout(() => uni.navigateBack(), 400)
+      return
+    }
+    form.value.title = m.title || ''
+    form.value.type = m.type || 'note'
+    form.value.categoryId = m.categoryId || categoryColumns.value[0]?.value || ''
+    form.value.fileUrl = m.fileUrl || ''
+  } catch {
+    loadFailed.value = true
+  } finally {
+    loading.value = false
   }
-  form.value.title = m.title || ''
-  form.value.type = m.type || 'note'
-  form.value.categoryId = m.categoryId || categoryColumns.value[0]?.value || ''
-  form.value.fileUrl = m.fileUrl || ''
 }
 
 async function save() {
-  if (!form.value.title) {
+  if (saving.value) return
+  if (!form.value.title.trim()) {
     uni.showToast({ title: '请输入标题', icon: 'none' })
     return
   }
-  if (form.value.type === 'link' && !form.value.fileUrl) {
-    uni.showToast({ title: '请填写链接地址', icon: 'none' })
-    return
+  if (form.value.type === 'link') {
+    const url = String(form.value.fileUrl || '').trim()
+    if (!url) {
+      uni.showToast({ title: '请填写链接地址', icon: 'none' })
+      return
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      uni.showToast({ title: '链接请以 http:// 或 https:// 开头', icon: 'none' })
+      return
+    }
+    form.value.fileUrl = url
   }
   if (!['link', 'note'].includes(form.value.type) && !form.value.fileUrl) {
     uni.showToast({ title: '请上传与类型匹配的资料文件', icon: 'none' })
     return
   }
+  form.value.title = form.value.title.trim()
   saving.value = true
   try {
     if (editing.value && materialId.value) {
@@ -183,3 +241,11 @@ async function save() {
   }
 }
 </script>
+<style scoped>
+.cat-fail {
+  display: block;
+  padding: 8rpx 24rpx 16rpx;
+  font-size: 22rpx;
+  color: var(--hai-danger);
+}
+</style>

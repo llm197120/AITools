@@ -3,35 +3,18 @@
   style: {
     navigationBarTitleText: '我的家庭',
     navigationBarBackgroundColor: '#F3F2EE',
+    enablePullDownRefresh: true,
   },
 }
 </route>
 
 <template>
   <view class="family-page">
-    <!-- 无家庭状态 -->
-    <view class="no-family" v-if="!familyStore.hasFamily">
-      <HomeEmpty
-        icon-name="home"
-        icon-color="#1B4F8A"
-        icon-size="40px"
-        title="还没有家庭"
-        hint="创建或加入家庭后，资料与计划可共享使用"
-      >
-        <template #actions>
-          <view class="actions">
-            <view class="btn-primary" @click="showCreate">创建家庭</view>
-            <view class="btn-ghost" @click="showJoin">加入家庭</view>
-          </view>
-        </template>
-      </HomeEmpty>
-    </view>
-
-    <!-- 有家庭状态 -->
-    <view class="has-family" v-else>
+    <!-- 有家庭状态（含加载失败时保留缓存） -->
+    <view class="has-family" v-if="familyStore.hasFamily">
       <view class="family-header">
         <text class="family-name">{{ familyStore.familyInfo?.name }}</text>
-        <text class="member-count">{{ familyStore.familyInfo?.memberCount || 0 }} 位成员</text>
+        <text class="member-count">{{ displayedMemberCount }} 位成员</text>
         <view class="edit-name" @click="showEditName" v-if="isAdmin">编辑名称</view>
       </view>
 
@@ -40,7 +23,8 @@
           <text class="section-title-text">家庭成员</text>
           <text class="invite-btn hai-press" @click="generateInviteCode" v-if="isAdmin">邀请成员</text>
         </view>
-        <view class="member-list">
+        <text v-if="membersLoadFailed" class="members-fail" @click="fetchMembers">成员加载失败，点此重试</text>
+        <view v-else class="member-list">
           <view class="member-item" v-for="member in members" :key="member.memberId">
             <image class="member-avatar" :src="member.avatarUrl || '/static/default-avatar.png'" mode="aspectFill" lazy-load />
             <view class="member-info">
@@ -64,6 +48,45 @@
       <view class="leave-btn" @click="confirmLeave" v-if="!isAdmin">退出家庭</view>
     </view>
 
+    <!-- 加载失败 -->
+    <view class="no-family" v-else-if="familyStore.familyLoadFailed">
+      <HomeEmpty
+        icon-name="warning"
+        icon-color="#1B4F8A"
+        icon-size="40px"
+        title="家庭信息加载失败"
+        hint="请检查网络后重试"
+      >
+        <template #actions>
+          <view class="actions">
+            <view class="btn-primary" @click="retryFamilyInfo">重试</view>
+          </view>
+        </template>
+      </HomeEmpty>
+    </view>
+
+    <!-- 无家庭状态 -->
+    <view class="no-family" v-else-if="familyStore.familyInfoLoaded">
+      <HomeEmpty
+        icon-name="home"
+        icon-color="#1B4F8A"
+        icon-size="40px"
+        title="还没有家庭"
+        hint="创建或加入家庭后，资料与计划可共享使用"
+      >
+        <template #actions>
+          <view class="actions">
+            <view class="btn-primary" @click="showCreate">创建家庭</view>
+            <view class="btn-ghost" @click="showJoin">加入家庭</view>
+          </view>
+        </template>
+      </HomeEmpty>
+    </view>
+
+    <view class="no-family loading-hint" v-else>
+      <text class="loading-text">加载中…</text>
+    </view>
+
     <wd-popup v-model="createVisible" position="center" custom-style="width:80%;border-radius:28rpx;overflow:hidden">
       <view class="dialog-title">创建家庭</view>
       <view class="dialog-body">
@@ -71,18 +94,19 @@
       </view>
       <view class="dialog-footer">
         <wd-button block @click="createVisible = false">取消</wd-button>
-        <wd-button type="primary" block @click="createFamily">确认创建</wd-button>
+        <wd-button type="primary" block :loading="familyBusy" @click="createFamily">确认创建</wd-button>
       </view>
     </wd-popup>
 
     <wd-popup v-model="joinVisible" position="center" custom-style="width:80%;border-radius:28rpx;overflow:hidden">
       <view class="dialog-title">加入家庭</view>
       <view class="dialog-body">
-        <wd-input v-model="inviteCode" placeholder="请输入6位邀请码" :maxlength="6" />
+        <wd-input v-model="inviteCode" placeholder="请输入6位邀请码" :maxlength="8" />
+        <text class="dialog-hint">邀请码 24 小时内有效，且只能使用一次</text>
       </view>
       <view class="dialog-footer">
         <wd-button block @click="joinVisible = false">取消</wd-button>
-        <wd-button type="primary" block @click="joinFamily">确认加入</wd-button>
+        <wd-button type="primary" block :loading="familyBusy" @click="joinFamily">确认加入</wd-button>
       </view>
     </wd-popup>
 
@@ -93,7 +117,7 @@
       </view>
       <view class="dialog-footer">
         <wd-button block @click="editNameVisible = false">取消</wd-button>
-        <wd-button type="primary" block @click="saveFamilyName">保存</wd-button>
+        <wd-button type="primary" block :loading="familyBusy" @click="saveFamilyName">保存</wd-button>
       </view>
     </wd-popup>
 
@@ -105,7 +129,7 @@
       </view>
       <view class="dialog-footer">
         <wd-button block @click="disbandVisible = false">取消</wd-button>
-        <wd-button type="error" block @click="doDisband">确认解散</wd-button>
+        <wd-button type="error" block :loading="familyBusy" @click="doDisband">确认解散</wd-button>
       </view>
     </wd-popup>
 
@@ -132,20 +156,29 @@ import { useUserStore } from '../../pages-homeai/stores/user'
 import { useFamilyStore } from '../../pages-homeai/stores/family'
 import { get as getApi, post as postApi, del as delApi, put as putApi } from '../../pages-homeai/api'
 import { ensureProfileWhenGuest, HOMEAI_ONBOARD_FAMILY_KEY } from '../../pages-homeai/utils/homeaiAuth'
+import { shareText } from '../../pages-homeai/platform/share'
 import { useMessage } from 'wot-design-uni'
 import HomeEmpty from '../../components/HomeEmpty.vue'
+import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
+import { useFamilyPoll } from '../../pages-homeai/utils/useFamilyPoll'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
 const message = useMessage()
 
 const members = ref<any[]>([])
+const membersLoadFailed = ref(false)
 const currentUserId = computed(() => userStore.userInfo?.id)
-const isAdmin = computed(() => members.value.some(m => m.userId === currentUserId.value && m.role === 'admin'))
+const isAdmin = computed(() => familyStore.myRole === 'admin')
+const displayedMemberCount = computed(() => {
+  if (!membersLoadFailed.value) return members.value.length
+  return Number(familyStore.familyInfo?.memberCount || 0)
+})
 
 // 创建家庭
 const createVisible = ref(false)
 const createName = ref('')
+const familyBusy = ref(false)
 
 // 加入家庭
 const joinVisible = ref(false)
@@ -166,7 +199,15 @@ const inviteSheetActions = [
 ]
 const pendingInviteCode = ref('')
 
+const { start: startFamilyPoll, stop: stopFamilyPoll } = useFamilyPoll()
+
+useHomeaiPullRefresh(async () => {
+  await familyStore.fetchFamilyInfo()
+  if (familyStore.hasFamily) await fetchMembers()
+})
+
 onShow(async () => {
+  stopFamilyPoll()
   if (!ensureProfileWhenGuest()) {
     return
   }
@@ -174,6 +215,7 @@ onShow(async () => {
   if (familyStore.hasFamily) {
     await fetchMembers()
     uni.removeStorageSync(HOMEAI_ONBOARD_FAMILY_KEY)
+    startFamilyPoll()
     return
   }
   const onboard = uni.getStorageSync(HOMEAI_ONBOARD_FAMILY_KEY)
@@ -185,16 +227,26 @@ onShow(async () => {
   }
 })
 
+async function retryFamilyInfo() {
+  await familyStore.fetchFamilyInfo()
+  if (familyStore.hasFamily) {
+    await fetchMembers()
+    startFamilyPoll()
+  }
+}
+
 function roleLabel(role: string) {
   const map: Record<string, string> = { admin: '管理员', member: '成员', restricted: '受限成员' }
   return map[role] || role
 }
 
 async function fetchMembers() {
+  membersLoadFailed.value = false
   try {
     members.value = await getApi('/family/members')
-  } catch (e) {
+  } catch {
     members.value = []
+    membersLoadFailed.value = true
   }
 }
 
@@ -204,13 +256,19 @@ function showCreate() {
   createVisible.value = true
 }
 async function createFamily() {
+  if (familyBusy.value) return
   if (!createName.value.trim()) {
     uni.showToast({ title: '请输入家庭名称', icon: 'none' })
     return
   }
-  await familyStore.createFamily(createName.value.trim())
-  createVisible.value = false
-  await fetchMembers()
+  familyBusy.value = true
+  try {
+    await familyStore.createFamily(createName.value.trim())
+    createVisible.value = false
+    await fetchMembers()
+  } finally {
+    familyBusy.value = false
+  }
 }
 
 // 加入家庭
@@ -219,48 +277,57 @@ function showJoin() {
   joinVisible.value = true
 }
 async function joinFamily() {
-  if (inviteCode.value.length !== 6) {
+  if (familyBusy.value) return
+  const code = inviteCode.value.replace(/\s/g, '').toUpperCase()
+  if (code.length !== 6) {
     uni.showToast({ title: '请输入6位邀请码', icon: 'none' })
     return
   }
-  await postApi('/family/members', { params: { code: inviteCode.value.toUpperCase() } })
-  joinVisible.value = false
-  await familyStore.fetchFamilyInfo()
-  await fetchMembers()
+  familyBusy.value = true
+  try {
+    await postApi('/family/members', { params: { code } })
+    joinVisible.value = false
+    await familyStore.fetchFamilyInfo()
+    await fetchMembers()
+  } finally {
+    familyBusy.value = false
+  }
 }
 
 // 生成邀请码
 async function generateInviteCode() {
-  const code = String(await postApi('/family/invite-code') || '')
-  if (!code) {
-    uni.showToast({ title: '生成失败', icon: 'none' })
-    return
+  if (familyBusy.value) return
+  familyBusy.value = true
+  try {
+    const code = String(await postApi('/family/invite-code') || '')
+    if (!code) {
+      uni.showToast({ title: '生成失败', icon: 'none' })
+      return
+    }
+    pendingInviteCode.value = code
+    inviteSheetVisible.value = true
+  } finally {
+    familyBusy.value = false
   }
-  pendingInviteCode.value = code
-  inviteSheetVisible.value = true
 }
 
 function copyInviteCode(code: string) {
   uni.setClipboardData({
     data: code,
     success: () => {
-      uni.showToast({ title: '邀请码已复制: ' + code, icon: 'none' })
+      uni.showToast({ title: '已复制，24小时内有效', icon: 'none' })
     },
   })
 }
 
-function shareInviteCode(code: string) {
+async function shareInviteCode(code: string) {
   const name = familyStore.familyInfo?.name || '家庭'
-  const summary = `邀请你加入「${name}」，邀请码：${code}`
-  // #ifdef APP-PLUS
-  uni.shareWithSystem({
-    type: 'text',
-    summary,
-    success: () => uni.showToast({ title: '已打开系统分享', icon: 'none' }),
-    fail: () => copyInviteCode(code),
-  })
-  return
-  // #endif
+  const summary = `邀请你加入「${name}」，邀请码：${code}（24小时内有效，只能使用一次）`
+  const ok = await shareText(summary, '邀请加入家庭')
+  if (ok) {
+    uni.showToast({ title: '已打开系统分享', icon: 'none' })
+    return
+  }
   copyInviteCode(code)
 }
 
@@ -273,6 +340,7 @@ function onInviteSelect({ index }: { index: number }) {
 
 // 移除成员
 async function removeMember(member: any) {
+  if (familyBusy.value) return
   try {
     await message.confirm({
       title: '移除成员',
@@ -281,8 +349,14 @@ async function removeMember(member: any) {
   } catch {
     return
   }
-  await delApi(`/family/member/${member.memberId}`)
-  await fetchMembers()
+  familyBusy.value = true
+  try {
+    await delApi(`/family/member/${member.memberId}`)
+    await fetchMembers()
+    await familyStore.fetchFamilyInfo()
+  } finally {
+    familyBusy.value = false
+  }
 }
 
 // 编辑名称
@@ -292,13 +366,19 @@ function showEditName() {
 }
 
 async function saveFamilyName() {
+  if (familyBusy.value) return
   if (!editName.value.trim()) {
     uni.showToast({ title: '请输入家庭名称', icon: 'none' })
     return
   }
-  await putApi('/family', { id: familyStore.familyInfo?.id, name: editName.value.trim() })
-  editNameVisible.value = false
-  await familyStore.fetchFamilyInfo()
+  familyBusy.value = true
+  try {
+    await putApi('/family', { id: familyStore.familyInfo?.id, name: editName.value.trim() })
+    editNameVisible.value = false
+    await familyStore.fetchFamilyInfo()
+  } finally {
+    familyBusy.value = false
+  }
 }
 
 // 转让管理员
@@ -313,11 +393,26 @@ function showTransfer() {
 }
 
 async function onTransferSelect({ index }: { index: number }) {
+  if (familyBusy.value) return
   const target = transferCandidates.value[index]
   if (!target) return
-  await postApi('/family/transfer', { params: { targetUserId: target.userId } })
-  uni.showToast({ title: '转让成功' })
-  await fetchMembers()
+  try {
+    await message.confirm({
+      title: '转让管理员',
+      msg: `确定将管理员转让给 ${target.nickname || '该成员'}？转让后您将变为普通成员。`,
+    })
+  } catch {
+    return
+  }
+  familyBusy.value = true
+  try {
+    await postApi('/family/transfer', { params: { targetUserId: target.userId } })
+    uni.showToast({ title: '转让成功' })
+    await familyStore.fetchFamilyInfo()
+    await fetchMembers()
+  } finally {
+    familyBusy.value = false
+  }
 }
 
 // 解散家庭
@@ -327,17 +422,24 @@ function confirmDisband() {
 }
 
 async function doDisband() {
+  if (familyBusy.value) return
   if (disbandConfirm.value !== '确认解散') {
     uni.showToast({ title: '请输入「确认解散」', icon: 'none' })
     return
   }
-  await familyStore.disbandFamily()
-  disbandVisible.value = false
-  uni.showToast({ title: '家庭已解散' })
+  familyBusy.value = true
+  try {
+    await familyStore.disbandFamily()
+    disbandVisible.value = false
+    uni.showToast({ title: '家庭已解散' })
+  } finally {
+    familyBusy.value = false
+  }
 }
 
 // 退出家庭
 async function confirmLeave() {
+  if (familyBusy.value) return
   try {
     await message.confirm({
       title: '退出家庭',
@@ -346,8 +448,13 @@ async function confirmLeave() {
   } catch {
     return
   }
-  await familyStore.leaveFamily()
-  uni.showToast({ title: '已退出家庭' })
+  familyBusy.value = true
+  try {
+    await familyStore.leaveFamily()
+    uni.showToast({ title: '已退出家庭' })
+  } finally {
+    familyBusy.value = false
+  }
 }
 </script>
 
@@ -361,6 +468,18 @@ async function confirmLeave() {
 
 .no-family {
   padding-top: 40rpx;
+}
+
+.loading-hint {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 320rpx;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: var(--hai-text-secondary, #888);
 }
 
 .actions {
@@ -451,6 +570,13 @@ async function confirmLeave() {
   align-items: center;
   padding: 28rpx 30rpx;
   border-bottom: 1rpx solid var(--hai-border);
+}
+.members-fail {
+  display: block;
+  padding: 32rpx 30rpx;
+  font-size: 26rpx;
+  color: var(--hai-danger, #c45c4a);
+  text-align: center;
 }
 
 .section-title-text {

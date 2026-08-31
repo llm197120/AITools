@@ -1,5 +1,5 @@
 <route lang="json5">
-{ style: { navigationBarTitleText: '回收站', navigationBarBackgroundColor: '#F3F2EE' } }
+{ style: { navigationBarTitleText: '回收站', navigationBarBackgroundColor: '#F3F2EE', enablePullDownRefresh: true, onReachBottomDistance: 80 } }
 </route>
 
 <template>
@@ -24,7 +24,19 @@
           <text class="op danger" @click.stop="purgeOne(row.id)">彻底删除</text>
         </view>
       </view>
-      <HomeEmpty v-if="!loading && rows.length === 0" title="回收站是空的" hint="删除的文件会出现在这里" />
+      <HomeEmpty
+        v-if="!loading && loadFailed"
+        title="回收站加载失败"
+        hint="请检查网络后重试"
+        action-text="重试"
+        @action="load"
+      />
+      <HomeEmpty v-else-if="!loading && rows.length === 0" title="回收站是空的" hint="删除的文件会出现在这里" />
+      <view v-if="rows.length > 0" class="load-more-wrap">
+        <view v-if="loadingMore" class="load-more-tip">加载中...</view>
+        <view v-else-if="hasMore" class="load-more-btn" @click="loadMore">加载更多</view>
+        <view v-else class="load-more-tip">没有更多了</view>
+      </view>
     </view>
 
     <view v-if="selected.length" class="batch-bar">
@@ -39,43 +51,79 @@
 
 <script lang="ts" setup>
 import { ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { storageApi } from '../../pages-homeai/api/storage'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 
 useHomeaiPageGuard()
+useHomeaiPullRefresh(() => load(true))
 
 const type = ref<'file' | 'folder'>('file')
 const rows = ref<any[]>([])
 const selected = ref<string[]>([])
 const loading = ref(false)
+const loadFailed = ref(false)
+const busy = ref(false)
+const PAGE_SIZE = 20
+const pageNo = ref(1)
+const hasMore = ref(true)
+const loadingMore = ref(false)
 
 onShow(() => {
-  load()
+  load(true, rows.value.length > 0)
 })
+onReachBottom(() => loadMore())
 
 function switchType(t: 'file' | 'folder') {
   type.value = t
   selected.value = []
-  load()
+  load(true)
 }
 
-async function load() {
-  loading.value = true
+function loadMore() {
+  load(false)
+}
+
+async function load(reset = true, silent = false) {
+  if (!reset && (loadingMore.value || !hasMore.value)) return
+  if (reset) {
+    if (!silent) loading.value = true
+    loadFailed.value = false
+    pageNo.value = 1
+    hasMore.value = true
+  } else {
+    loadingMore.value = true
+  }
   try {
+    const nextPage = reset ? 1 : pageNo.value + 1
     const res: any = await storageApi.myRecycleBin({
       type: type.value,
-      pageNo: 1,
-      pageSize: 100,
+      pageNo: nextPage,
+      pageSize: PAGE_SIZE,
     })
-    rows.value = res?.records || []
-    selected.value = []
+    const records = res?.records || []
+    rows.value = reset ? records : rows.value.concat(records)
+    pageNo.value = nextPage
+    const total = res?.total
+    hasMore.value = typeof total === 'number' ? rows.value.length < total : records.length >= PAGE_SIZE
+    if (reset) selected.value = []
   } catch {
-    rows.value = []
+    if (reset) {
+      loadFailed.value = rows.value.length === 0
+      if (!silent) {
+        rows.value = []
+      } else if (rows.value.length > 0) {
+        uni.showToast({ title: '刷新失败', icon: 'none' })
+      }
+    } else {
+      uni.showToast({ title: '加载更多失败', icon: 'none' })
+    }
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
 }
 
@@ -92,9 +140,15 @@ function payload(ids: string[]) {
 }
 
 async function restoreOne(id: string) {
-  await storageApi.myRestore(payload([id]))
-  uni.showToast({ title: '已恢复', icon: 'success' })
-  await load()
+  if (busy.value) return
+  busy.value = true
+  try {
+    await storageApi.myRestore(payload([id]))
+    uni.showToast({ title: '已恢复', icon: 'success' })
+    await load(true)
+  } finally {
+    busy.value = false
+  }
 }
 
 async function purgeOne(id: string) {
@@ -102,19 +156,29 @@ async function purgeOne(id: string) {
     title: '彻底删除',
     content: '删除后不可恢复，确定？',
     success: async (r) => {
-      if (!r.confirm) return
-      await storageApi.myDeletePermanently(payload([id]))
-      uni.showToast({ title: '已删除', icon: 'success' })
-      await load()
+      if (!r.confirm || busy.value) return
+      busy.value = true
+      try {
+        await storageApi.myDeletePermanently(payload([id]))
+        uni.showToast({ title: '已删除', icon: 'success' })
+        await load(true)
+      } finally {
+        busy.value = false
+      }
     },
   })
 }
 
 async function restoreSelected() {
-  if (!selected.value.length) return
-  await storageApi.myRestore(payload(selected.value))
-  uni.showToast({ title: '已恢复', icon: 'success' })
-  await load()
+  if (!selected.value.length || busy.value) return
+  busy.value = true
+  try {
+    await storageApi.myRestore(payload(selected.value))
+    uni.showToast({ title: '已恢复', icon: 'success' })
+    await load(true)
+  } finally {
+    busy.value = false
+  }
 }
 
 async function purgeSelected() {
@@ -123,10 +187,15 @@ async function purgeSelected() {
     title: '彻底删除',
     content: `确定彻底删除选中的 ${selected.value.length} 项？`,
     success: async (r) => {
-      if (!r.confirm) return
-      await storageApi.myDeletePermanently(payload(selected.value))
-      uni.showToast({ title: '已删除', icon: 'success' })
-      await load()
+      if (!r.confirm || busy.value) return
+      busy.value = true
+      try {
+        await storageApi.myDeletePermanently(payload(selected.value))
+        uni.showToast({ title: '已删除', icon: 'success' })
+        await load(true)
+      } finally {
+        busy.value = false
+      }
     },
   })
 }
@@ -223,5 +292,23 @@ async function purgeSelected() {
 .batch-ops {
   display: flex;
   gap: 28rpx;
+}
+.load-more-wrap {
+  width: 100%;
+  padding: 16rpx 0 160rpx;
+  text-align: center;
+}
+.load-more-btn {
+  display: inline-block;
+  padding: 16rpx 48rpx;
+  font-size: 26rpx;
+  color: var(--hai-primary);
+  background: var(--hai-card);
+  border-radius: 999rpx;
+  box-shadow: var(--hai-shadow);
+}
+.load-more-tip {
+  font-size: 24rpx;
+  color: var(--hai-text-muted);
 }
 </style>

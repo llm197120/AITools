@@ -4,14 +4,17 @@
  * - 保存图片/视频到相册：APP 端 plus.gallery.save + Android 运行时权限申请
  *   （Android 13+ 申请 READ_MEDIA_IMAGES/READ_MEDIA_VIDEO，更早版本申请 WRITE_EXTERNAL_STORAGE）
  * - 下载临时文件 / 打开本地文档：APP 端 plus.downloader / plus.runtime.openFile，小程序走 uni API
- * - Capacitor H5 壳：platform/capDownload.ts（相册 Media、文档 Share）
+ * - Capacitor H5 壳：platform/capDownload.ts（相册 Media、原生下载 + 系统打开）
  */
+import { accessTokenHeaders } from './accessToken'
 // #ifdef H5
 import {
+  capacitorDownloadToTemp,
   capacitorOpenDocument,
   capacitorSaveImage,
   capacitorSaveVideo,
 } from './capDownload'
+import { isCapacitorNative } from './runtime'
 // #endif
 
 /** Android 13+（API 33）媒体权限模型：以 READ_MEDIA_* 替代写外部存储 */
@@ -97,11 +100,34 @@ export function requestAlbumPermission(): Promise<boolean> {
     )
     // #endif
 
+    // #ifdef H5
+    if (isCapacitorNative()) {
+      void requestCapacitorAlbumPermission().then(resolve)
+      return
+    }
+    // #endif
     // #ifndef APP-PLUS
-    // 非 APP 端（小程序/H5）：无 Android 权限模型，直接放行
     resolve(true)
     // #endif
   })
+}
+
+async function requestCapacitorAlbumPermission(): Promise<boolean> {
+  try {
+    const { Media } = await import('@capacitor-community/media')
+    const anyMedia = Media as { requestPermissions?: () => Promise<{ publicStorage?: string }> }
+    if (typeof anyMedia.requestPermissions !== 'function') {
+      return true
+    }
+    const r = await anyMedia.requestPermissions()
+    if (r?.publicStorage && r.publicStorage !== 'granted' && r.publicStorage !== 'limited') {
+      showPermissionGuide()
+      return false
+    }
+    return true
+  } catch {
+    return true
+  }
 }
 
 /**
@@ -167,17 +193,22 @@ export function saveVideoToAlbum(filePath: string): Promise<void> {
  * - APP：plus.downloader 原生下载（保存到 _downloads/ 目录）
  * - 小程序：uni.downloadFile
  */
-export function downloadToTemp(url: string): Promise<string> {
+function rejectDownloadStatus(status?: number): Error {
+  return new Error(status ? `HTTP ${status}` : '下载失败')
+}
+
+export function downloadToTemp(url: string, fileName?: string): Promise<string> {
   return new Promise((resolve, reject) => {
+    const header = accessTokenHeaders(url)
     // #ifdef APP-PLUS
     const task = plus.downloader.createDownload(
       url,
-      { filename: '_downloads/' },
+      header ? { filename: '_downloads/', header } : { filename: '_downloads/' },
       (download, status) => {
         if (status === 200 && download.filename) {
           resolve(download.filename)
         } else {
-          reject(new Error('下载失败'))
+          reject(rejectDownloadStatus(status))
         }
       },
     )
@@ -187,11 +218,12 @@ export function downloadToTemp(url: string): Promise<string> {
     // #ifdef MP-WEIXIN
     uni.downloadFile({
       url,
+      header,
       success: (res) => {
         if (res.statusCode === 200 && res.tempFilePath) {
           resolve(res.tempFilePath)
         } else {
-          reject(new Error('下载失败'))
+          reject(rejectDownloadStatus(res.statusCode))
         }
       },
       fail: (err) => reject(err),
@@ -199,11 +231,16 @@ export function downloadToTemp(url: string): Promise<string> {
     // #endif
 
     // #ifdef H5
+    if (isCapacitorNative()) {
+      void capacitorDownloadToTemp(url, fileName).then(resolve).catch(reject)
+      return
+    }
     uni.downloadFile({
       url,
+      header,
       success: (res) => {
         if (res.statusCode === 200 && res.tempFilePath) resolve(res.tempFilePath)
-        else reject(new Error('下载失败'))
+        else reject(rejectDownloadStatus(res.statusCode))
       },
       fail: (err) => reject(err),
     })
@@ -216,7 +253,7 @@ export function downloadToTemp(url: string): Promise<string> {
  * - APP：plus.runtime.openFile 原生打开
  * - 小程序：uni.openDocument
  */
-export function openLocalDocument(filePath: string) {
+export function openLocalDocument(filePath: string, fileName?: string) {
   // #ifdef APP-PLUS
   plus.runtime.openFile(
     filePath,
@@ -234,8 +271,8 @@ export function openLocalDocument(filePath: string) {
   // #endif
 
   // #ifdef H5
-  void capacitorOpenDocument(filePath).catch(() =>
-    uni.showToast({ title: '无法打开该文件', icon: 'none' }),
+  void capacitorOpenDocument(filePath, fileName).catch((e) =>
+    uni.showToast({ title: (e && e.message) || '无法打开该文件', icon: 'none' }),
   )
   // #endif
 }

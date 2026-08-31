@@ -32,6 +32,9 @@ import { ref } from 'vue'
 import { useUserStore } from '../../pages-homeai/stores/user'
 import { displayNickname } from '../../pages-homeai/utils/displayName'
 import HomeMediaUpload from '../../pages-homeai/components/HomeMediaUpload.vue'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+
+useHomeaiPageGuard()
 
 const userStore = useUserStore()
 const nickname = ref(displayNickname(userStore.userInfo) === '未登录' ? '' : (userStore.userInfo?.nickname && userStore.userInfo.nickname !== '微信用户' ? userStore.userInfo.nickname : ''))
@@ -39,6 +42,7 @@ const avatarUrl = ref(userStore.userInfo?.avatarUrl || '')
 const loading = ref(false)
 
 async function submit() {
+  if (loading.value) return
   const name = nickname.value.trim()
   if (!name) {
     uni.showToast({ title: '请输入昵称', icon: 'none' })

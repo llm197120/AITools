@@ -2,7 +2,7 @@
  * 资料存储：下载 / 保存到本地（小程序 + Android APP）
  * 平台差异（相册权限、保存/下载/打开）统一走 platform/download.ts 适配层
  */
-import { storageApi } from '../api/storage'
+import { downloadFailTitle, resolveContentUrl } from './contentUrl'
 import { getFileExt, isImageExt, isVideoExt } from './filePreview'
 import {
   downloadToTemp,
@@ -14,22 +14,15 @@ import {
 
 export type DownloadFileInput = {
   id?: string
+  materialId?: string
   fileUrl?: string
   originalName?: string
   extension?: string
 }
 
-/** 获取最新可下载 URL（私有 OSS 预签名可能过期） */
-async function resolveDownloadUrl(input: DownloadFileInput): Promise<string> {
-  if (input.id) {
-    try {
-      const url = await storageApi.fileAccessUrl(input.id)
-      if (url) return url
-    } catch {
-      // 回退 fileUrl
-    }
-  }
-  return input.fileUrl || ''
+/** 有 id 时走后端鉴权流，避开 WebView/OSS CORS；仅有外链时才直下 */
+function resolveDownloadUrl(input: DownloadFileInput): string {
+  return resolveContentUrl(input)
 }
 
 /**
@@ -87,44 +80,41 @@ function requestAlbumAuth(): Promise<boolean> {
  * - 图片/视频：保存到系统相册
  * - 其他：下载后用系统文档菜单打开（可转发/另存）
  */
-export async function downloadStorageFile(input: DownloadFileInput) {
+export async function downloadStorageFile(input: DownloadFileInput): Promise<string | undefined> {
   const ext = (input.extension || getFileExt(input.originalName || input.fileUrl || '')).toLowerCase()
-  const url = await resolveDownloadUrl(input)
+  const url = resolveDownloadUrl(input)
   if (!url) {
     uni.showToast({ title: '无法获取下载地址', icon: 'none' })
-    return
+    return undefined
   }
 
+  const fileName = input.originalName || (ext ? `file.${ext}` : undefined)
   uni.showLoading({ title: '下载中...', mask: true })
   try {
-    const tempPath = await downloadToTemp(url)
+    const tempPath = await downloadToTemp(url, fileName)
     uni.hideLoading()
 
-    if (isImageExt(ext)) {
+    if (isImageExt(ext) || isVideoExt(ext)) {
       const ok = await requestAlbumAuth()
-      if (!ok) return
+      if (!ok) {
+        uni.showToast({ title: '未获得相册权限，无法保存', icon: 'none' })
+        return tempPath
+      }
       uni.showLoading({ title: '保存中...', mask: true })
-      await saveImageToAlbum(tempPath)
+      if (isImageExt(ext)) await saveImageToAlbum(tempPath)
+      else await saveVideoToAlbum(tempPath)
       uni.hideLoading()
       uni.showToast({ title: '已保存到相册', icon: 'success' })
-      return
+      return tempPath
     }
 
-    if (isVideoExt(ext)) {
-      const ok = await requestAlbumAuth()
-      if (!ok) return
-      uni.showLoading({ title: '保存中...', mask: true })
-      await saveVideoToAlbum(tempPath)
-      uni.hideLoading()
-      uni.showToast({ title: '已保存到相册', icon: 'success' })
-      return
-    }
-
-    openLocalDocument(tempPath)
-  } catch (e) {
+    openLocalDocument(tempPath, fileName)
+    return tempPath
+  } catch (e: any) {
     uni.hideLoading()
     console.error('资料下载失败', e)
-    uni.showToast({ title: '下载失败，请稍后重试', icon: 'none' })
+    uni.showToast({ title: downloadFailTitle(e), icon: 'none' })
+    return undefined
   }
 }
 

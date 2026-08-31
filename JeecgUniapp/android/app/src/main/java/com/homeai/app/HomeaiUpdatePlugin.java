@@ -1,16 +1,26 @@
 package com.homeai.app;
 
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.OpenableColumns;
 import android.provider.Settings;
+import android.util.Base64;
+import androidx.activity.result.ActivityResult;
 import androidx.core.content.FileProvider;
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -19,6 +29,9 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -27,6 +40,7 @@ public class HomeaiUpdatePlugin extends Plugin {
 
     private static final int MAX_ZIP_ENTRIES = 8000;
     private static final long MAX_UNCOMPRESSED = 200L * 1024 * 1024;
+    private static final long MAX_PICK_BYTES = 500L * 1024 * 1024;
 
     @PluginMethod
     public void download(PluginCall call) {
@@ -36,14 +50,88 @@ public class HomeaiUpdatePlugin extends Plugin {
             call.reject("缺少下载地址");
             return;
         }
+        JSObject headers = call.getObject("headers");
         new Thread(() -> {
             try {
-                File dest = downloadTo(url, sanitizeName(fileName));
+                File dest = downloadTo(url, sanitizeName(fileName), headers);
                 JSObject ret = new JSObject();
                 ret.put("path", dest.getAbsolutePath());
                 call.resolve(ret);
             } catch (Exception e) {
                 call.reject("下载失败: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    @PluginMethod
+    public void openFile(PluginCall call) {
+        String path = call.getString("path");
+        String mime = call.getString("mime", "application/octet-stream");
+        if (path == null || path.isEmpty()) {
+            call.reject("缺少文件路径");
+            return;
+        }
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("无法打开文件");
+            return;
+        }
+        String type = mime == null || mime.isEmpty() ? "application/octet-stream" : mime;
+        activity.runOnUiThread(() -> {
+            try {
+                File file = new File(path);
+                if (!file.isFile()) {
+                    call.reject("文件不存在");
+                    return;
+                }
+                Uri uri = FileProvider.getUriForFile(
+                        activity, activity.getPackageName() + ".fileprovider", file);
+                Intent view = new Intent(Intent.ACTION_VIEW);
+                view.setDataAndType(uri, type);
+                view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                List<ResolveInfo> targets = activity.getPackageManager()
+                        .queryIntentActivities(view, PackageManager.MATCH_DEFAULT_ONLY);
+                for (ResolveInfo info : targets) {
+                    activity.grantUriPermission(
+                            info.activityInfo.packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                }
+                Intent chooser = Intent.createChooser(view, "打开文件");
+                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                activity.startActivity(chooser);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("打开失败: " + e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void readBase64(PluginCall call) {
+        String path = call.getString("path");
+        if (path == null || path.isEmpty()) {
+            call.reject("缺少文件路径");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                File file = new File(path);
+                if (!file.isFile()) {
+                    call.reject("文件不存在");
+                    return;
+                }
+                byte[] bytes = new byte[(int) file.length()];
+                try (FileInputStream in = new FileInputStream(file)) {
+                    int off = 0;
+                    int n;
+                    while (off < bytes.length && (n = in.read(bytes, off, bytes.length - off)) > 0) {
+                        off += n;
+                    }
+                }
+                JSObject ret = new JSObject();
+                ret.put("data", Base64.encodeToString(bytes, Base64.NO_WRAP));
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject("读取失败: " + e.getMessage());
             }
         }).start();
     }
@@ -132,7 +220,154 @@ public class HomeaiUpdatePlugin extends Plugin {
         });
     }
 
-    private File downloadTo(String url, String fileName) throws Exception {
+    /** 系统文档选择器（ACTION_OPEN_DOCUMENT），避免 WebView input 只弹出相册视频 */
+    @PluginMethod
+    public void pickFile(PluginCall call) {
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("无法选择文件");
+            return;
+        }
+        boolean multiple = Boolean.TRUE.equals(call.getBoolean("multiple", false));
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        List<String> mimes = readMimeTypes(call);
+        if (mimes.isEmpty()) {
+            String mime = call.getString("mime", "*/*");
+            intent.setType(mime == null || mime.isEmpty() ? "*/*" : mime);
+        } else if (mimes.size() == 1) {
+            intent.setType(mimes.get(0));
+        } else {
+            intent.setType("*/*");
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, mimes.toArray(new String[0]));
+        }
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, multiple);
+        startActivityForResult(call, intent, "onPickFileResult");
+    }
+
+    @ActivityCallback
+    private void onPickFileResult(PluginCall call, ActivityResult result) {
+        if (call == null) {
+            return;
+        }
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) {
+            JSObject ret = new JSObject();
+            ret.put("files", new JSArray());
+            call.resolve(ret);
+            return;
+        }
+        List<Uri> uris = collectUris(result.getData());
+        new Thread(() -> {
+            try {
+                JSArray files = new JSArray();
+                for (Uri uri : uris) {
+                    files.put(copyUriToCache(uri));
+                }
+                JSObject ret = new JSObject();
+                ret.put("files", files);
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject("选择失败: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    private static List<String> readMimeTypes(PluginCall call) {
+        List<String> mimes = new ArrayList<>();
+        JSArray arr = call.getArray("mimeTypes");
+        if (arr == null) {
+            return mimes;
+        }
+        for (int i = 0; i < arr.length(); i++) {
+            String mime = arr.optString(i, "");
+            if (mime != null && !mime.isEmpty()) {
+                mimes.add(mime);
+            }
+        }
+        return mimes;
+    }
+
+    private static List<Uri> collectUris(Intent data) {
+        List<Uri> uris = new ArrayList<>();
+        if (data == null) {
+            return uris;
+        }
+        ClipData clip = data.getClipData();
+        if (clip != null) {
+            for (int i = 0; i < clip.getItemCount(); i++) {
+                Uri uri = clip.getItemAt(i).getUri();
+                if (uri != null) {
+                    uris.add(uri);
+                }
+            }
+            return uris;
+        }
+        if (data.getData() != null) {
+            uris.add(data.getData());
+        }
+        return uris;
+    }
+
+    private String queryDisplayName(Uri uri) {
+        Cursor cursor = getContext().getContentResolver().query(
+                uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null);
+        if (cursor != null) {
+            try {
+                if (cursor.moveToFirst()) {
+                    int idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                    if (idx >= 0) {
+                        String name = cursor.getString(idx);
+                        if (name != null && !name.isEmpty()) {
+                            return name;
+                        }
+                    }
+                }
+            } finally {
+                cursor.close();
+            }
+        }
+        return "file-" + System.currentTimeMillis();
+    }
+
+    private JSObject copyUriToCache(Uri uri) throws Exception {
+        String displayName = queryDisplayName(uri);
+        String mime = getContext().getContentResolver().getType(uri);
+        if (mime == null || mime.isEmpty()) {
+            mime = "application/octet-stream";
+        }
+        File dir = new File(getContext().getCacheDir(), "homeai-pick");
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new Exception("无法创建临时目录");
+        }
+        File dest = new File(dir, System.currentTimeMillis() + "-" + sanitizeName(displayName));
+        long copied = 0;
+        try (InputStream in = getContext().getContentResolver().openInputStream(uri);
+             FileOutputStream out = new FileOutputStream(dest)) {
+            if (in == null) {
+                throw new Exception("无法读取所选文件");
+            }
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                copied += n;
+                if (copied > MAX_PICK_BYTES) {
+                    //noinspection ResultOfMethodCallIgnored
+                    dest.delete();
+                    throw new Exception("文件过大");
+                }
+                out.write(buf, 0, n);
+            }
+        }
+        JSObject item = new JSObject();
+        item.put("path", dest.getAbsolutePath());
+        item.put("name", displayName);
+        item.put("size", dest.length());
+        item.put("mimeType", mime);
+        return item;
+    }
+
+    private File downloadTo(String url, String fileName, JSObject headers) throws Exception {
         File dir = new File(getContext().getCacheDir(), "homeai-update");
         if (!dir.exists() && !dir.mkdirs()) {
             throw new Exception("无法创建下载目录");
@@ -142,6 +377,7 @@ public class HomeaiUpdatePlugin extends Plugin {
         conn.setConnectTimeout(20000);
         conn.setReadTimeout(120000);
         conn.setInstanceFollowRedirects(true);
+        applyHeaders(conn, headers);
         conn.connect();
         int code = conn.getResponseCode();
         if (code >= 400) {
@@ -241,10 +477,40 @@ public class HomeaiUpdatePlugin extends Plugin {
         file.delete();
     }
 
+    private static void applyHeaders(HttpURLConnection conn, JSObject headers) {
+        if (headers == null) {
+            return;
+        }
+        Iterator<String> keys = headers.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            Object val = headers.opt(key);
+            if (val != null && val != JSONObject.NULL) {
+                conn.setRequestProperty(key, String.valueOf(val));
+            }
+        }
+    }
+
     private static String sanitizeName(String name) {
         if (name == null || name.isEmpty()) {
-            return "update.bin";
+            return "file.bin";
         }
-        return name.replaceAll("[^A-Za-z0-9._-]", "_");
+        String leaf = name;
+        int slash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+        if (slash >= 0) {
+            leaf = name.substring(slash + 1);
+        }
+        int dot = leaf.lastIndexOf('.');
+        String base = dot > 0 ? leaf.substring(0, dot) : leaf;
+        String ext = dot > 0 ? leaf.substring(dot) : "";
+        base = base.replaceAll("[^A-Za-z0-9._-]", "_");
+        ext = ext.replaceAll("[^A-Za-z0-9.]", "");
+        if (base.replace("_", "").isEmpty()) {
+            base = "file-" + System.currentTimeMillis();
+        }
+        if (base.length() > 60) {
+            base = base.substring(0, 60);
+        }
+        return ext.isEmpty() ? base : base + ext;
     }
 }

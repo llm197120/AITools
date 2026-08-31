@@ -89,7 +89,11 @@ function readWebCode(shellCode: number): number {
 function nativePlugin() {
   return import('@capacitor/core').then(({ registerPlugin }) =>
     registerPlugin<{
-      download: (o: { url: string; fileName: string }) => Promise<{ path: string }>
+      download: (o: {
+        url: string
+        fileName: string
+        headers?: Record<string, string>
+      }) => Promise<{ path: string }>
       sha256: (o: { path: string }) => Promise<{ hash: string }>
       unzip: (o: { zipPath: string; destDirName: string }) => Promise<{ path: string }>
       installApk: (o: { path: string }) => Promise<void>

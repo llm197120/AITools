@@ -1,6 +1,15 @@
 <route lang="json5">{ style: { navigationBarTitleText: '学习资料', navigationBarBackgroundColor: '#F3F2EE' } }</route>
 <template>
-  <view class="hai-page" :class="{ 'hai-page--timer': learning }">
+  <view v-if="loading" class="hai-page"><HomeSkeleton variant="card" /></view>
+  <HomeEmpty
+    v-else-if="loadFailed"
+    title="资料加载失败"
+    hint="请检查网络后重试"
+    action-text="重试"
+    :card="true"
+    @action="retryLoad"
+  />
+  <view v-else class="hai-page" :class="{ 'hai-page--timer': learning }">
     <text class="title">{{ material.title || title }}</text>
     <text class="meta" v-if="material.category">{{ material.category }} · {{ material.type }}</text>
 
@@ -16,19 +25,19 @@
     <!-- 其他文档提示 -->
     <view v-else-if="mediaUrl" class="doc-tip" @click="openDocument">
       <text class="doc-icon">📄</text>
-      <text>点击打开文档</text>
+      <text>用手机应用打开文件</text>
     </view>
 
     <view v-if="material.description" class="desc">{{ material.description }}</view>
 
     <view v-if="learning" class="timer-bar">
       <text>学习中 {{ formatElapsed(elapsed) }}</text>
-      <wd-button size="small" type="warning" @click="stopLearn">结束学习</wd-button>
+      <wd-button size="small" type="warning" :loading="sessionBusy" @click="stopLearn">结束并保存</wd-button>
     </view>
     <view v-else class="actions">
-      <wd-button size="large" type="primary" block @click="startLearn">开始学习</wd-button>
-      <wd-button size="large" plain block @click="goEdit">编辑</wd-button>
-      <wd-button size="large" type="error" plain block @click="deleteVisible = true">删除</wd-button>
+      <wd-button size="large" type="primary" block :loading="sessionBusy" @click="startLearn">开始学习</wd-button>
+      <wd-button v-if="canEdit" size="large" plain block @click="goEdit">编辑</wd-button>
+      <wd-button v-if="canEdit" size="large" type="error" plain block @click="deleteVisible = true">删除</wd-button>
     </view>
   </view>
 
@@ -39,7 +48,7 @@
     </view>
     <view class="dialog-footer">
       <wd-button block @click="deleteVisible = false">取消</wd-button>
-      <wd-button type="error" block @click="doDelete">确认删除</wd-button>
+      <wd-button type="error" block :loading="deleting" @click="doDelete">确认删除</wd-button>
     </view>
   </wd-popup>
 </template>
@@ -49,7 +58,16 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import NativeHtmlAudio from '../../pages-homeai/components/NativeHtmlAudio'
 import { learnApi } from '../../pages-homeai/api/learn'
 import { getFileExt, isAudioExt, isImageExt, isVideoExt, previewFile } from '../../pages-homeai/utils/filePreview'
+import { confirmStopLearn } from '../../pages-homeai/utils/learnSession'
+import HomeEmpty from '../../components/HomeEmpty.vue'
+import HomeSkeleton from '../../components/HomeSkeleton.vue'
 import { isStandaloneApp, openExternalUrl } from '../../pages-homeai/platform/runtime'
+import { useUserStore } from '../../pages-homeai/stores/user'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+
+useHomeaiPageGuard()
+
+const userStore = useUserStore()
 
 const materialId = ref('')
 const material = ref<any>({})
@@ -61,12 +79,20 @@ const elapsed = ref(0)
 /** 列表跳转带 autoStart=1 时，无进行中会话则自动开始学习 */
 const autoStart = ref(false)
 const deleteVisible = ref(false)
+const deleting = ref(false)
+const sessionBusy = ref(false)
+const loading = ref(true)
+const loadFailed = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
 
 const isVideo = computed(() => material.value.type === 'video' || isVideoExt(getFileExt(mediaUrl.value)))
 const isImage = computed(() => material.value.type === 'image' || isImageExt(getFileExt(mediaUrl.value)))
 const isAudio = computed(() => material.value.type === 'audio' || isAudioExt(getFileExt(mediaUrl.value)))
 const isLink = computed(() => material.value.type === 'link')
+const canEdit = computed(() => {
+  const uid = userStore.userInfo?.id
+  return !!uid && !!material.value?.userId && material.value.userId === uid
+})
 const linkActionLabel = computed(() => (isStandaloneApp() ? '在浏览器中打开' : '复制链接'))
 
 function formatElapsed(sec: number) {
@@ -90,24 +116,52 @@ function startTimer(base = 0) {
   }, 1000)
 }
 
-async function loadMaterial(id: string) {
-  const m = await learnApi.materialById(id)
-  if (!m) {
-    uni.showToast({ title: '资料不存在', icon: 'none' })
+async function loadMaterial(id: string, silent = false) {
+  try {
+    const m = await learnApi.materialById(id)
+    if (!m) {
+      loadFailed.value = !silent
+      uni.showToast({ title: '资料不存在', icon: 'none' })
+      return false
+    }
+    material.value = m
+    const nextUrl = m.fileUrl || ''
+    if (nextUrl !== mediaUrl.value) mediaUrl.value = nextUrl
+    if (m.type === 'link') linkUrl.value = m.fileUrl || ''
+    uni.setNavigationBarTitle({ title: m.title || '学习资料' })
+    loadFailed.value = false
+    return true
+  } catch {
+    loadFailed.value = !silent && !material.value?.id
     return false
   }
-  material.value = m
-  mediaUrl.value = m.fileUrl || ''
-  if (m.type === 'link') linkUrl.value = m.fileUrl || ''
-  uni.setNavigationBarTitle({ title: m.title || '学习资料' })
-  return true
+}
+
+async function retryLoad() {
+  if (!materialId.value) return
+  loading.value = true
+  loadFailed.value = false
+  try {
+    await loadMaterial(materialId.value)
+  } finally {
+    loading.value = false
+  }
 }
 
 async function syncSession() {
-  const session: any = await learnApi.activeSession()
-  if (session?.materialId === materialId.value) {
-    learning.value = true
-    startTimer(session.elapsedSeconds || 0)
+  try {
+    const session: any = await learnApi.activeSession()
+    if (session?.materialId === materialId.value) {
+      learning.value = true
+      startTimer(Number(session.elapsedSeconds || 0))
+      return
+    }
+    if (learning.value) {
+      learning.value = false
+      clearTimer()
+    }
+  } catch {
+    // 回前台对时失败时保留本地计时，不打断正在看的视频
   }
 }
 
@@ -137,17 +191,30 @@ function openLink() {
 }
 
 async function startLearn() {
-  await learnApi.start(materialId.value)
-  learning.value = true
-  startTimer(0)
-  uni.showToast({ title: '已开始学习', icon: 'success' })
+  if (sessionBusy.value || learning.value) return
+  sessionBusy.value = true
+  try {
+    await learnApi.start(materialId.value)
+    learning.value = true
+    startTimer(0)
+    uni.showToast({ title: '已开始学习', icon: 'success' })
+  } finally {
+    sessionBusy.value = false
+  }
 }
 
 async function stopLearn() {
-  await learnApi.stop(materialId.value)
-  learning.value = false
-  clearTimer()
-  uni.showToast({ title: '已记录学习时长', icon: 'success' })
+  if (sessionBusy.value) return
+  if (!(await confirmStopLearn())) return
+  sessionBusy.value = true
+  try {
+    await learnApi.stop(materialId.value)
+    learning.value = false
+    clearTimer()
+    uni.showToast({ title: '已记录学习时长', icon: 'success' })
+  } finally {
+    sessionBusy.value = false
+  }
 }
 
 function goEdit() {
@@ -156,7 +223,8 @@ function goEdit() {
 }
 
 async function doDelete() {
-  if (!materialId.value) return
+  if (!materialId.value || deleting.value) return
+  deleting.value = true
   try {
     await learnApi.remove(materialId.value)
     deleteVisible.value = false
@@ -164,6 +232,8 @@ async function doDelete() {
     setTimeout(() => uni.navigateBack(), 600)
   } catch {
     // request 层已 toast
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -172,15 +242,19 @@ onLoad(async (opts: any) => {
     mediaUrl.value = decodeURIComponent(opts.videoUrl)
     title.value = decodeURIComponent(opts.title || '视频')
     uni.setNavigationBarTitle({ title: title.value })
+    loading.value = false
     return
   }
   materialId.value = opts?.id || ''
   autoStart.value = opts?.autoStart === '1' || opts?.autoStart === 1 || opts?.autoStart === true
   if (!materialId.value) {
+    loading.value = false
+    loadFailed.value = true
     uni.showToast({ title: '参数错误', icon: 'none' })
     return
   }
   const loaded = await loadMaterial(materialId.value)
+  loading.value = false
   await syncSession()
   // 仅资料加载成功且无进行中会话时，按 autoStart 自动开始计时
   if (loaded && autoStart.value && !learning.value) {
@@ -189,8 +263,10 @@ onLoad(async (opts: any) => {
 })
 
 onShow(async () => {
-  if (!materialId.value) return
-  await loadMaterial(materialId.value)
+  if (!materialId.value || loading.value) return
+  await syncSession()
+  if (learning.value) return
+  await loadMaterial(materialId.value, !!material.value?.id)
 })
 
 onUnmounted(() => clearTimer())

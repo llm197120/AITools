@@ -1,9 +1,8 @@
 /**
  * HomeAI 小程序 API 请求封装
  */
-import { isMpWeixin } from '@/utils/platform'
 import { getToken } from '../utils/auth'
-import { useUserStore } from '../stores/user'
+import { consumeHomeaiUnauthorized } from '../utils/homeaiAuth'
 import { getServerBaseUrl as getPlatformServerBaseUrl } from '../platform/env'
 
 const BASE_URL = '/homeai'
@@ -86,32 +85,15 @@ async function request<T = any>(options: RequestOptions): Promise<T> {
       method: options.method || 'GET',
       data: unwrapped.data,
       header,
+      timeout: 30000,
       success: (res) => {
         const data = res.data as any
+        if (consumeHomeaiUnauthorized(res.statusCode, data)) {
+          reject(new Error(data?.message || '登录已过期'))
+          return
+        }
         if (data.success) {
           resolve(data.result)
-        } else if (data.code === 401) {
-          // Token 过期：清理登录态（storage + Pinia store），避免 isLogin 残留
-          useUserStore().clearLocalSession()
-          if (!isMpWeixin) {
-            const pages = getCurrentPages()
-            const cur: any = pages[pages.length - 1]
-            const route = cur?.route ? `/${cur.route}` : ''
-            let loginUrl = '/pages/auth/login'
-            if (route && route !== '/pages/auth/login' && route !== '/pages/launch/index') {
-              const opts = cur.options || {}
-              const keys = Object.keys(opts)
-              const q = keys
-                .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(opts[k]))}`)
-                .join('&')
-              const full = q ? `${route}?${q}` : route
-              loginUrl += `?redirect=${encodeURIComponent(full)}`
-            }
-            uni.reLaunch({ url: loginUrl })
-          } else {
-            uni.switchTab({ url: '/pages/homeai/profile' })
-          }
-          reject(new Error(data.message || '登录已过期'))
         } else {
           uni.showToast({ title: data.message || '请求失败', icon: 'none' })
           reject(new Error(data.message || '请求失败'))

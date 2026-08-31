@@ -4,13 +4,17 @@
     navigationBarTitleText: '烹饪指南',
     navigationBarBackgroundColor: '#F3F2EE',
     onReachBottomDistance: 80,
+    enablePullDownRefresh: true,
   },
 }
 </route>
 
 <template>
   <view class="hai-page hai-page--fab">
-    <view class="search-bar"><input class="search-input" v-model="keyword" placeholder="搜索菜谱..." confirm-type="search" @confirm="search"/></view>
+    <view class="search-bar">
+      <input class="search-input" v-model="keyword" placeholder="搜索菜谱..." confirm-type="search" @confirm="search" />
+      <text v-if="keyword" class="search-clear" @click="clearSearch">清除</text>
+    </view>
     <scroll-view v-if="recommends.length" scroll-x class="recommend-scroll">
       <view class="recommend-head"><text class="recommend-title">为你推荐</text></view>
       <view class="recommend-row">
@@ -38,6 +42,13 @@
       <text class="tab link" @click="goCategory">分类 ›</text>
     </view>
     <view v-if="loading"><HomeSkeleton variant="list" :rows="4" /></view>
+    <HomeEmpty
+      v-else-if="loadFailed"
+      title="菜谱加载失败"
+      hint="请检查网络后重试"
+      action-text="重试"
+      @action="keyword.trim() ? search() : load(true)"
+    />
     <view v-else class="recipe-grid">
       <view class="recipe-card" v-for="r in recipes" :key="r.id" @click="detail(r.id)">
         <image class="recipe-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill" lazy-load />
@@ -53,12 +64,12 @@
       </view>
     </view>
     <HomeEmpty
-      v-if="!loading && recipes.length === 0"
+      v-if="!loading && !loadFailed && recipes.length === 0"
       :title="emptyTitle"
-      action-text="添加菜谱"
-      @action="goAdd"
+      :action-text="keyword.trim() ? '清空搜索' : '添加菜谱'"
+      @action="keyword.trim() ? clearSearch() : goAdd()"
     />
-    <view v-if="tab === 'all' && recipes.length > 0" class="load-more-wrap">
+    <view v-if="tab !== 'hot' && recipes.length > 0" class="load-more-wrap">
       <view v-if="loadingMore" class="load-more-tip">加载中...</view>
       <view v-else-if="hasMore" class="load-more-btn" @click="loadMore">加载更多</view>
       <view v-else class="load-more-tip">没有更多了</view>
@@ -72,12 +83,17 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
+import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
 import { recipeApi } from '../../pages-homeai/api/recipe'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
 
 useHomeaiPageGuard()
+useHomeaiPullRefresh(async () => {
+  lastNewLoadAt = 0
+  await Promise.all([loadRecommend(), loadNewRecipes(), keyword.value.trim() ? search() : load(true)])
+})
 
 const keyword = ref('')
 const recipes = ref<any[]>([])
@@ -85,12 +101,14 @@ const recommends = ref<any[]>([])
 const newRecipes = ref<any[]>([])
 const tab = ref<'all' | 'hot' | 'favorite'>('all')
 const loading = ref(false)
+const loadFailed = ref(false)
 const PAGE_SIZE = 20
 const pageNo = ref(1)
 const hasMore = ref(true)
 const loadingMore = ref(false)
 
 const emptyTitle = computed(() => {
+  if (keyword.value.trim()) return '未找到相关菜谱'
   if (tab.value === 'favorite') return '暂无收藏'
   if (tab.value === 'hot') return '暂无热门菜谱'
   return '暂无菜谱'
@@ -123,7 +141,7 @@ async function loadRecommend() {
     recommends.value = (await recipeApi.recommend(8)) || []
     lastRecLoadAt = Date.now()
   } catch {
-    recommends.value = []
+    if (!recommends.value.length) recommends.value = []
   }
 }
 
@@ -133,18 +151,20 @@ async function loadNewRecipes() {
     newRecipes.value = (await recipeApi.newest(8, 30)) || []
     lastNewLoadAt = Date.now()
   } catch {
-    newRecipes.value = []
+    if (!newRecipes.value.length) newRecipes.value = []
   }
 }
 
-async function load(reset = true) {
-  if (tab.value !== 'all') {
-    loading.value = true
+async function load(reset = true, silent = false) {
+  if (tab.value === 'hot') {
+    if (!silent) loading.value = true
+    loadFailed.value = false
     try {
-      if (tab.value === 'favorite') {
-        recipes.value = (await recipeApi.favorites()) || []
-      } else {
-        recipes.value = (await recipeApi.hot(30)) || []
+      recipes.value = (await recipeApi.hot(30)) || []
+    } catch {
+      if (!silent) {
+        recipes.value = []
+        loadFailed.value = true
       }
     } finally {
       loading.value = false
@@ -153,7 +173,8 @@ async function load(reset = true) {
   }
   if (!reset && (loadingMore.value || !hasMore.value)) return
   if (reset) {
-    loading.value = true
+    if (!silent) loading.value = true
+    loadFailed.value = false
     pageNo.value = 1
     hasMore.value = true
   } else {
@@ -161,12 +182,22 @@ async function load(reset = true) {
   }
   try {
     const nextPage = reset ? 1 : pageNo.value + 1
-    const res = await recipeApi.list({ pageNo: String(nextPage), pageSize: String(PAGE_SIZE) })
+    const params = { pageNo: String(nextPage), pageSize: String(PAGE_SIZE) }
+    const res = tab.value === 'favorite' ? await recipeApi.favorites(params) : await recipeApi.list(params)
     const records: any[] = res?.records || (Array.isArray(res) ? res : [])
     recipes.value = reset ? records : recipes.value.concat(records)
     pageNo.value = nextPage
     const total = res?.total
     hasMore.value = typeof total === 'number' ? recipes.value.length < total : records.length >= PAGE_SIZE
+  } catch {
+    if (reset) {
+      if (!silent) {
+        recipes.value = []
+        loadFailed.value = true
+      }
+    } else {
+      uni.showToast({ title: '加载更多失败', icon: 'none' })
+    }
   } finally {
     loading.value = false
     loadingMore.value = false
@@ -174,19 +205,23 @@ async function load(reset = true) {
 }
 
 function loadMore() {
-  if (tab.value !== 'all') return
+  if (tab.value === 'hot') return
   load(false)
 }
 
 function switchTab(t: 'all' | 'hot' | 'favorite') {
+  keyword.value = ''
   tab.value = t
   load(true)
 }
 
 onShow(() => {
+  lastNewLoadAt = 0
   loadRecommend()
   loadNewRecipes()
-  load(true)
+  const silent = recipes.value.length > 0
+  if (keyword.value.trim()) search(silent)
+  else load(true, silent)
 })
 
 onReachBottom(() => {
@@ -198,18 +233,29 @@ function diffLabel(d: any) {
   return map[Number(d)] || '中等'
 }
 
-async function search() {
+function clearSearch() {
+  keyword.value = ''
+  load(true)
+}
+
+async function search(silent = false) {
   if (!keyword.value.trim()) {
-    await load(true)
+    await load(true, silent)
     return
   }
-  loading.value = true
+  if (!silent) loading.value = true
+  loadFailed.value = false
   try {
     const { get } = await import('../../pages-homeai/api/request')
     const res: any = await get('/recipe/search', { keyword: keyword.value.trim() })
     recipes.value = Array.isArray(res) ? res : []
     tab.value = 'all'
     hasMore.value = false
+  } catch {
+    if (!silent) {
+      recipes.value = []
+      loadFailed.value = true
+    }
   } finally {
     loading.value = false
   }
@@ -228,8 +274,9 @@ function goCategory() {
 
 <style scoped>
 /* page shell: .hai-page */
-.search-bar{padding:8rpx 0 16rpx}
-.search-input{height:72rpx;padding:0 28rpx;background:var(--hai-card);border-radius:999rpx;font-size:28rpx;box-shadow:var(--hai-shadow)}
+.search-bar{position:relative;padding:8rpx 0 16rpx}
+.search-input{height:72rpx;padding:0 88rpx 0 28rpx;background:var(--hai-card);border-radius:999rpx;font-size:28rpx;box-shadow:var(--hai-shadow)}
+.search-clear{position:absolute;right:28rpx;top:50%;transform:translateY(-50%);font-size:24rpx;color:var(--hai-primary)}
 .recommend-scroll{margin-bottom:16rpx;white-space:nowrap}
 .recommend-head{margin-bottom:12rpx}
 .recommend-title{font-size:28rpx;font-weight:600;color:var(--hai-text)}

@@ -4,8 +4,8 @@
     <view class="section">
       <text class="label">导入来源</text>
       <view class="type-row">
-        <view class="type-btn" :class="{ active: importType === 'wechat_csv' }" @click="importType = 'wechat_csv'">微信 CSV</view>
-        <view class="type-btn" :class="{ active: importType === 'excel' }" @click="importType = 'excel'">Excel</view>
+        <view class="type-btn" :class="{ active: importType === 'wechat_csv' }" @click="switchType('wechat_csv')">微信 CSV</view>
+        <view class="type-btn" :class="{ active: importType === 'excel' }" @click="switchType('excel')">Excel</view>
       </view>
     </view>
     <view class="upload-box" @click="chooseFile">
@@ -13,18 +13,29 @@
       <text>{{ fileName || '点击选择文件' }}</text>
       <text class="tip">微信 CSV 或 .xlsx / .xls</text>
     </view>
-    <wd-button size="large" type="primary" :disabled="!filePath" @click="preview">开始解析</wd-button>
+    <wd-button size="large" type="primary" :disabled="!filePath" :loading="parsing" @click="preview">开始解析</wd-button>
   </view>
 </template>
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { useHomeaiFilePick } from '../../pages-homeai/utils/useHomeaiFilePick'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+
+useHomeaiPageGuard()
 
 const { pickFiles } = useHomeaiFilePick()
 
 const importType = ref<'wechat_csv' | 'excel'>('wechat_csv')
 const filePath = ref('')
 const fileName = ref('')
+const parsing = ref(false)
+
+function switchType(next: 'wechat_csv' | 'excel') {
+  if (importType.value === next) return
+  importType.value = next
+  filePath.value = ''
+  fileName.value = ''
+}
 
 async function chooseFile() {
   const ext = importType.value === 'excel' ? ['xlsx', 'xls'] : ['csv']
@@ -41,18 +52,24 @@ async function chooseFile() {
 }
 
 async function preview() {
-  if (!filePath.value) return
+  if (!filePath.value || parsing.value) return
   const { billApi } = await import('../../pages-homeai/api/bill')
+  parsing.value = true
   uni.showLoading({ title: '解析中...' })
   try {
     const rows = await billApi.importPreview(filePath.value, importType.value)
     uni.hideLoading()
-    uni.navigateTo({
-      url: `/pages-homeai-more/bill/import-confirm?rows=${encodeURIComponent(JSON.stringify(rows))}`,
-    })
+    if (!Array.isArray(rows) || !rows.length) {
+      uni.showToast({ title: '没有解析到账单', icon: 'none' })
+      return
+    }
+    uni.setStorageSync('homeai_bill_import_preview', rows)
+    uni.navigateTo({ url: '/pages-homeai-more/bill/import-confirm' })
   } catch (e: any) {
     uni.hideLoading()
     uni.showToast({ title: e.message || '解析失败', icon: 'none' })
+  } finally {
+    parsing.value = false
   }
 }
 </script>

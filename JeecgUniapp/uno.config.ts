@@ -34,7 +34,8 @@ export default defineConfig({
     // 支持图标，需要搭配图标库，eg: @iconify-json/carbon, 使用 `<button class="i-carbon-sun dark:i-carbon-moon" />`
     presetIcons({
       scale: 1.2,
-      warn: true,
+      // 关闭缺失图标告警；JS 循环 `i--` 会被误扫成 icon "-"
+      warn: false,
       extraProperties: {
         display: 'inline-block',
         'vertical-align': 'middle',

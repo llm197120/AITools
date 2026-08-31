@@ -14,6 +14,7 @@ export const storageApi = {
       pageNo != null ? { pageNo: String(pageNo), pageSize: String(pageSize ?? 20) } : undefined,
     ),
   fileDetail: (id: string) => get<any>(`/storage/files/${id}`),
+  /** 刷新展示用预签名，不是下载入口；下载请走 /content */
   fileAccessUrl: (id: string) => get<string>(`/storage/files/${id}/access-url`),
   createFolder: (
     name: string,
@@ -55,11 +56,13 @@ export const storageApi = {
     put('/storage/my/restore', { data: payload }),
   myDeletePermanently: (payload: { fileIds?: string[]; folderIds?: string[] }) =>
     del('/storage/my/deletePermanently', { data: payload }),
+  myUsage: () => get<any>('/storage/my/usage'),
   generateQuotaCheck: (instruction?: string) =>
     get<any>('/storage/office/generate/quota-check', instruction ? { instruction } : undefined),
   convert: (fileId: string, targetFormat: string) =>
     post('/storage/office/convert', { params: { fileId, targetFormat } }),
   preview: (id: string) => get<any>(`/storage/files/${id}/preview`),
+  /** 仅管理端 Office 转 PDF；APP 打开原文件，不要再调用 */
   previewPdf: (id: string) => post(`/storage/files/${id}/preview-pdf`),
   generate: (fileId: string, instruction: string, docType?: string) =>
     post('/storage/office/generate', { params: { fileId, instruction, docType: docType || 'word' } }),

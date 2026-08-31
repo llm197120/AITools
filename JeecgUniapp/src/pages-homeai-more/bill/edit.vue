@@ -1,6 +1,15 @@
 <route lang="json5">{ style: { navigationBarTitleText: '编辑账单', navigationBarBackgroundColor: '#F3F2EE' } }</route>
 <template>
-  <HomeFormCard>
+  <view v-if="loading" class="hai-page"><HomeSkeleton variant="card" /></view>
+  <HomeEmpty
+    v-else-if="loadFailed"
+    title="账单加载失败"
+    hint="请检查网络后重试"
+    action-text="重试"
+    :card="true"
+    @action="loadEntry"
+  />
+  <HomeFormCard v-else>
     <view class="type-switch">
       <view class="type-btn" :class="{ active: form.type === 'expense' }" @click="switchType('expense')">支出</view>
       <view class="type-btn" :class="{ active: form.type === 'income', income: form.type === 'income' }" @click="switchType('income')">收入</view>
@@ -47,9 +56,16 @@ import { localDateStr } from '../../pages-homeai/utils/date'
 import HomeFormCard from '../../components/HomeFormCard.vue'
 import HomePickerCell from '../../pages-homeai/components/HomePickerCell.vue'
 import HomeDateCell from '../../pages-homeai/components/HomeDateCell.vue'
+import HomeEmpty from '../../components/HomeEmpty.vue'
+import HomeSkeleton from '../../components/HomeSkeleton.vue'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+
+useHomeaiPageGuard()
 
 const entryId = ref('')
 const saving = ref(false)
+const loading = ref(true)
+const loadFailed = ref(false)
 const form = ref({
   type: 'expense',
   amount: '',
@@ -79,14 +95,12 @@ function switchType(type: string) {
   loadCategories(type)
 }
 
-onLoad(async (opts: any) => {
-  if (!opts?.id) {
-    uni.showToast({ title: '参数错误', icon: 'none' })
-    setTimeout(() => uni.navigateBack(), 800)
-    return
-  }
+async function loadEntry() {
+  if (!entryId.value) return
+  loading.value = true
+  loadFailed.value = false
   try {
-    const entry = await billApi.entryById(opts.id)
+    const entry = await billApi.entryById(entryId.value)
     entryId.value = entry.id
     form.value = {
       type: entry.type || 'expense',
@@ -98,16 +112,48 @@ onLoad(async (opts: any) => {
     }
     await loadCategories(form.value.type)
   } catch {
+    loadFailed.value = true
     uni.showToast({ title: '加载失败', icon: 'none' })
+  } finally {
+    loading.value = false
   }
+}
+
+onLoad(async (opts: any) => {
+  if (!opts?.id) {
+    loading.value = false
+    loadFailed.value = true
+    uni.showToast({ title: '参数错误', icon: 'none' })
+    setTimeout(() => uni.navigateBack(), 800)
+    return
+  }
+  entryId.value = opts.id
+  await loadEntry()
 })
 
 async function save() {
-  const amount = parseFloat(form.value.amount)
+  if (saving.value) return
+  const raw = String(form.value.amount || '').trim()
+  if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
+    uni.showToast({ title: '请填写有效金额（最多两位小数）', icon: 'none' })
+    return
+  }
+  const amount = parseFloat(raw)
   if (!form.value.categoryId || !Number.isFinite(amount) || amount <= 0) {
     uni.showToast({ title: '请填写有效金额和分类', icon: 'none' })
     return
   }
+  if (form.value.billDate > localDateStr()) {
+    const ok = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '日期未到',
+        content: '这是未来的日期，确定仍要记账？',
+        success: (r) => resolve(!!r.confirm),
+      })
+    })
+    if (!ok) return
+  }
+  form.value.remark = String(form.value.remark || '').trim()
   saving.value = true
   try {
     await billApi.update({

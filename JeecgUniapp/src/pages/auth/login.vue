@@ -76,7 +76,7 @@
         />
       </view>
 
-      <view class="agree-row" @tap="agreed = !agreed">
+      <view class="agree-row" @tap="toggleAgreed">
         <view class="agree-box" :class="{ on: agreed }"></view>
         <text class="agree-text">我已阅读并同意</text>
         <text class="tip-link" @tap.stop="goAgreement">《用户协议》</text>
@@ -139,6 +139,12 @@ onLoad((query?: Record<string, string>) => {
   }
   uni.setNavigationBarTitle({ title: isRegisterMode.value ? '注册' : '登录' })
 })
+
+function toggleAgreed() {
+  agreed.value = !agreed.value
+  if (agreed.value) uni.setStorageSync('homeai_privacy_agreed', 1)
+  else uni.removeStorageSync('homeai_privacy_agreed')
+}
 
 function toggleMode() {
   isRegisterMode.value = !isRegisterMode.value

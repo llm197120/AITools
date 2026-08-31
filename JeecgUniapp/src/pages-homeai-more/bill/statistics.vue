@@ -1,5 +1,5 @@
 <route lang="json5">
-{ style: { navigationBarTitleText: '统计分析', navigationBarBackgroundColor: '#F3F2EE' } }
+{ style: { navigationBarTitleText: '统计分析', navigationBarBackgroundColor: '#F3F2EE', enablePullDownRefresh: true } }
 </route>
 
 <template>
@@ -16,6 +16,13 @@
     </view>
     <view class="section-title">支出分类占比</view>
     <view v-if="loading"><HomeSkeleton variant="list" :rows="3" /></view>
+    <HomeEmpty
+      v-else-if="loadFailed"
+      title="统计加载失败"
+      hint="请检查网络后重试"
+      action-text="重试"
+      @action="loadStats"
+    />
     <view v-else-if="categoryStats.length === 0"><HomeEmpty title="暂无统计数据" /></view>
     <view v-else class="cat-list">
       <view class="cat-row" v-for="c in categoryStats" :key="c.categoryId">
@@ -34,17 +41,24 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { billApi } from '../../pages-homeai/api/bill'
-import { localMonthStr } from '../../pages-homeai/utils/date'
+import { addMonths, localMonthStr } from '../../pages-homeai/utils/date'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 import HomeEmpty from '../../components/HomeEmpty.vue'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
+
+useHomeaiPageGuard()
+useHomeaiPullRefresh(() => loadStats())
 
 const currentMonth = ref(localMonthStr())
 const summary = ref({ expense: '0', income: '0', balance: '0' })
 const categoryStats = ref<any[]>([])
 const loading = ref(true)
+const loadFailed = ref(false)
 
 async function loadStats() {
-  loading.value = true
+  if (!categoryStats.value.length) loading.value = true
+  loadFailed.value = false
   try {
     const sum: any = await billApi.summary(currentMonth.value)
     summary.value = {
@@ -58,15 +72,16 @@ async function loadStats() {
       ...x,
       percent: Math.round((Number(x.amount || 0) / total) * 100),
     }))
+  } catch {
+    loadFailed.value = categoryStats.value.length === 0
+    if (!loadFailed.value) uni.showToast({ title: '统计刷新失败', icon: 'none' })
   } finally {
     loading.value = false
   }
 }
 
 function changeMonth(d: number) {
-  const [y, m] = currentMonth.value.split('-').map(Number)
-  const dt = new Date(y, m - 1 + d)
-  currentMonth.value = localMonthStr(dt)
+  currentMonth.value = addMonths(currentMonth.value, d)
   loadStats()
 }
 

@@ -73,7 +73,14 @@
       </view>
 
       <HomeEmpty
-        v-if="!subFolders.length && !files.length"
+        v-if="loadFailed && !subFolders.length && !files.length"
+        title="资料加载失败"
+        hint="请检查网络后重试"
+        action-text="重试"
+        @action="refresh"
+      />
+      <HomeEmpty
+        v-else-if="!subFolders.length && !files.length"
         :title="folderId ? '文件夹为空' : '暂无资料'"
         :hint="folderId ? '点击下方按钮上传文件' : '可新建文件夹，或直接上传文件到根目录'"
         action-text="新建文件夹"
@@ -106,7 +113,7 @@
       </view>
       <view class="dialog-footer">
         <wd-button block @click="namePopupVisible = false">取消</wd-button>
-        <wd-button type="primary" block @click="submitNamePopup">确定</wd-button>
+        <wd-button type="primary" block :loading="nameBusy" @click="submitNamePopup">确定</wd-button>
       </view>
     </wd-popup>
     <wd-popup v-model="confirmVisible" position="center" custom-style="width:80%;border-radius:28rpx;overflow:hidden">
@@ -116,7 +123,7 @@
       </view>
       <view class="dialog-footer">
         <wd-button block @click="confirmVisible = false">取消</wd-button>
-        <wd-button type="error" block @click="submitConfirm">确认删除</wd-button>
+        <wd-button type="error" block :loading="confirmBusy" @click="submitConfirm">确认删除</wd-button>
       </view>
     </wd-popup>
   </view>
@@ -129,6 +136,7 @@ import { useMemberLabel } from '../../pages-homeai/utils/useMemberLabel'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 import { getStorageDisplayName } from '../../pages-homeai/utils/storageFileDisplay'
+import { toDateStr } from '../../pages-homeai/utils/date'
 import HomeFileIcon from '../../components/HomeFileIcon.vue'
 
 const props = defineProps<{ folderId: string | null; userId?: string }>()
@@ -138,6 +146,7 @@ const { loadMemberLabels, resolveMemberLabel } = useMemberLabel()
 const {
   files,
   loading,
+  loadFailed,
   subFolders,
   breadcrumbs,
   refresh,
@@ -163,10 +172,12 @@ const {
   namePopupPlaceholder,
   namePopupValue,
   submitNamePopup,
+  nameBusy,
   confirmVisible,
   confirmTitle,
   confirmMessage,
   submitConfirm,
+  confirmBusy,
 } = useStorageBrowser(
   () => props.folderId,
   () => props.userId,
@@ -191,7 +202,7 @@ function formatSize(bytes: number) {
 }
 
 function formatTime(t: string) {
-  return t ? t.substring(0, 10) : ''
+  return toDateStr(t)
 }
 </script>
 

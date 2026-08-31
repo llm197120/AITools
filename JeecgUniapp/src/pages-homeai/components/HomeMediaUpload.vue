@@ -72,6 +72,7 @@
 import { computed, ref } from 'vue'
 import { getServerBaseUrl } from '../api/request'
 import { getToken } from '../utils/auth'
+import { consumeHomeaiUnauthorized } from '../utils/homeaiAuth'
 import { AUDIO_EXTS } from '../platform/fileAccept'
 import { useHomeaiFilePick } from '../utils/useHomeaiFilePick'
 import { previewFile } from '../utils/filePreview'
@@ -161,11 +162,16 @@ function uploadFile(filePath: string): Promise<string> {
       name: 'file',
       formData: props.formData,
       header: { 'X-Access-Token': getToken() || '' },
+      timeout: 120000,
       onProgressUpdate: (res) => {
         if (res.progress) progress.value = res.progress
       },
       success: (res) => {
         try {
+          if (consumeHomeaiUnauthorized(res.statusCode, res.data)) {
+            reject(new Error('登录已过期'))
+            return
+          }
           const data = JSON.parse(res.data)
           if (data.success && data.result) resolve(data.result)
           else reject(new Error(data.message || '上传失败'))

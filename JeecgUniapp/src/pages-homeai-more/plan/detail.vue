@@ -1,6 +1,23 @@
 <route lang="json5">{ style: { navigationBarTitleText: '计划详情', navigationBarBackgroundColor: '#F3F2EE' } }</route>
 <template>
-  <view class="hai-page" v-if="plan.id">
+  <view v-if="loading" class="hai-page"><HomeSkeleton variant="card" /></view>
+  <HomeEmpty
+    v-else-if="loadFailed"
+    title="计划加载失败"
+    hint="请检查网络后重试"
+    action-text="重试"
+    :card="true"
+    @action="loadPlan"
+  />
+  <HomeEmpty
+    v-else-if="!plan.id"
+    title="计划不存在或已删除"
+    hint="可能已被删除，或链接已失效"
+    action-text="返回"
+    :card="true"
+    @action="goBack"
+  />
+  <view class="hai-page" v-else>
     <view class="status-bar">
       <text class="priority" :class="plan.priority || 'normal'">{{ priorityLabel(plan.priority) }}</text>
       <text class="status">{{ statusLabel(plan.status) }}</text>
@@ -34,6 +51,7 @@
         size="large"
         type="primary"
         block
+        :loading="toggling"
         @click="toggleComplete"
       >标记为已完成</wd-button>
       <wd-button
@@ -41,15 +59,14 @@
         size="large"
         plain
         block
+        :loading="toggling"
         @click="toggleComplete"
       >取消完成</wd-button>
       <text v-if="plan.status === 'expired'" class="expired-tip">已过期，不可修改状态</text>
-      <wd-button size="large" plain block @click="goEdit">编辑</wd-button>
-      <wd-button size="large" type="error" plain block @click="deleteVisible = true">删除</wd-button>
+      <wd-button v-if="canEdit" size="large" plain block @click="goEdit">编辑</wd-button>
+      <wd-button v-if="canEdit" size="large" type="error" plain block @click="deleteVisible = true">删除</wd-button>
     </view>
   </view>
-  <view v-else class="loading">加载中...</view>
-
   <wd-popup v-model="deleteVisible" position="center" custom-style="width:80%;border-radius:28rpx;overflow:hidden">
     <view class="dialog-title">删除计划</view>
     <view class="dialog-body">
@@ -57,7 +74,7 @@
     </view>
     <view class="dialog-footer">
       <wd-button block @click="deleteVisible = false">取消</wd-button>
-      <wd-button type="error" block @click="doDelete">确认删除</wd-button>
+      <wd-button type="error" block :loading="deleting" @click="doDelete">确认删除</wd-button>
     </view>
   </wd-popup>
 </template>
@@ -66,11 +83,32 @@ import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { planApi } from '../../pages-homeai/api/plan'
 import { localDateStr } from '../../pages-homeai/utils/date'
+import HomeEmpty from '../../components/HomeEmpty.vue'
+import HomeSkeleton from '../../components/HomeSkeleton.vue'
+import { useUserStore } from '../../pages-homeai/stores/user'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+
+useHomeaiPageGuard()
+
+const userStore = useUserStore()
 
 const plan = ref<any>({})
 const instanceId = ref('')
 const planDate = ref('')
 const deleteVisible = ref(false)
+const loading = ref(true)
+const loadFailed = ref(false)
+const toggling = ref(false)
+const deleting = ref(false)
+
+function goBack() {
+  uni.navigateBack()
+}
+
+const canEdit = computed(() => {
+  const uid = userStore.userInfo?.id
+  return !!uid && !!plan.value.userId && plan.value.userId === uid
+})
 
 const deleteHint = computed(() => {
   if (plan.value.repeatRule && plan.value.repeatRule !== 'none') {
@@ -97,28 +135,49 @@ function formatHm(v: any) {
   return String(v)
 }
 
-async function loadPlan() {
-  if (!instanceId.value) return
+async function loadPlan(silent = false) {
+  if (!instanceId.value) {
+    loading.value = false
+    loadFailed.value = true
+    return
+  }
+  if (!silent) loading.value = true
+  loadFailed.value = false
   try {
-    const found = await planApi.instance(instanceId.value)
+    try {
+      const found = await planApi.instance(instanceId.value)
+      if (found) {
+        plan.value = found
+        return
+      }
+    } catch {
+      // 回退按日列表，兼容旧后端
+    }
+    const list = (await planApi.byDate(planDate.value)) || []
+    const found = list.find((p: any) => p.id === instanceId.value)
     if (found) {
       plan.value = found
       return
     }
+    if (!plan.value.id) plan.value = {}
   } catch {
-    // 回退按日列表，兼容旧后端
+    loadFailed.value = !plan.value.id
+    if (loadFailed.value) uni.showToast({ title: '计划加载失败', icon: 'none' })
+  } finally {
+    loading.value = false
   }
-  const list = (await planApi.byDate(planDate.value)) || []
-  const found = list.find((p: any) => p.id === instanceId.value)
-  if (found) plan.value = found
-  else uni.showToast({ title: '计划不存在', icon: 'none' })
 }
 
 async function toggleComplete() {
-  if (plan.value.status === 'expired') return
-  await planApi.toggle(instanceId.value)
-  uni.showToast({ title: '已更新', icon: 'success' })
-  await loadPlan()
+  if (plan.value.status === 'expired' || toggling.value) return
+  toggling.value = true
+  try {
+    await planApi.toggle(instanceId.value)
+    uni.showToast({ title: '已更新', icon: 'success' })
+    await loadPlan(true)
+  } finally {
+    toggling.value = false
+  }
 }
 
 function goEdit() {
@@ -126,6 +185,8 @@ function goEdit() {
 }
 
 async function doDelete() {
+  if (deleting.value) return
+  deleting.value = true
   try {
     await planApi.remove(instanceId.value)
     deleteVisible.value = false
@@ -133,6 +194,8 @@ async function doDelete() {
     setTimeout(() => uni.navigateBack(), 600)
   } catch {
     // request 层已 toast
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -145,17 +208,17 @@ onLoad((opts: any) => {
   instanceId.value = opts?.id || ''
   planDate.value = opts?.planDate || localDateStr()
   if (!instanceId.value) {
+    loading.value = false
     uni.showToast({ title: '参数错误', icon: 'none' })
   }
 })
 
 onShow(() => {
-  if (instanceId.value) loadPlan()
+  if (instanceId.value) loadPlan(!!plan.value.id)
 })
 </script>
 <style scoped>
 /* page shell: .hai-page */
-.loading { text-align: center; padding: 80rpx; color: var(--hai-text-muted); }
 .status-bar { display: flex; justify-content: space-between; margin-bottom: 16rpx; }
 .priority { font-size: 24rpx; padding: 6rpx 16rpx; border-radius: 8rpx; background: var(--hai-border); color: var(--hai-text-secondary); }
 .priority.important { background: var(--hai-primary-soft); color: var(--hai-primary); }

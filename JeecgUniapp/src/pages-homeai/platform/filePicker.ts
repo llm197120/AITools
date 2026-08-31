@@ -1,9 +1,12 @@
 /**
- * HomeAI 平台文件选择适配器：小程序走 chooseMessageFile，APP 走 chooseFile，
- * Capacitor/H5 走 `<input type=file>`（accept 含 MIME，避免 Android 只出图片）
+ * HomeAI 平台文件选择适配器：
+ * Capacitor 原生走 ACTION_OPEN_DOCUMENT（系统文件管理），避免 WebView 只出相册视频；
+ * 小程序走 chooseMessageFile；APP-PLUS 走 chooseFile；浏览器 H5 走 `<input type=file>`。
  * 与 useHomeaiFilePick 的 pickFiles 结果形状保持一致（path/name/size）
  */
+import { pickCapacitorDocuments } from './capFilePick'
 import { buildAccept, resolveAppChooseType } from './fileAccept'
+import { isCapacitorNative } from './runtime'
 
 export interface PickedDocument {
   path: string
@@ -26,6 +29,20 @@ export interface PickDocumentOptions {
  * 成功返回文件数组，用户取消或平台不支持时 resolve([])
  */
 export function pickDocument(opts?: PickDocumentOptions): Promise<PickedDocument[]> {
+  if (isCapacitorNative()) {
+    return pickCapacitorDocuments(opts).catch((err) => {
+      const msg = String((err && (err as any).message) || err || '')
+      if (/not implemented|UNIMPLEMENTED|NOT_CAPACITOR/i.test(msg)) {
+        return pickDocumentWebOrUni(opts)
+      }
+      uni.showToast({ title: msg.replace(/^选择失败:\s*/, '') || '选择失败', icon: 'none' })
+      return []
+    })
+  }
+  return pickDocumentWebOrUni(opts)
+}
+
+function pickDocumentWebOrUni(opts?: PickDocumentOptions): Promise<PickedDocument[]> {
   const count = opts?.count ?? 1
   return new Promise((resolve) => {
     // #ifdef MP-WEIXIN
@@ -83,7 +100,8 @@ export function pickDocument(opts?: PickDocumentOptions): Promise<PickedDocument
     const input = document.createElement('input')
     input.type = 'file'
     input.multiple = count > 1
-    input.accept = buildAccept({ extension: opts?.extension, type: opts?.type })
+    // Capacitor 兜底：video/* 会被 WebView 收成相册；用 */* 尽量出系统文件选择
+    input.accept = isCapacitorNative() ? '*/*' : buildAccept({ extension: opts?.extension, type: opts?.type })
     input.style.position = 'fixed'
     input.style.left = '-9999px'
     const done = (files: PickedDocument[]) => {

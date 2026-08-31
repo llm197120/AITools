@@ -2,9 +2,17 @@
 <template>
   <view class="preview-page">
     <view v-if="loading" class="loading">加载中...</view>
+    <HomeEmpty
+      v-else-if="loadFailed"
+      title="预览加载失败"
+      hint="请检查网络后重试"
+      action-text="重试"
+      :card="true"
+      @action="reloadPreview"
+    />
     <template v-else>
       <text class="file-name">{{ fileName }}</text>
-      <text v-if="convertHint" class="convert-hint">{{ convertHint }}</text>
+      <text v-if="hint" class="convert-hint">{{ hint }}</text>
 
       <image
         v-if="mode === 'image'"
@@ -30,39 +38,45 @@
           <text class="pdf-page">{{ pdfPage }} / {{ pdfTotal }}</text>
           <wd-button size="small" :disabled="pdfPage >= pdfTotal" @click="changePdfPage(1)">下一页</wd-button>
         </view>
-        <wd-button v-if="pdfFailed" type="primary" @click="openDocument">系统打开</wd-button>
+        <wd-button v-if="pdfFailed" type="primary" @click="openDocument">用系统打开</wd-button>
       </view>
 
       <view v-else class="doc-box">
         <text class="doc-icon">📄</text>
-        <text class="doc-tip">{{ mode === 'office' ? 'Office 文档' : '文档文件' }}</text>
-        <wd-button type="primary" @click="openDocument">打开文档</wd-button>
+        <text class="doc-tip">{{ mode === 'office' ? '将用手机上的应用打开（如 WPS、微信）' : '将用手机上的应用打开' }}</text>
+        <wd-button type="primary" @click="openDocument">打开文件</wd-button>
       </view>
 
       <view class="action-bar">
-        <wd-button v-if="mode === 'image'" type="primary" block @click="handleSaveImage">
+        <wd-button v-if="mode === 'image'" type="primary" block :loading="acting" @click="handleSaveImage">
           保存到相册
         </wd-button>
-        <wd-button v-else-if="mode === 'video'" type="primary" block @click="handleDownload">
+        <wd-button v-else-if="mode === 'video'" type="primary" block :loading="acting" @click="handleDownload">
           保存视频到相册
         </wd-button>
-        <wd-button v-else type="primary" block @click="handleDownload">
-          下载文件
+        <wd-button v-else type="primary" block :loading="acting" @click="handleDownload">
+          打开文件
         </wd-button>
       </view>
     </template>
   </view>
 </template>
 <script lang="ts" setup>
-import { nextTick, onUnmounted, ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import NativeHtmlAudio from '../../pages-homeai/components/NativeHtmlAudio'
 import { storageApi } from '../../pages-homeai/api/storage'
 import { learnApi } from '../../pages-homeai/api/learn'
+import { resolveContentUrl } from '../../pages-homeai/utils/contentUrl'
 import { downloadStorageFile, saveStorageImage } from '../../pages-homeai/utils/fileDownload'
 import { getStorageDisplayName, normalizeStorageFile } from '../../pages-homeai/utils/storageFileDisplay'
-import { openLocalDocument } from '../../pages-homeai/platform/download'
+import { downloadToTemp, openLocalDocument } from '../../pages-homeai/platform/download'
+import { isCapacitorNative } from '../../pages-homeai/platform/runtime'
 import { fetchPdfBuffer, renderPdfPage } from '../../pages-homeai/utils/pdfPreview'
+import HomeEmpty from '../../components/HomeEmpty.vue'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+
+useHomeaiPageGuard()
 import {
   getFileExt,
   isAudioExt,
@@ -77,6 +91,9 @@ import {
 type PreviewMode = 'image' | 'video' | 'audio' | 'text' | 'pdf' | 'office' | 'other'
 
 const loading = ref(true)
+const loadFailed = ref(false)
+const acting = ref(false)
+let lastOpts: any = null
 const fileId = ref('')
 const materialId = ref('')
 const fileUrl = ref('')
@@ -85,12 +102,11 @@ const fileExt = ref('')
 const mode = ref<PreviewMode>('other')
 const textContent = ref('')
 const tempFilePath = ref('')
-const convertHint = ref('')
+const hint = ref('')
 const pdfPage = ref(1)
 const pdfTotal = ref(1)
 const pdfFailed = ref(false)
 let pdfBuffer: ArrayBuffer | null = null
-let pollTimer: ReturnType<typeof setInterval> | null = null
 
 function detectMode(name: string, ext?: string, kind?: string): PreviewMode {
   if (kind === 'image' || kind === 'video' || kind === 'audio' || kind === 'text' || kind === 'pdf' || kind === 'office') {
@@ -109,53 +125,47 @@ function detectMode(name: string, ext?: string, kind?: string): PreviewMode {
 function fileInput() {
   return {
     id: fileId.value || undefined,
+    materialId: materialId.value || undefined,
     fileUrl: fileUrl.value,
     originalName: fileName.value,
     extension: fileExt.value,
   }
 }
 
-function stopPoll() {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
+/** 文档/PDF/文本走后端鉴权流，避免 OSS 预签名在 WebView 里被 CORS 拦 */
+function contentOrFileUrl(): string {
+  return resolveContentUrl({
+    id: fileId.value || undefined,
+    materialId: materialId.value || undefined,
+    fileUrl: fileUrl.value,
+  })
 }
 
 async function loadTextContent(url: string) {
-  try {
-    if (typeof fetch === 'function') {
-      const res = await fetch(url)
-      textContent.value = await res.text()
-      return
-    }
-  } catch {
-    // 回退下载
+  const temp = await downloadToTemp(url, fileName.value || 'text.txt')
+  tempFilePath.value = temp
+  if (isCapacitorNative() && !/^https?:\/\//i.test(temp)) {
+    const { capacitorReadBase64, base64ToUtf8 } = await import('../../pages-homeai/platform/capDownload')
+    textContent.value = base64ToUtf8(await capacitorReadBase64(temp))
+    return
   }
-  return new Promise<void>((resolve, reject) => {
-    uni.downloadFile({
-      url,
-      success: (res) => {
-        if (res.statusCode !== 200) {
-          reject(new Error('下载失败'))
-          return
-        }
-        tempFilePath.value = res.tempFilePath
-        const fsm: any = uni.getFileSystemManager?.()
-        if (!fsm) {
-          textContent.value = '当前平台不支持文本预览，请下载查看'
-          resolve()
-          return
-        }
-        fsm.readFile({
-          filePath: res.tempFilePath,
-          encoding: 'utf-8',
-          success: (r: any) => {
-            textContent.value = typeof r.data === 'string' ? r.data : String(r.data)
-            resolve()
-          },
-          fail: reject,
-        })
+  if (typeof fetch === 'function' && /^https?:\/\//i.test(temp)) {
+    const res = await fetch(temp)
+    textContent.value = await res.text()
+    return
+  }
+  const fsm: any = uni.getFileSystemManager?.()
+  if (!fsm) {
+    textContent.value = '当前平台不支持文本预览，请下载查看'
+    return
+  }
+  await new Promise<void>((resolve, reject) => {
+    fsm.readFile({
+      filePath: temp,
+      encoding: 'utf-8',
+      success: (r: any) => {
+        textContent.value = typeof r.data === 'string' ? r.data : String(r.data)
+        resolve()
       },
       fail: reject,
     })
@@ -175,7 +185,7 @@ async function showPdf(url: string) {
     pdfTotal.value = await renderPdfPage(pdfBuffer, canvas, pdfPage.value)
   } catch {
     pdfFailed.value = true
-    convertHint.value = '页内预览失败，可尝试系统打开'
+    hint.value = '页内预览失败，可尝试用系统打开'
   }
 }
 
@@ -188,54 +198,15 @@ async function changePdfPage(delta: number) {
   if (canvas) await renderPdfPage(pdfBuffer, canvas, pdfPage.value)
 }
 
-function applyKind(kind?: string, previewPdfUrl?: string) {
-  mode.value = detectMode(fileName.value, fileExt.value, kind)
-  if (mode.value === 'office' && previewPdfUrl) {
-    fileUrl.value = previewPdfUrl
-    mode.value = 'pdf'
+function applyPreviewMeta(data?: any) {
+  if (data?.fileName) fileName.value = data.fileName
+  if (data?.extension) fileExt.value = data.extension
+  const next = detectMode(fileName.value, fileExt.value, data?.kind)
+  // 图片展示沿用列表/详情的压缩图；文档必须用原文件，不再转 PDF
+  if (data?.fileUrl && (next !== 'image' || !fileUrl.value)) {
+    fileUrl.value = data.fileUrl
   }
-}
-
-async function pollPreview(getPreview: () => Promise<any>) {
-  stopPoll()
-  convertHint.value = '正在转换为 PDF…'
-  pollTimer = setInterval(async () => {
-    try {
-      const data = await getPreview()
-      if (data?.previewPdfUrl) {
-        stopPoll()
-        convertHint.value = ''
-        fileUrl.value = data.previewPdfUrl
-        mode.value = 'pdf'
-        await showPdf(data.previewPdfUrl)
-      } else if (data?.convertStatus === 'FAILED') {
-        stopPoll()
-        convertHint.value = data.errorMessage || '转换失败，请下载或系统打开'
-        mode.value = 'office'
-      }
-    } catch {
-      stopPoll()
-    }
-  }, 3000)
-}
-
-async function ensureOfficePdf(getPreview: () => Promise<any>, startConvert: () => Promise<any>) {
-  const data = await getPreview()
-  applyKind(data?.kind, data?.previewPdfUrl)
-  if (data?.fileUrl) fileUrl.value = data.fileUrl
-  if (mode.value === 'pdf' && data?.previewPdfUrl) {
-    await showPdf(data.previewPdfUrl)
-    return
-  }
-  if (mode.value !== 'office') return
-  const started = await startConvert()
-  if (started?.previewPdfUrl) {
-    fileUrl.value = started.previewPdfUrl
-    mode.value = 'pdf'
-    await showPdf(started.previewPdfUrl)
-    return
-  }
-  await pollPreview(getPreview)
+  mode.value = next
 }
 
 function previewFullImage() {
@@ -243,23 +214,38 @@ function previewFullImage() {
 }
 
 function openDocument() {
-  const open = (path: string) => openLocalDocument(path)
-  if (tempFilePath.value) {
-    open(tempFilePath.value)
+  if (tempFilePath.value && !/^https?:\/\//i.test(tempFilePath.value)) {
+    openLocalDocument(tempFilePath.value, fileName.value)
     return
   }
   handleDownload()
 }
 
 async function handleSaveImage() {
-  await saveStorageImage(fileInput())
+  if (acting.value) return
+  acting.value = true
+  try {
+    await saveStorageImage(fileInput())
+  } finally {
+    acting.value = false
+  }
 }
 
 async function handleDownload() {
-  await downloadStorageFile(fileInput())
+  if (acting.value) return
+  acting.value = true
+  try {
+    const path = await downloadStorageFile(fileInput())
+    if (path) tempFilePath.value = path
+  } finally {
+    acting.value = false
+  }
 }
 
-onLoad(async (opts: any) => {
+async function loadPreview(opts: any) {
+  lastOpts = opts
+  loading.value = true
+  loadFailed.value = false
   try {
     if (opts?.fileId) {
       fileId.value = opts.fileId
@@ -267,19 +253,10 @@ onLoad(async (opts: any) => {
       fileUrl.value = file.fileUrl || ''
       fileName.value = getStorageDisplayName(file)
       fileExt.value = file.extension || getFileExt(fileName.value)
-      await ensureOfficePdf(
-        () => storageApi.preview(fileId.value),
-        () => storageApi.previewPdf(fileId.value),
-      )
-      if (mode.value === 'other' || !opts) {
-        mode.value = detectMode(fileName.value, fileExt.value)
-      }
+      applyPreviewMeta(await storageApi.preview(fileId.value))
     } else if (opts?.materialId) {
       materialId.value = opts.materialId
-      await ensureOfficePdf(
-        () => learnApi.preview(materialId.value),
-        () => learnApi.previewPdf(materialId.value),
-      )
+      applyPreviewMeta(await learnApi.preview(materialId.value))
       if (!fileName.value) fileName.value = decodeURIComponent(opts.name || '学习资料')
     } else if (opts?.url) {
       fileUrl.value = decodeURIComponent(opts.url)
@@ -288,26 +265,27 @@ onLoad(async (opts: any) => {
       mode.value = detectMode(fileName.value, fileExt.value)
     }
     uni.setNavigationBarTitle({ title: (fileName.value || '预览').substring(0, 12) })
-    if (mode.value === 'text' && fileUrl.value) {
-      await loadTextContent(fileUrl.value)
-    } else if (mode.value === 'pdf' && fileUrl.value && !pdfBuffer) {
-      await showPdf(fileUrl.value)
-    } else if ((mode.value === 'office' || mode.value === 'other') && fileUrl.value) {
-      uni.downloadFile({
-        url: fileUrl.value,
-        success: (res) => {
-          if (res.statusCode === 200) tempFilePath.value = res.tempFilePath
-        },
-      })
+    const sourceUrl = contentOrFileUrl()
+    if (mode.value === 'text' && sourceUrl) {
+      await loadTextContent(sourceUrl)
+    } else if (mode.value === 'pdf' && sourceUrl && !pdfBuffer) {
+      await showPdf(sourceUrl)
     }
   } catch (e: any) {
+    loadFailed.value = true
     uni.showToast({ title: e.message || '加载失败', icon: 'none' })
   } finally {
     loading.value = false
   }
-})
+}
 
-onUnmounted(() => stopPoll())
+function reloadPreview() {
+  if (lastOpts) loadPreview(lastOpts)
+}
+
+onLoad((opts: any) => {
+  loadPreview(opts || {})
+})
 </script>
 <style scoped>
 .preview-page { min-height: 100vh; background: var(--hai-bg); padding: 24rpx 32rpx 160rpx; box-sizing: border-box; }

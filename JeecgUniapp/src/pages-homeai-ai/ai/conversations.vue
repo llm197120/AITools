@@ -3,13 +3,28 @@
   style: {
     navigationBarTitleText: 'AI对话',
     navigationBarBackgroundColor: '#F3F2EE',
+    enablePullDownRefresh: true,
+    onReachBottomDistance: 80,
   },
 }
 </route>
 
 <template>
   <view class="conversations-page">
-    <view v-if="!loading && list.length === 0" class="empty-wrap">
+    <view v-if="loading && list.length === 0" class="empty-wrap">
+      <HomeSkeleton variant="list" :rows="4" />
+    </view>
+    <view v-else-if="!loading && loadFailed" class="empty-wrap">
+      <HomeEmpty
+        icon-name="chat"
+        title="加载失败"
+        hint="请检查网络后重试"
+        action-text="重试"
+        :card="false"
+        @action="loadList"
+      />
+    </view>
+    <view v-else-if="!loading && list.length === 0" class="empty-wrap">
       <HomeEmpty
         icon-name="chat"
         title="暂无对话"
@@ -48,8 +63,13 @@
         </view>
       </view>
     </view>
+    <view v-if="list.length > 0" class="load-more-wrap">
+      <view v-if="loadingMore" class="load-more-tip">加载中...</view>
+      <view v-else-if="hasMore" class="load-more-btn" @click="loadMore">加载更多</view>
+      <view v-else class="load-more-tip">没有更多了</view>
+    </view>
 
-    <view class="hai-fab" @click="createAndGo()">
+    <view class="hai-fab" :class="{ disabled: creating }" @click="createAndGo()">
       <wd-icon name="add" size="24px" color="#fff"></wd-icon>
     </view>
   </view>
@@ -57,15 +77,24 @@
 
 <script lang="ts" setup>
 import { reactive, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi, put as putApi, del as delApi } from '../../pages-homeai/api/request'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
 import HomeEmpty from '../../components/HomeEmpty.vue'
+import HomeSkeleton from '../../components/HomeSkeleton.vue'
 
 useHomeaiPageGuard()
+useHomeaiPullRefresh(() => loadList(true))
 
 const list = ref<any[]>([])
-const loading = ref(false)
+const loading = ref(true)
+const loadFailed = ref(false)
+const creating = ref(false)
+const PAGE_SIZE = 20
+const pageNo = ref(1)
+const hasMore = ref(true)
+const loadingMore = ref(false)
 const offsets = reactive<Record<string, number>>({})
 const ACTION_WIDTH = 160
 const startX = ref(0)
@@ -73,17 +102,53 @@ const startOffset = ref(0)
 const activeId = ref('')
 const moved = ref(false)
 
-onShow(loadList)
+onShow(() => loadList(true, list.value.length > 0))
+onReachBottom(() => loadMore())
 
-async function loadList() {
-  loading.value = true
+function loadMore() {
+  loadList(false)
+}
+
+async function loadList(reset = true, silent = false) {
+  if (!reset && (loadingMore.value || !hasMore.value)) return
+  if (reset) {
+    if (!silent) loading.value = true
+    loadFailed.value = false
+    pageNo.value = 1
+    hasMore.value = true
+  } else {
+    loadingMore.value = true
+  }
   try {
-    list.value = await getApi('/ai/conversations/mine')
-    for (const key of Object.keys(offsets)) delete offsets[key]
+    const nextPage = reset ? 1 : pageNo.value + 1
+    const res: any = await getApi('/ai/conversations/mine', {
+      pageNo: String(nextPage),
+      pageSize: String(PAGE_SIZE),
+    })
+    const records: any[] = Array.isArray(res) ? res : (res?.records || [])
+    list.value = reset ? records : list.value.concat(records)
+    pageNo.value = nextPage
+    if (Array.isArray(res)) {
+      hasMore.value = false
+    } else {
+      const total = res?.total
+      hasMore.value = typeof total === 'number' ? list.value.length < total : records.length >= PAGE_SIZE
+    }
+    if (reset) {
+      for (const key of Object.keys(offsets)) delete offsets[key]
+    }
   } catch (e) {
     console.error('加载对话列表失败', e)
+    if (reset) {
+      loadFailed.value = list.value.length === 0
+      if (!silent) list.value = []
+      else uni.showToast({ title: '刷新失败', icon: 'none' })
+    } else {
+      uni.showToast({ title: '加载更多失败', icon: 'none' })
+    }
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
 }
 
@@ -98,17 +163,24 @@ function formatTime(dateStr: string) {
 }
 
 async function createAndGo(tip?: string) {
+  if (creating.value) return
+  creating.value = true
   try {
     const conv = await postApi('/ai/conversations', {})
-    goChat(conv.id, tip)
+    goChat(conv.id, tip, conv.title)
   } catch (e) {
     console.error('创建对话失败', e)
+    uni.showToast({ title: '创建对话失败', icon: 'none' })
+  } finally {
+    creating.value = false
   }
 }
 
-function goChat(id: string, initialMsg?: string) {
-  const url = `/pages-homeai-ai/ai/chat?id=${id}${initialMsg ? '&initial=' + encodeURIComponent(initialMsg) : ''}`
-  uni.navigateTo({ url })
+function goChat(id: string, initialMsg?: string, title?: string) {
+  const parts = [`id=${id}`]
+  if (initialMsg) parts.push('initial=' + encodeURIComponent(initialMsg))
+  if (title) parts.push('title=' + encodeURIComponent(title))
+  uni.navigateTo({ url: `/pages-homeai-ai/ai/chat?${parts.join('&')}` })
 }
 
 function closeOthers(exceptId: string) {
@@ -151,7 +223,7 @@ function onItemClick(item: any) {
     offsets[item.id] = 0
     return
   }
-  goChat(item.id)
+  goChat(item.id, undefined, item.title)
 }
 
 function renameItem(item: any) {
@@ -161,10 +233,14 @@ function renameItem(item: any) {
     editable: true,
     content: item.title,
     success: async (res) => {
-      if (res.confirm && res.content) {
-        await putApi(`/ai/conversations/${item.id}/rename`, { params: { title: res.content } })
-        await loadList()
+      if (!res.confirm) return
+      const title = String(res.content || '').trim()
+      if (!title) {
+        uni.showToast({ title: '请输入名称', icon: 'none' })
+        return
       }
+      await putApi(`/ai/conversations/${item.id}/rename`, { params: { title } })
+      await loadList(true)
     },
   })
 }
@@ -177,7 +253,7 @@ function deleteItem(item: any) {
     success: async (res) => {
       if (res.confirm) {
         await delApi(`/ai/conversations/${item.id}`)
-        await loadList()
+        await loadList(true)
       }
     },
   })
@@ -248,6 +324,24 @@ function deleteItem(item: any) {
 }
 .empty-wrap {
   padding: 48rpx 32rpx 120rpx;
+}
+.load-more-wrap {
+  width: 100%;
+  padding: 8rpx 0 140rpx;
+  text-align: center;
+}
+.load-more-btn {
+  display: inline-block;
+  padding: 16rpx 48rpx;
+  font-size: 26rpx;
+  color: var(--hai-primary);
+  background: var(--hai-card);
+  border-radius: 999rpx;
+  box-shadow: var(--hai-shadow);
+}
+.load-more-tip {
+  font-size: 24rpx;
+  color: var(--hai-text-muted);
 }
 .empty-actions {
   padding-top: 28rpx;

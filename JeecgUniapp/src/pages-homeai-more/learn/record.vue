@@ -1,4 +1,4 @@
-<route lang="json5">{ style: { navigationBarTitleText: '学习记录', navigationBarBackgroundColor: '#F3F2EE' } }</route>
+<route lang="json5">{ style: { navigationBarTitleText: '学习记录', navigationBarBackgroundColor: '#F3F2EE', enablePullDownRefresh: true } }</route>
 <template>
   <view class="hai-page">
     <view class="month-bar">
@@ -10,33 +10,70 @@
       <text v-for="w in weekLabels" :key="w" class="w">{{ w }}</text>
     </view>
     <view class="grid">
-      <view v-for="(cell, i) in calendarCells" :key="i" class="cell" :class="{ empty: !cell.date, studied: cell.studied }">
+      <view
+        v-for="(cell, i) in calendarCells"
+        :key="i"
+        class="cell"
+        :class="{ empty: !cell.date, studied: cell.studied, selected: cell.date === selectedDate, today: cell.isToday }"
+        @click="cell.date && selectDate(cell.date)"
+      >
         <text v-if="cell.date">{{ cell.day }}</text>
       </view>
     </view>
     <view class="records">
-      <view class="record" v-for="r in records" :key="r.id">
-        <text class="title">{{ r.materialTitle || r.title || '学习记录' }}</text>
-        <text class="meta">{{ formatDuration(r.duration) }} · {{ formatDate(r.startTime || r.createTime) }}</text>
-        <text v-if="r.notes" class="notes">{{ r.notes }}</text>
-      </view>
-      <HomeEmpty v-if="records.length === 0" title="暂无学习记录" />
+      <view v-if="loading"><HomeSkeleton variant="list" :rows="3" /></view>
+      <HomeEmpty
+        v-else-if="loadFailed"
+        title="记录加载失败"
+        hint="请检查网络后重试"
+        action-text="重试"
+        @action="loadData"
+      />
+      <template v-else>
+        <view v-if="selectedDate" class="list-head">
+          <text>{{ selectedDate }} · {{ displayedRecords.length }} 条</text>
+          <text class="clear-day" @click="selectedDate = ''">看全月</text>
+        </view>
+        <view class="record" v-for="r in displayedRecords" :key="r.id">
+          <text class="title">{{ r.materialTitle || r.title || '学习记录' }}</text>
+          <text class="meta">{{ formatDuration(r.duration) }} · {{ formatDate(r.startTime || r.createTime) }}</text>
+          <text v-if="r.notes" class="notes">{{ r.notes }}</text>
+        </view>
+        <HomeEmpty v-if="displayedRecords.length === 0" :title="emptyTitle" />
+      </template>
     </view>
   </view>
 </template>
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { learnApi } from '../../pages-homeai/api/learn'
+import { addMonths, localDateStr, toDateStr, toDateTimeStr } from '../../pages-homeai/utils/date'
 import HomeEmpty from '../../components/HomeEmpty.vue'
+import HomeSkeleton from '../../components/HomeSkeleton.vue'
+import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
+import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
+
+useHomeaiPageGuard()
+useHomeaiPullRefresh(() => loadData())
 
 const viewYear = ref(new Date().getFullYear())
 const viewMonth = ref(new Date().getMonth() + 1)
 const studyDates = ref<string[]>([])
 const records = ref<any[]>([])
+const selectedDate = ref('')
+const loading = ref(true)
+const loadFailed = ref(false)
 const weekLabels = ['日', '一', '二', '三', '四', '五', '六']
+const todayStr = localDateStr()
 
 const yearMonthParam = computed(() => `${viewYear.value}-${String(viewMonth.value).padStart(2, '0')}`)
+const isCurrentMonth = computed(() => yearMonthParam.value === todayStr.slice(0, 7))
+const displayedRecords = computed(() => records.value)
+const emptyTitle = computed(() => {
+  if (selectedDate.value) return `${selectedDate.value} 暂无学习记录`
+  return isCurrentMonth.value ? '本月暂无学习记录' : `${viewYear.value}年${viewMonth.value}月暂无学习记录`
+})
 
 const calendarCells = computed(() => {
   const first = new Date(viewYear.value, viewMonth.value - 1, 1)
@@ -46,7 +83,7 @@ const calendarCells = computed(() => {
   for (let i = 0; i < startWeek; i++) cells.push({})
   for (let d = 1; d <= lastDay; d++) {
     const date = `${yearMonthParam.value}-${String(d).padStart(2, '0')}`
-    cells.push({ date, day: d, studied: studyDates.value.includes(date) })
+    cells.push({ date, day: d, studied: studyDates.value.includes(date), isToday: date === todayStr })
   }
   return cells
 })
@@ -57,29 +94,71 @@ function formatDuration(sec: number) {
 }
 
 function formatDate(t: string) {
-  return t ? String(t).substring(0, 16).replace('T', ' ') : ''
+  return toDateTimeStr(t)
 }
 
-async function loadData() {
-  studyDates.value = (await learnApi.calendar(yearMonthParam.value)) || []
-  const all = (await learnApi.records()) || []
-  records.value = all.filter((r: any) => {
-    const d = String(r.startTime || r.createTime || '').substring(0, 7)
-    return d === yearMonthParam.value
-  })
+let loadSeq = 0
+
+async function loadData(silent = false) {
+  const seq = ++loadSeq
+  if (!silent) loading.value = true
+  loadFailed.value = false
+  try {
+    const dates = ((await learnApi.calendar(yearMonthParam.value)) || []).map(toDateStr).filter(Boolean)
+    const list =
+      (await learnApi.records({
+        yearMonth: yearMonthParam.value,
+        studyDate: selectedDate.value || undefined,
+      })) || []
+    if (seq !== loadSeq) return
+    studyDates.value = dates
+    records.value = list
+  } catch {
+    if (seq !== loadSeq) return
+    loadFailed.value = records.value.length === 0
+    if (!silent) {
+      records.value = []
+      studyDates.value = []
+    }
+  } finally {
+    if (seq === loadSeq) loading.value = false
+  }
+}
+
+function selectDate(date: string) {
+  selectedDate.value = selectedDate.value === date ? '' : date
+  loadData(records.value.length > 0)
+}
+
+function shiftMonth(delta: number) {
+  const next = addMonths(yearMonthParam.value, delta)
+  viewYear.value = Number(next.slice(0, 4))
+  viewMonth.value = Number(next.slice(5, 7))
+  selectedDate.value = ''
+  records.value = []
+  studyDates.value = []
+  loading.value = true
+  loadData()
 }
 
 function prevMonth() {
-  if (viewMonth.value === 1) { viewMonth.value = 12; viewYear.value-- } else viewMonth.value--
-  loadData()
+  shiftMonth(-1)
 }
 
 function nextMonth() {
-  if (viewMonth.value === 12) { viewMonth.value = 1; viewYear.value++ } else viewMonth.value++
-  loadData()
+  shiftMonth(1)
 }
 
-onShow(loadData)
+onLoad((opts: any) => {
+  const date = String(opts?.date || '')
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    viewYear.value = Number(date.slice(0, 4))
+    viewMonth.value = Number(date.slice(5, 7))
+    selectedDate.value = date
+  }
+})
+
+onShow(() => loadData(records.value.length > 0))
 </script>
 <style scoped>
 /* page shell: .hai-page */
@@ -92,7 +171,11 @@ onShow(loadData)
 .cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 8rpx; font-size: 24rpx; color: var(--hai-text); }
 .cell.empty { visibility: hidden; }
 .cell.studied { background: var(--hai-success-soft); color: var(--hai-success); font-weight: 600; }
+.cell.today:not(.selected) { border: 2rpx solid var(--hai-primary); }
+.cell.selected { background: var(--hai-primary); color: var(--hai-on-primary); font-weight: 600; }
 .records { background: var(--hai-card); border-radius: 28rpx; padding: 16rpx; box-shadow: var(--hai-shadow); }
+.list-head { display: flex; justify-content: space-between; align-items: center; padding: 8rpx 8rpx 12rpx; font-size: 24rpx; color: var(--hai-text-secondary); }
+.clear-day { color: var(--hai-primary); }
 .record { padding: 20rpx 8rpx; border-bottom: 1rpx solid var(--hai-border); }
 .title { font-size: 28rpx; color: var(--hai-text); display: block; }
 .meta { font-size: 22rpx; color: var(--hai-text-muted); display: block; margin-top: 6rpx; }

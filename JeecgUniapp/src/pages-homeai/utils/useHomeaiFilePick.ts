@@ -1,8 +1,9 @@
 /**
  * HomeAI 统一文件选择：白名单校验 + chooseMessageFile / 图片 / 视频
  */
-import { AUDIO_EXTS, extensionFromMime } from '../platform/fileAccept'
+import { AUDIO_EXTS, VIDEO_EXTS, extensionFromMime } from '../platform/fileAccept'
 import { pickDocument } from '../platform/filePicker'
+import { isCapacitorNative } from '../platform/runtime'
 import { getExtension, preloadWhitelist, validateUploadFile } from './fileWhitelist'
 
 export interface HomeaiPickedFile {
@@ -124,11 +125,32 @@ export function useHomeaiFilePick() {
     })
   }
 
-  /** 选择视频 + 白名单 */
+  /** 选择视频 + 白名单。Capacitor 走系统文件选择器，避免 uni.chooseVideo 只出相册 */
   async function pickVideo(opts?: {
     sourceType?: Array<'album' | 'camera'>
     maxDuration?: number
   }): Promise<HomeaiPickedFile[]> {
+    if (isCapacitorNative()) {
+      const files = await pickFiles({
+        count: 1,
+        type: 'video',
+        extension: [...VIDEO_EXTS],
+        allowedExt: [...VIDEO_EXTS],
+      })
+      const max = opts?.maxDuration
+      if (max && files[0]?.path) {
+        try {
+          const info: any = await uni.getVideoInfo({ src: files[0].path })
+          if (info?.duration && Number(info.duration) > max) {
+            uni.showToast({ title: `视频不能超过 ${max} 秒`, icon: 'none' })
+            return []
+          }
+        } catch {
+          // 无法读时长则放行，由后端再限
+        }
+      }
+      return files
+    }
     return new Promise((resolve) => {
       uni.chooseVideo({
         sourceType: opts?.sourceType || ['album', 'camera'],
