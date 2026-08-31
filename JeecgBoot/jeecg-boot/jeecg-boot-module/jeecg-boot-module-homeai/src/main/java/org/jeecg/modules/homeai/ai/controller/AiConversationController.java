@@ -65,11 +65,20 @@ public class AiConversationController {
 
     /**
      * 获取当前用户对话列表（小程序端）
+     * 传入 pageNo+pageSize 时返回分页；否则保持全量 List（兼容旧客户端）
      */
     @GetMapping("/mine")
-    public Result<?> getMyConversations(HttpServletRequest request) {
+    public Result<?> getMyConversations(
+            @RequestParam(required = false) Integer pageNo,
+            @RequestParam(required = false) Integer pageSize,
+            HttpServletRequest request) {
         String userId = getAppUserId(request);
         if (userId == null) return Result.error("未登录");
+        //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R111】对话列表可选分页---
+        if (pageNo != null && pageSize != null) {
+            return Result.OK(conversationService.pageUserConversations(userId, pageNo, pageSize));
+        }
+        //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R111】对话列表可选分页---
         List<AiConversation> list = conversationService.getUserConversations(userId);
         return Result.OK(list);
     }

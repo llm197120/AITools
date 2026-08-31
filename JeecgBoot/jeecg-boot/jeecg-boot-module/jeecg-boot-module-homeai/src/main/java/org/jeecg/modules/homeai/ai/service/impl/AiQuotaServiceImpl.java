@@ -4,12 +4,14 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
+import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.RedisUtil;
 import org.jeecg.modules.homeai.ai.entity.AiUserQuota;
 import org.jeecg.modules.homeai.ai.entity.AiQuotaLog;
 import org.jeecg.modules.homeai.ai.mapper.AiUserQuotaMapper;
 import org.jeecg.modules.homeai.ai.mapper.AiQuotaLogMapper;
 import org.jeecg.modules.homeai.ai.service.IAiQuotaService;
+import org.jeecg.modules.homeai.ai.util.AiQuotaLimitUtil;
 import org.jeecg.modules.homeai.ai.vo.AiQuotaUsageVO;
 import org.jeecg.modules.homeai.user.entity.WxUser;
 import org.jeecg.modules.homeai.user.service.IWxUserService;
@@ -58,8 +60,11 @@ public class AiQuotaServiceImpl implements IAiQuotaService {
     @Override
     public Map<String, Object> checkQuota(String userId, int estimatedInputTokens, int estimatedOutputTokens) {
         AiUserQuota quota = getOrCreateUserQuota(userId);
-        int dailyLimit = quota.getDailyLimit() != null ? quota.getDailyLimit() : DEFAULT_DAILY_LIMIT;
-        int monthlyLimit = quota.getMonthlyLimit() != null ? quota.getMonthlyLimit() : DEFAULT_MONTHLY_LIMIT;
+        Date now = new Date();
+        //update-begin---author:cursor---date:2026-08-22---for:【审查B】预检用真实限额，取消日限额硬编码透支-----------
+        int dailyLimit = AiQuotaLimitUtil.resolveDailyLimit(quota, DEFAULT_DAILY_LIMIT, now);
+        int monthlyLimit = AiQuotaLimitUtil.resolveMonthlyLimit(quota, DEFAULT_MONTHLY_LIMIT, now);
+        //update-end---author:cursor---date:2026-08-22---for:【审查B】预检用真实限额，取消日限额硬编码透支-----------
         int dailyConsumed = getDailyConsumed(userId);
         int monthlyConsumed = getMonthlyConsumed(userId);
         int estimatedTotal = estimatedInputTokens + estimatedOutputTokens;
@@ -69,7 +74,7 @@ public class AiQuotaServiceImpl implements IAiQuotaService {
         result.put("remainingMonthly", Math.max(0, monthlyLimit - monthlyConsumed));
 
         // 预检：预估消耗 + 已消耗 是否超过限额
-        if (dailyConsumed + estimatedTotal > dailyLimit + 1000) { // 允许透支1000
+        if (dailyConsumed + estimatedTotal > dailyLimit) {
             result.put("allowed", false);
             result.put("message", "今日Token额度即将用完，请缩短消息或等待额度重置");
             return result;
@@ -89,23 +94,42 @@ public class AiQuotaServiceImpl implements IAiQuotaService {
     public void deductQuota(String userId, String conversationId, String modelName,
                             int inputTokens, int outputTokens) {
         int total = inputTokens + outputTokens;
+        if (total <= 0) {
+            return;
+        }
+
+        AiUserQuota quota = getOrCreateUserQuota(userId);
+        Date now = new Date();
+        int dailyLimit = AiQuotaLimitUtil.resolveDailyLimit(quota, DEFAULT_DAILY_LIMIT, now);
+        int monthlyLimit = AiQuotaLimitUtil.resolveMonthlyLimit(quota, DEFAULT_MONTHLY_LIMIT, now);
 
         // Redis 原子计数
         String dailyKey = QUOTA_DAILY_KEY + userId;
         String monthlyKey = QUOTA_MONTHLY_KEY + userId;
 
         // 设置过期时间（今日剩余秒数 / 本月剩余秒数）
-        LocalDateTime now = LocalDateTime.now();
-        long dailyExpire = LocalDateTime.of(now.toLocalDate(), LocalTime.MAX).atZone(ZoneId.systemDefault()).toEpochSecond()
-                - now.atZone(ZoneId.systemDefault()).toEpochSecond();
-        long monthlyExpire = LocalDateTime.of(now.getYear(), now.getMonth(), 1, 0, 0)
+        LocalDateTime localNow = LocalDateTime.now();
+        long dailyExpire = LocalDateTime.of(localNow.toLocalDate(), LocalTime.MAX).atZone(ZoneId.systemDefault()).toEpochSecond()
+                - localNow.atZone(ZoneId.systemDefault()).toEpochSecond();
+        long monthlyExpire = LocalDateTime.of(localNow.getYear(), localNow.getMonth(), 1, 0, 0)
                 .plusMonths(1).atZone(ZoneId.systemDefault()).toEpochSecond()
-                - now.atZone(ZoneId.systemDefault()).toEpochSecond();
+                - localNow.atZone(ZoneId.systemDefault()).toEpochSecond();
 
-        redisUtil.incr(dailyKey, total);
+        //update-begin---author:cursor---date:2026-08-22---for:【审查B】配额原子扣减后二次比较，超额回滚-----------
+        long afterDaily = redisUtil.incr(dailyKey, total);
         redisUtil.expire(dailyKey, dailyExpire);
-        redisUtil.incr(monthlyKey, total);
+        if (afterDaily > dailyLimit) {
+            redisUtil.decr(dailyKey, total);
+            throw new JeecgBootException("今日Token额度已用完，请缩短消息或等待额度重置");
+        }
+        long afterMonthly = redisUtil.incr(monthlyKey, total);
         redisUtil.expire(monthlyKey, monthlyExpire);
+        if (afterMonthly > monthlyLimit) {
+            redisUtil.decr(monthlyKey, total);
+            redisUtil.decr(dailyKey, total);
+            throw new JeecgBootException("本月Token额度已用完，下月自动重置");
+        }
+        //update-end---author:cursor---date:2026-08-22---for:【审查B】配额原子扣减后二次比较，超额回滚-----------
 
         // DB 持久化记录
         AiQuotaLog logRecord = new AiQuotaLog();
@@ -122,9 +146,9 @@ public class AiQuotaServiceImpl implements IAiQuotaService {
 
     @Override
     public int getDailyConsumed(String userId) {
-        Integer cached = (Integer) redisUtil.get(QUOTA_DAILY_KEY + userId);
-        if (cached != null) {
-            return cached;
+        Object cached = redisUtil.get(QUOTA_DAILY_KEY + userId);
+        if (cached instanceof Number) {
+            return AiQuotaLimitUtil.toConsumed(cached);
         }
         // 从 DB 计算今日消耗并回填 Redis
         LocalDate today = LocalDate.now();
@@ -142,9 +166,9 @@ public class AiQuotaServiceImpl implements IAiQuotaService {
 
     @Override
     public int getMonthlyConsumed(String userId) {
-        Integer cached = (Integer) redisUtil.get(QUOTA_MONTHLY_KEY + userId);
-        if (cached != null) {
-            return cached;
+        Object cached = redisUtil.get(QUOTA_MONTHLY_KEY + userId);
+        if (cached instanceof Number) {
+            return AiQuotaLimitUtil.toConsumed(cached);
         }
         LocalDate now = LocalDate.now();
         Date start = Date.from(now.withDayOfMonth(1).atStartOfDay(ZoneId.systemDefault()).toInstant());

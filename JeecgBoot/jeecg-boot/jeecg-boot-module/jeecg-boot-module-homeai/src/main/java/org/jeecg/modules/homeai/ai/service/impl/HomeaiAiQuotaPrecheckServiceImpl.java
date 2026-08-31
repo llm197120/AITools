@@ -4,13 +4,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.ai.constant.HomeaiAiQuotaScene;
+import org.jeecg.modules.homeai.ai.entity.AiUserQuota;
 import org.jeecg.modules.homeai.ai.service.IAiQuotaService;
 import org.jeecg.modules.homeai.ai.service.IHomeaiAiQuotaPrecheckService;
+import org.jeecg.modules.homeai.ai.util.AiQuotaLimitUtil;
 import org.jeecg.modules.homeai.ai.util.HomeaiAiQuotaEstimateUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiPlanConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -90,9 +93,15 @@ public class HomeaiAiQuotaPrecheckServiceImpl implements IHomeaiAiQuotaPrecheckS
     }
 
     private void enrichLimits(String userId, Map<String, Object> result) {
+        //update-begin---author:cursor---date:2026-08-22---for:【审查B】预检展示用户真实限额-----------
         Map<String, Integer> defaults = quotaService.getDefaultQuota();
-        result.put("dailyLimit", defaults.get("dailyLimit"));
-        result.put("monthlyLimit", defaults.get("monthlyLimit"));
+        int defaultDaily = defaults.getOrDefault("dailyLimit", 10000);
+        int defaultMonthly = defaults.getOrDefault("monthlyLimit", 200000);
+        AiUserQuota quota = quotaService.getOrCreateUserQuota(userId);
+        Date now = new Date();
+        result.put("dailyLimit", AiQuotaLimitUtil.resolveDailyLimit(quota, defaultDaily, now));
+        result.put("monthlyLimit", AiQuotaLimitUtil.resolveMonthlyLimit(quota, defaultMonthly, now));
+        //update-end---author:cursor---date:2026-08-22---for:【审查B】预检展示用户真实限额-----------
         if (!result.containsKey("remainingDaily") || !result.containsKey("remainingMonthly")) {
             Map<String, Object> bare = quotaService.checkQuota(userId, 0, 0);
             result.putIfAbsent("remainingDaily", bare.get("remainingDaily"));

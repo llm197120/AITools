@@ -37,7 +37,12 @@ public class AiConversation extends JeecgEntity implements Serializable {
     @Schema(description = "消息数量")
     private Integer messageCount;
 
-    /** 删除状态(0-正常,1-已删除) */
+    //update-begin---author:cursor---date:2026-08-22---for:【审查D】对话软删用手写 wrapper，不加 TableLogic---
+    /**
+     * 删除状态(0-正常,1-已删除)。不用 {@code @TableLogic}：与 deletedAt 一起由
+     * {@code AiConversationServiceImpl} 手写软删 wrapper，避免与 JeecgEntity 字段语义打架。
+     */
+    //update-end---author:cursor---date:2026-08-22---for:【审查D】对话软删用手写 wrapper，不加 TableLogic---
     @Schema(description = "删除状态")
     private Integer delFlag;
 

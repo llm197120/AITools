@@ -2,6 +2,8 @@ package org.jeecg.modules.homeai.ai.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.jeecg.modules.homeai.ai.entity.AiConversation;
@@ -25,6 +27,17 @@ public class AiConversationServiceImpl extends ServiceImpl<AiConversationMapper,
                 .orderByDesc(AiConversation::getUpdateTime);
         return list(query);
     }
+
+    //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R111】对话列表可选分页---
+    @Override
+    public IPage<AiConversation> pageUserConversations(String userId, int pageNo, int pageSize) {
+        LambdaQueryWrapper<AiConversation> query = new LambdaQueryWrapper<>();
+        query.eq(AiConversation::getUserId, userId)
+                .eq(AiConversation::getDelFlag, 0)
+                .orderByDesc(AiConversation::getUpdateTime);
+        return page(new Page<>(pageNo, pageSize), query);
+    }
+    //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R111】对话列表可选分页---
 
     @Override
     public AiConversation createConversation(String userId, String title, String modelName) {

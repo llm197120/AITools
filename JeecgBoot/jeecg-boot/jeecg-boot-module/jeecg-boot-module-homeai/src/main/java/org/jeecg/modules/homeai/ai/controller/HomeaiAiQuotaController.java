@@ -36,7 +36,9 @@ public class HomeaiAiQuotaController {
     public Result<?> precheck(@RequestParam(defaultValue = "chat") String scene,
                               @RequestParam(required = false) String text,
                               HttpServletRequest request) {
-        String userId = securityUtil.getCurrentUserId(request);
+        //update-begin---author:cursor---date:2026-08-22---for:【审查B】配额预检只认 HomeAI 用户-----------
+        String userId = securityUtil.getWxUserId(request);
+        //update-end---author:cursor---date:2026-08-22---for:【审查B】配额预检只认 HomeAI 用户-----------
         if (userId == null) {
             return Result.error("未登录");
         }
@@ -48,7 +50,9 @@ public class HomeaiAiQuotaController {
     @PostMapping("/precheck")
     @Operation(summary = "AI配额-按场景预检(POST，推荐)")
     public Result<?> precheckPost(@RequestBody Map<String, Object> body, HttpServletRequest request) {
-        String userId = securityUtil.getCurrentUserId(request);
+        //update-begin---author:cursor---date:2026-08-22---for:【审查B】配额预检只认 HomeAI 用户-----------
+        String userId = securityUtil.getWxUserId(request);
+        //update-end---author:cursor---date:2026-08-22---for:【审查B】配额预检只认 HomeAI 用户-----------
         if (userId == null) {
             return Result.error("未登录");
         }
