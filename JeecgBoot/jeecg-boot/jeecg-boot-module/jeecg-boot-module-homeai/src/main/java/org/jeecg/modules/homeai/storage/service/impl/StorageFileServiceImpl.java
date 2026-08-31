@@ -576,7 +576,7 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
                 .like(StorageFile::getOriginalName, keyword);
         StorageVisibilityQueryUtil.applyReadableFileFilter(query, userId, familyId);
         query.orderByDesc(StorageFile::getCreateTime);
-        return list(query);
+        return page(new Page<>(1, 50), query).getRecords();
     }
 
     @Override
@@ -585,7 +585,7 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
         query.eq(StorageFile::getDelFlag, 0)
                 .like(StorageFile::getOriginalName, keyword)
                 .orderByDesc(StorageFile::getCreateTime);
-        return list(query);
+        return page(new Page<>(1, 50), query).getRecords();
     }
 
     @Override
