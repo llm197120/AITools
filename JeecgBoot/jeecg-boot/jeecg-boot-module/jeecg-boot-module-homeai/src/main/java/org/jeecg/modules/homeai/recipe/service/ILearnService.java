@@ -11,6 +11,14 @@ public interface ILearnService extends IService<LearnMaterial> {
     void startLearn(String userId, String materialId);
     LearnRecord stopLearn(String userId, String materialId);
     List<LearnRecord> getUserRecords(String userId);
+
+    //update-begin---author:cursor---date:2026-08-22---for:【HomeAI-R83】学习记录按月查询-----------
+    List<LearnRecord> getUserRecords(String userId, String yearMonth);
+
+    //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R117】学习记录按日查询---
+    List<LearnRecord> getUserRecords(String userId, String yearMonth, String studyDate);
+    //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R117】学习记录按日查询---
+    //update-end---author:cursor---date:2026-08-22---for:【HomeAI-R83】学习记录按月查询-----------
     /** 用户学习统计（记录数、总时长-分钟） */
     Map<String, Object> getUserStatistics(String userId);
     /** 手动记录一次学习 */

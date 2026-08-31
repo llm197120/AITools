@@ -110,9 +110,18 @@ public class BillController {
     }
 
     @GetMapping("/entries")
-    public Result<?> entries(@RequestParam String yearMonth, HttpServletRequest r) {
+    public Result<?> entries(@RequestParam String yearMonth,
+                             @RequestParam(required = false) Integer pageNo,
+                             @RequestParam(required = false) Integer pageSize,
+                             @RequestParam(required = false) String keyword,
+                             HttpServletRequest r) {
         String uid = getUserId(r);
         if (uid == null) return Result.error("未登录");
+        //update-begin---author:cursor---date:2026-08-22---for:【审查C】账单按月服务端分页-----------
+        if (pageNo != null && pageSize != null) {
+            return Result.OK(billService.pageMonthList(new Page<>(pageNo, pageSize), uid, yearMonth, keyword));
+        }
+        //update-end---author:cursor---date:2026-08-22---for:【审查C】账单按月服务端分页-----------
         return Result.OK(billService.getMonthList(uid, yearMonth));
     }
 
@@ -391,7 +400,10 @@ public class BillController {
     @Operation(summary="账单-导入确认写入(管理端)")
     @RequiresPermissions("homeai:bill:importExcel")
     public Result<?> importConfirm(@RequestBody Map<String, Object> body) {
-        String userId = body.get("userId") != null ? String.valueOf(body.get("userId")) : null;
+        String userId = body.get("userId") != null ? String.valueOf(body.get("userId")).trim() : null;
+        if (userId == null || userId.isEmpty()) {
+            return Result.error("请选择账单归属用户");
+        }
         Object entriesObj = body.get("entries");
         if (!(entriesObj instanceof List) || ((List<?>) entriesObj).isEmpty()) {
             return Result.error("没有可导入的数据");

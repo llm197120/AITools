@@ -17,6 +17,7 @@ import org.jeecg.common.system.vo.LoginUser;
 import org.jeecg.common.util.oConvertUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
+import org.jeecg.modules.homeai.config.HomeaiImageProcess;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.family.entity.Family;
@@ -199,7 +200,7 @@ public class WxUserController {
         user.setPassword(null);
         user.setSalt(null);
         if (oConvertUtils.isNotEmpty(user.getAvatarUrl())) {
-            user.setAvatarUrl(fileStorageService.resolveAccessUrl(user.getAvatarUrl()));
+            user.setAvatarUrl(fileStorageService.resolveAccessUrl(user.getAvatarUrl(), HomeaiImageProcess.THUMB));
         }
     }
 

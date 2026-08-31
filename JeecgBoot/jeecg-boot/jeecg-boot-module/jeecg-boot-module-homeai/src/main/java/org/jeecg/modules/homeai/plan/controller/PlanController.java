@@ -68,9 +68,9 @@ public class PlanController {
     private static final String ACTION_PLAN_ROLL_FORWARD = "plan_repeat_roll_forward";
 
     private String getUserId(HttpServletRequest r) {
-        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
-        return securityUtil.getCurrentUserId(r);
-        //update-end---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
+        //update-begin---author:cursor---date:2026-08-22---for:【审查B】APP 业务归属只认 HomeAI 用户-----------
+        return securityUtil.getWxUserId(r);
+        //update-end---author:cursor---date:2026-08-22---for:【审查B】APP 业务归属只认 HomeAI 用户-----------
     }
 
     private String getOperatorId(HttpServletRequest r) {

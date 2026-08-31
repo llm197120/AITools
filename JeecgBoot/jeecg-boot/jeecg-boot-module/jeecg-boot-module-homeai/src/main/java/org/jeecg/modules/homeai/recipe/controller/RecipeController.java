@@ -19,6 +19,7 @@ import org.jeecg.common.util.oConvertUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.audit.service.IHomeaiAuditLogService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
+import org.jeecg.modules.homeai.config.HomeaiImageProcess;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.recipe.entity.Recipe;
 import org.jeecg.modules.homeai.recipe.entity.RecipeCategory;
@@ -66,9 +67,9 @@ public class RecipeController {
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】菜谱审计埋点-----------
 
     private String getUserId(HttpServletRequest r) {
-        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
-        return securityUtil.getCurrentUserId(r);
-        //update-end---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
+        //update-begin---author:cursor---date:2026-08-22---for:【审查B】APP 业务归属只认 HomeAI 用户-----------
+        return securityUtil.getWxUserId(r);
+        //update-end---author:cursor---date:2026-08-22---for:【审查B】APP 业务归属只认 HomeAI 用户-----------
     }
 
     /**
@@ -134,7 +135,7 @@ public class RecipeController {
     public Result<?> list(Recipe r, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "10") int pageSize, HttpServletRequest req) {
         QueryWrapper<Recipe> qw = QueryGenerator.initQueryWrapper(r, req.getParameterMap());
         qw.eq("del_flag", "0").orderByDesc("create_time");
-        if (!securityUtil.isConsoleAuthenticated(req)) {
+        if (!securityUtil.canConsoleViewAll(req, "homeai:recipe:list")) {
             String uid = getUserId(req);
             if (uid == null) {
                 return Result.error("未登录");
@@ -157,7 +158,7 @@ public class RecipeController {
     @GetMapping("/search")
     public Result<?> search(@RequestParam String keyword, HttpServletRequest req) {
         List<Recipe> list;
-        if (securityUtil.isConsoleAuthenticated(req)) {
+        if (securityUtil.canConsoleViewAll(req, "homeai:recipe:list")) {
             list = recipeService.search(keyword);
         } else {
             String uid = getUserId(req);
@@ -177,11 +178,26 @@ public class RecipeController {
 
     @GetMapping("/favorites")
     @Operation(summary = "菜谱-我的收藏")
-    public Result<?> favorites(HttpServletRequest req) {
+    public Result<?> favorites(
+            @RequestParam(required = false) Integer pageNo,
+            @RequestParam(required = false) Integer pageSize,
+            HttpServletRequest req) {
         String uid = getUserId(req);
         if (uid == null) return Result.error("未登录");
         WxUser user = wxUserService.getById(uid);
-        List<Recipe> list = recipeService.listFavoriteRecipes(uid, user != null ? user.getFamilyId() : null);
+        String familyId = user != null ? user.getFamilyId() : null;
+        //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R114】收藏列表可选分页---
+        if (pageNo != null && pageSize != null) {
+            IPage<Recipe> page = recipeService.pageFavoriteRecipes(uid, familyId, pageNo, pageSize);
+            if (page.getRecords() != null) {
+                for (Recipe item : page.getRecords()) {
+                    resolveRecipeUrls(item);
+                }
+            }
+            return Result.OK(page);
+        }
+        //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R114】收藏列表可选分页---
+        List<Recipe> list = recipeService.listFavoriteRecipes(uid, familyId);
         if (list != null) {
             for (Recipe item : list) {
                 resolveRecipeUrls(item);
@@ -222,7 +238,7 @@ public class RecipeController {
             for (Map<String, Object> item : list) {
                 Object cover = item.get("coverUrl");
                 if (cover != null && !String.valueOf(cover).startsWith("data:")) {
-                    item.put("coverUrl", fileStorageService.resolveAccessUrl(String.valueOf(cover)));
+                    item.put("coverUrl", fileStorageService.resolveAccessUrl(String.valueOf(cover), HomeaiImageProcess.THUMB));
                 }
             }
         }
@@ -288,14 +304,20 @@ public class RecipeController {
 
     /** 兼容历史相对地址数据：转换 coverUrl / videoUrl 为绝对访问地址 */
     private void resolveRecipeUrls(Recipe recipe) {
+        resolveRecipeUrls(recipe, HomeaiImageProcess.THUMB);
+    }
+
+    //update-begin---author:cursor---date:2026-08-22---for:【APP流量】菜谱封面走压缩图---
+    private void resolveRecipeUrls(Recipe recipe, String coverProcess) {
         if (recipe == null) return;
         if (recipe.getCoverUrl() != null && !recipe.getCoverUrl().startsWith("data:")) {
-            recipe.setCoverUrl(fileStorageService.resolveAccessUrl(recipe.getCoverUrl()));
+            recipe.setCoverUrl(fileStorageService.resolveAccessUrl(recipe.getCoverUrl(), coverProcess));
         }
         if (recipe.getVideoUrl() != null) {
             recipe.setVideoUrl(fileStorageService.resolveAccessUrl(recipe.getVideoUrl()));
         }
     }
+    //update-end---author:cursor---date:2026-08-22---for:【APP流量】菜谱封面走压缩图---
 
     //update-begin---author:cursor---date:2026-08-21---for:【菜谱列表】分类中文名---
     private Map<String, String> recipeCategoryNameMap() {
@@ -323,12 +345,12 @@ public class RecipeController {
     @SuppressWarnings("unchecked")
     private void resolveRecipeDetail(Map<String, Object> detail) {
         if (detail == null) return;
-        resolveRecipeUrls((Recipe) detail.get("recipe"));
+        resolveRecipeUrls((Recipe) detail.get("recipe"), HomeaiImageProcess.DISPLAY);
         List<RecipeStep> steps = (List<RecipeStep>) detail.get("steps");
         if (steps != null) {
             for (RecipeStep step : steps) {
                 if (step.getImageUrl() != null) {
-                    step.setImageUrl(fileStorageService.resolveAccessUrl(step.getImageUrl()));
+                    step.setImageUrl(fileStorageService.resolveAccessUrl(step.getImageUrl(), HomeaiImageProcess.DISPLAY));
                 }
             }
         }
@@ -343,6 +365,20 @@ public class RecipeController {
         }
     }
 
+    //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R118】菜谱难度 1～5 校验---
+    private Result<?> normalizeRecipeDifficulty(Recipe recipe) {
+        if (recipe.getDifficulty() == null) {
+            recipe.setDifficulty(3);
+            return null;
+        }
+        int d = recipe.getDifficulty();
+        if (d < 1 || d > 5) {
+            return Result.error("难度须在 1～5 之间");
+        }
+        return null;
+    }
+    //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R118】菜谱难度 1～5 校验---
+
     @PostMapping
     public Result<?> create(@RequestBody Map<String, Object> body, HttpServletRequest r) {
         String uid = getUserId(r);
@@ -350,6 +386,8 @@ public class RecipeController {
         Recipe recipe = JSON.parseObject(JSON.toJSONString(body), Recipe.class);
         Result<?> categoryError = validateRecipeCategory(recipe);
         if (categoryError != null) return categoryError;
+        Result<?> difficultyError = normalizeRecipeDifficulty(recipe);
+        if (difficultyError != null) return difficultyError;
         recipe.setUserId(uid);
         WxUser user = wxUserService.getById(uid);
         try {
@@ -371,6 +409,8 @@ public class RecipeController {
         if (r == null || r.getId() == null) return Result.error("参数异常");
         Result<?> categoryError = validateRecipeCategory(r);
         if (categoryError != null) return categoryError;
+        Result<?> difficultyError = normalizeRecipeDifficulty(r);
+        if (difficultyError != null) return difficultyError;
         Recipe existing = recipeService.getById(r.getId());
         if (existing == null) return Result.error("菜谱不存在");
         // 管理端控制台可编辑任意菜谱；小程序端只能编辑自己的或家庭共享菜谱
@@ -421,6 +461,8 @@ public class RecipeController {
         Recipe recipe = JSON.parseObject(JSON.toJSONString(body), Recipe.class);
         Result<?> categoryError = validateRecipeCategory(recipe);
         if (categoryError != null) return categoryError;
+        Result<?> difficultyError = normalizeRecipeDifficulty(recipe);
+        if (difficultyError != null) return difficultyError;
         //update-begin---author:cursor ---date:2026-08-12 for：【菜谱可见性】管理端新增写入可见性/家庭-----------
         try {
             recipeService.applyAdminVisibilityOnSave(recipe);
@@ -658,6 +700,8 @@ public class RecipeController {
         recipe.setId(id);
         Result<?> categoryError = validateRecipeCategory(recipe);
         if (categoryError != null) return categoryError;
+        Result<?> difficultyError = normalizeRecipeDifficulty(recipe);
+        if (difficultyError != null) return difficultyError;
         //update-begin---author:cursor ---date:2026-08-12 for：【菜谱可见性】管理端编辑写入可见性/家庭-----------
         try {
             recipeService.applyAdminVisibilityOnSave(recipe);

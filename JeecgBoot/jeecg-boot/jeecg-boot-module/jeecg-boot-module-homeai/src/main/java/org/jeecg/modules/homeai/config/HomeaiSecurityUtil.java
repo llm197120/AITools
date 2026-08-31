@@ -13,6 +13,7 @@ import org.jeecg.modules.homeai.user.service.IWxUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
+import org.apache.shiro.SecurityUtils;
 
 /**
  * HomeAI 模块安全工具
@@ -151,4 +152,21 @@ public class HomeaiSecurityUtil {
         }
     }
     //update-end---author:cursor---date:2026-08-20---for:【Android体验】退出登录作废 Redis token-----------
+
+    //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R118】控制台全量视图须细粒度权限---
+    /**
+     * 管理端 JWT 有效且具备指定 HomeAI 权限时，才允许跳过 APP 行级隔离看全量数据。
+     */
+    public boolean canConsoleViewAll(HttpServletRequest request, String permission) {
+        if (!isConsoleAuthenticated(request) || oConvertUtils.isEmpty(permission)) {
+            return false;
+        }
+        try {
+            return SecurityUtils.getSubject().isPermitted(permission);
+        } catch (Exception e) {
+            log.warn("校验管理端权限失败: {}", e.getMessage());
+            return false;
+        }
+    }
+    //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R118】控制台全量视图须细粒度权限---
 }

@@ -17,9 +17,13 @@ import org.jeecg.common.util.oConvertUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.audit.service.IHomeaiAuditLogService;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
+import org.jeecg.modules.homeai.config.HomeaiImageProcess;
+import org.jeecg.modules.homeai.config.HomeaiHttpDeny;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.learn.service.ILearnCategoryService;
+import org.jeecg.modules.homeai.preview.HomeaiFileMime;
 import org.jeecg.modules.homeai.preview.HomeaiFilePreviewDto;
+import org.jeecg.modules.homeai.preview.HomeaiPreviewKind;
 import org.jeecg.modules.homeai.preview.IHomeaiFilePreviewService;
 import org.jeecg.modules.homeai.recipe.entity.LearnMaterial;
 import org.jeecg.modules.homeai.recipe.mapper.LearnMaterialMapper;
@@ -56,9 +60,9 @@ public class LearnController {
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】学习审计埋点-----------
 
     private String getUserId(HttpServletRequest r) {
-        //update-begin---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
-        return securityUtil.getCurrentUserId(r);
-        //update-end---author:cursor---date:2026-08-20---for:【Android体验】业务接口统一走 SecurityUtil 解析手机号 JWT-----------
+        //update-begin---author:cursor---date:2026-08-22---for:【审查B】APP 业务归属只认 HomeAI 用户-----------
+        return securityUtil.getWxUserId(r);
+        //update-end---author:cursor---date:2026-08-22---for:【审查B】APP 业务归属只认 HomeAI 用户-----------
     }
 
     private Result<?> syncLearnCategory(LearnMaterial m) {
@@ -78,11 +82,17 @@ public class LearnController {
 
     @GetMapping("/materials")
     @Operation(summary="学习资料-分页列表查询")
-    public Result<?> materials(LearnMaterial m, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "10") int pageSize, HttpServletRequest req) {
+    public Result<?> materials(LearnMaterial m, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "10") int pageSize,
+                               @RequestParam(required = false) String keyword, HttpServletRequest req) {
         QueryWrapper<LearnMaterial> qw = QueryGenerator.initQueryWrapper(m, req.getParameterMap());
         qw.eq("del_flag", "0").orderByDesc("create_time");
+        //update-begin---author:cursor---date:2026-08-22---for:【审查E】学习资料按标题检索---
+        if (oConvertUtils.isNotEmpty(keyword)) {
+            qw.like("title", keyword.trim());
+        }
+        //update-end---author:cursor---date:2026-08-22---for:【审查E】学习资料按标题检索---
         //update-begin---author:cursor---date:2026-08-20---for:【审查修复】APP 只看自己的资料；管理端控制台仍看全部---
-        if (!securityUtil.isConsoleAuthenticated(req)) {
+        if (!securityUtil.canConsoleViewAll(req, "homeai:learn:material:list")) {
             String uid = getUserId(req);
             if (uid == null) return Result.error("未登录");
             qw.eq("user_id", uid);
@@ -92,12 +102,15 @@ public class LearnController {
         // 兼容历史相对地址数据：统一转换为绝对访问地址
         if (result.getRecords() != null) {
             for (LearnMaterial item : result.getRecords()) {
+                //update-begin---author:cursor---date:2026-08-22---for:【APP流量】学习封面/图片压缩---
                 if (item.getFileUrl() != null) {
-                    item.setFileUrl(fileStorageService.resolveAccessUrl(item.getFileUrl()));
+                    String process = "image".equals(item.getType()) ? HomeaiImageProcess.DISPLAY : null;
+                    item.setFileUrl(fileStorageService.resolveAccessUrl(item.getFileUrl(), process));
                 }
                 if (item.getCoverUrl() != null && !item.getCoverUrl().startsWith("data:")) {
-                    item.setCoverUrl(fileStorageService.resolveAccessUrl(item.getCoverUrl()));
+                    item.setCoverUrl(fileStorageService.resolveAccessUrl(item.getCoverUrl(), HomeaiImageProcess.THUMB));
                 }
+                //update-end---author:cursor---date:2026-08-22---for:【APP流量】学习封面/图片压缩---
                 if (item.getPreviewPdfUrl() != null) {
                     item.setPreviewPdfUrl(fileStorageService.resolveAccessUrl(item.getPreviewPdfUrl()));
                 }
@@ -115,6 +128,33 @@ public class LearnController {
         if (denied != null) return denied;
         return Result.OK(filePreviewService.previewLearn(material));
     }
+
+    //update-begin---author:cursor---date:2026-08-22---for:【HomeAI-R81】APP 鉴权下载原文件-----------
+    @GetMapping("/materials/{id}/content")
+    @Operation(summary = "学习资料-下载原文件")
+    public void downloadMaterialContent(@PathVariable String id, HttpServletRequest req,
+                                        HttpServletResponse response) throws java.io.IOException {
+        LearnMaterial material = learnService.getById(id);
+        Result<?> denied = assertCanReadMaterial(material, req);
+        if (denied != null) {
+            HomeaiHttpDeny.write(response, denied);
+            return;
+        }
+        try {
+            String ext = HomeaiPreviewKind.extensionOfNameOrUrl(material.getTitle());
+            if (ext.isEmpty()) {
+                ext = HomeaiPreviewKind.extensionOfNameOrUrl(material.getFileUrl());
+            }
+            java.nio.file.Path path = fileStorageService.resolveLocalPath(material.getFileUrl());
+            HomeaiFileMime.writeLocalFile(response, path, material.getTitle(), ext);
+        } catch (Exception e) {
+            log.warn("学习资料下载失败 id={}", id, e);
+            if (!response.isCommitted()) {
+                response.sendError(HttpServletResponse.SC_BAD_GATEWAY, "文件读取失败");
+            }
+        }
+    }
+    //update-end---author:cursor---date:2026-08-22---for:【HomeAI-R81】APP 鉴权下载原文件-----------
 
     @PostMapping("/materials/{id}/preview-pdf")
     @Operation(summary = "学习资料-Office 转 PDF 预览")
@@ -190,10 +230,17 @@ public class LearnController {
     }
 
     @GetMapping("/records")
-    public Result<?> records(HttpServletRequest r) {
+    public Result<?> records(
+            @RequestParam(required = false) String yearMonth,
+            @RequestParam(required = false) String studyDate,
+            HttpServletRequest r) {
         String uid = getUserId(r);
         if (uid == null) return Result.error("未登录");
-        return Result.OK(learnService.getUserRecords(uid));
+        //update-begin---author:cursor---date:2026-08-22---for:【HomeAI-R83】学习记录按月查询-----------
+        //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R117】学习记录按日查询---
+        return Result.OK(learnService.getUserRecords(uid, yearMonth, studyDate));
+        //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R117】学习记录按日查询---
+        //update-end---author:cursor---date:2026-08-22---for:【HomeAI-R83】学习记录按月查询-----------
     }
 
     /**

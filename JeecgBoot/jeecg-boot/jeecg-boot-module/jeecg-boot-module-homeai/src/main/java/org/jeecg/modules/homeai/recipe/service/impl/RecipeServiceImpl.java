@@ -2,12 +2,15 @@ package org.jeecg.modules.homeai.recipe.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
+import org.jeecg.modules.homeai.config.service.IHomeaiFileWhitelistService;
 import org.jeecg.modules.homeai.family.entity.FamilyMember;
 import org.jeecg.modules.homeai.family.service.IFamilyMemberService;
 import org.jeecg.modules.homeai.plan.entity.PlanInstance;
@@ -45,6 +48,9 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
     @Autowired private RecipeStepMapper stepMapper;
     @Autowired private RecipeFavoriteMapper favoriteMapper;
     @Autowired private IHomeaiFileStorageService fileStorageService;
+    //update-begin---author:cursor---date:2026-08-22---for:【审查D】菜谱上传走全局扩展名白名单---
+    @Autowired private IHomeaiFileWhitelistService whitelistService;
+    //update-end---author:cursor---date:2026-08-22---for:【审查D】菜谱上传走全局扩展名白名单---
     @Lazy
     @Autowired private IPlanService planService;
     @Autowired private IFamilyMemberService familyMemberService;
@@ -538,6 +544,40 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
         return ordered;
     }
 
+    //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R114】收藏列表可选分页---
+    @Override
+    public IPage<Recipe> pageFavoriteRecipes(String userId, String familyId, int pageNo, int pageSize) {
+        pageNo = Math.max(pageNo, 1);
+        pageSize = Math.min(Math.max(pageSize, 1), 100);
+        LambdaQueryWrapper<RecipeFavorite> fq = new LambdaQueryWrapper<>();
+        fq.eq(RecipeFavorite::getUserId, userId).orderByDesc(RecipeFavorite::getCreateTime);
+        IPage<RecipeFavorite> favPage = favoriteMapper.selectPage(new Page<>(pageNo, pageSize), fq);
+        IPage<Recipe> result = new Page<>(pageNo, pageSize, favPage.getTotal());
+        if (favPage.getRecords() == null || favPage.getRecords().isEmpty()) {
+            result.setRecords(Collections.emptyList());
+            return result;
+        }
+        List<String> ids = favPage.getRecords().stream().map(RecipeFavorite::getRecipeId).toList();
+        LambdaQueryWrapper<Recipe> q = new LambdaQueryWrapper<>();
+        q.in(Recipe::getId, ids).eq(Recipe::getDelFlag, 0);
+        applyClientVisibilityFilter(q, userId, familyId);
+        List<Recipe> recipes = list(q);
+        Map<String, Recipe> map = new LinkedHashMap<>();
+        for (Recipe r : recipes) {
+            map.put(r.getId(), r);
+        }
+        List<Recipe> ordered = new ArrayList<>();
+        for (RecipeFavorite fav : favPage.getRecords()) {
+            Recipe r = map.get(fav.getRecipeId());
+            if (r != null) {
+                ordered.add(r);
+            }
+        }
+        result.setRecords(ordered);
+        return result;
+    }
+    //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R114】收藏列表可选分页---
+
     @Override
     public List<RecipeIngredient> getIngredients(String recipeId) {
         LambdaQueryWrapper<RecipeIngredient> q = new LambdaQueryWrapper<>();
@@ -552,11 +592,13 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
         return stepMapper.selectList(q);
     }
 
+    private static final int SEARCH_MAX_ROWS = 50;
+
     @Override
     public List<Recipe> search(String keyword) {
         LambdaQueryWrapper<Recipe> q = new LambdaQueryWrapper<>();
         q.like(Recipe::getName, keyword).eq(Recipe::getDelFlag, 0).orderByDesc(Recipe::getCreateTime);
-        return list(q);
+        return page(new Page<>(1, SEARCH_MAX_ROWS), q).getRecords();
     }
 
     @Override
@@ -565,7 +607,7 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
         q.like(Recipe::getName, keyword).eq(Recipe::getDelFlag, 0);
         applyClientVisibilityFilter(q, userId, familyId);
         q.orderByDesc(Recipe::getCreateTime);
-        return list(q);
+        return page(new Page<>(1, SEARCH_MAX_ROWS), q).getRecords();
     }
 
     @Override
@@ -1023,6 +1065,11 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
         if (oConvertUtils.isEmpty(ext) || !allowedExts.contains(ext)) {
             throw new JeecgBootException("不支持的" + label + "格式，仅支持: " + String.join("/", allowedExts));
         }
+        //update-begin---author:cursor---date:2026-08-22---for:【审查D】菜谱上传走全局扩展名白名单---
+        if (!whitelistService.isAllowedExtension(ext)) {
+            throw new JeecgBootException("不支持上传该文件类型");
+        }
+        //update-end---author:cursor---date:2026-08-22---for:【审查D】菜谱上传走全局扩展名白名单---
         try {
             HomeaiFileMagicUtil.validate(file, ext);
         } catch (IOException e) {

@@ -111,10 +111,45 @@ public class LearnServiceImpl extends ServiceImpl<LearnMaterialMapper, LearnMate
 
     @Override
     public List<LearnRecord> getUserRecords(String userId) {
+        return getUserRecords(userId, null);
+    }
+
+    //update-begin---author:cursor---date:2026-08-22---for:【HomeAI-R83】学习记录按月查询-----------
+    @Override
+    public List<LearnRecord> getUserRecords(String userId, String yearMonth) {
+        return getUserRecords(userId, yearMonth, null);
+    }
+
+    //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R117】学习记录按日查询---
+    @Override
+    public List<LearnRecord> getUserRecords(String userId, String yearMonth, String studyDate) {
         LambdaQueryWrapper<LearnRecord> q = new LambdaQueryWrapper<>();
-        q.eq(LearnRecord::getUserId, userId).orderByDesc(LearnRecord::getCreateTime);
+        q.eq(LearnRecord::getUserId, userId);
+        if (oConvertUtils.isNotEmpty(studyDate) && studyDate.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            java.sql.Date day = java.sql.Date.valueOf(LocalDate.parse(studyDate));
+            q.and(wrapper -> wrapper
+                    .eq(LearnRecord::getStudyDate, day)
+                    .or(w -> w.isNull(LearnRecord::getStudyDate)
+                            .apply("DATE(IFNULL(start_time, create_time)) = {0}", studyDate)));
+        } else if (oConvertUtils.isNotEmpty(yearMonth) && yearMonth.matches("\\d{4}-\\d{2}")) {
+            //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R116】记录按月与日历统一 study_date---
+            LocalDate start = LocalDate.parse(yearMonth + "-01");
+            LocalDate end = start.plusMonths(1);
+            java.sql.Date startDate = java.sql.Date.valueOf(start);
+            java.sql.Date endDate = java.sql.Date.valueOf(end);
+            q.and(wrapper -> wrapper
+                    .and(w -> w.isNotNull(LearnRecord::getStudyDate)
+                            .ge(LearnRecord::getStudyDate, startDate)
+                            .lt(LearnRecord::getStudyDate, endDate))
+                    .or(w -> w.isNull(LearnRecord::getStudyDate)
+                            .apply("DATE_FORMAT(IFNULL(start_time, create_time), '%Y-%m') = {0}", yearMonth)));
+            //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R116】记录按月与日历统一 study_date---
+        }
+        q.orderByDesc(LearnRecord::getCreateTime);
         return recordMapper.selectList(q);
     }
+    //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R117】学习记录按日查询---
+    //update-end---author:cursor---date:2026-08-22---for:【HomeAI-R83】学习记录按月查询-----------
 
     @Override
     public Map<String, Object> getUserStatistics(String userId) {
@@ -399,9 +434,15 @@ public class LearnServiceImpl extends ServiceImpl<LearnMaterialMapper, LearnMate
     public Map<String, Object> getTodayProgress(String userId) {
         int goal = getDailyGoalMinutes(userId);
         LocalDate today = LocalDate.now();
+        java.sql.Date todayDate = java.sql.Date.valueOf(today);
+        //update-begin---author:cursor---date:2026-08-23---for:【HomeAI-R118】今日进度与 study_date 对齐---
         List<LearnRecord> records = recordMapper.selectList(new LambdaQueryWrapper<LearnRecord>()
                 .eq(LearnRecord::getUserId, userId)
-                .ge(LearnRecord::getCreateTime, java.sql.Date.valueOf(today)));
+                .and(wrapper -> wrapper
+                        .eq(LearnRecord::getStudyDate, todayDate)
+                        .or(w -> w.isNull(LearnRecord::getStudyDate)
+                                .apply("DATE(IFNULL(start_time, create_time)) = {0}", today.toString()))));
+        //update-end---author:cursor---date:2026-08-23---for:【HomeAI-R118】今日进度与 study_date 对齐---
         int seconds = records.stream().mapToInt(r -> r.getDuration() != null ? r.getDuration() : 0).sum();
         int todayMinutes = seconds / 60;
         Map<String, Object> result = new LinkedHashMap<>();

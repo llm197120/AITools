@@ -1,6 +1,8 @@
 package org.jeecg.modules.homeai.bill.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.jeecg.modules.homeai.bill.entity.BillCategory;
@@ -10,6 +12,7 @@ import org.jeecg.modules.homeai.bill.service.IBillCategoryService;
 import org.jeecg.modules.homeai.bill.service.IBillEntryService;
 import org.jeecg.modules.homeai.bill.util.BillEntryAccess;
 import org.jeecg.common.util.RedisUtil;
+import org.jeecg.common.util.oConvertUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
@@ -128,15 +131,45 @@ public class BillEntryServiceImpl extends ServiceImpl<BillEntryMapper, BillEntry
 
     @Override
     public List<BillEntry> getMonthList(String userId, String yearMonth) {
+        List<BillEntry> entries = list(monthListQuery(userId, yearMonth, null));
+        fillCategoryNames(entries);
+        return entries;
+    }
+
+    //update-begin---author:cursor---date:2026-08-22---for:【审查C】账单按月服务端分页-----------
+    @Override
+    public IPage<BillEntry> pageMonthList(Page<BillEntry> page, String userId, String yearMonth, String keyword) {
+        IPage<BillEntry> result = page(page, monthListQuery(userId, yearMonth, keyword));
+        fillCategoryNames(result.getRecords());
+        return result;
+    }
+
+    private LambdaQueryWrapper<BillEntry> monthListQuery(String userId, String yearMonth, String keyword) {
         LocalDate start = LocalDate.parse(yearMonth + "-01");
         LocalDate end = start.plusMonths(1);
         LambdaQueryWrapper<BillEntry> q = new LambdaQueryWrapper<>();
         q.eq(BillEntry::getUserId, userId).eq(BillEntry::getDelFlag, 0)
          .between(BillEntry::getBillDate, start, end).orderByDesc(BillEntry::getBillDate);
-        List<BillEntry> entries = list(q);
-        fillCategoryNames(entries);
-        return entries;
+        //update-begin---author:cursor---date:2026-08-22---for:【审查E】账单按月检索备注/支付方式/分类名---
+        if (oConvertUtils.isNotEmpty(keyword)) {
+            String kw = keyword.trim();
+            List<String> catIds = new ArrayList<>();
+            for (BillCategory c : categoryService.getEnabledCategories(null)) {
+                if (c.getName() != null && c.getName().contains(kw)) {
+                    catIds.add(c.getId());
+                }
+            }
+            q.and(w -> {
+                w.like(BillEntry::getRemark, kw).or().like(BillEntry::getPaymentMethod, kw);
+                if (!catIds.isEmpty()) {
+                    w.or().in(BillEntry::getCategoryId, catIds);
+                }
+            });
+        }
+        //update-end---author:cursor---date:2026-08-22---for:【审查E】账单按月检索备注/支付方式/分类名---
+        return q;
     }
+    //update-end---author:cursor---date:2026-08-22---for:【审查C】账单按月服务端分页-----------
 
     @Override
     public void fillCategoryNames(List<BillEntry> entries) {
