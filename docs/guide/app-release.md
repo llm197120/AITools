@@ -19,11 +19,20 @@
 
 ## 2. 改版本号
 
-源在 `JeecgUniapp/manifest.config.ts`（会生成 `src/manifest.json`）：
+**版本唯一源在 `JeecgUniapp/manifest.config.ts`**（构建时 `@uni-helper/vite-plugin-uni-manifest` 会用它自动生成 `src/manifest.json`）：
 
 ```ts
 versionName: '1.0.1',
 versionCode: '101',
+```
+
+> ⚠️ **只改 `manifest.config.ts`，不要改 `src/manifest.json`**——后者是构建产物，每次 `build:h5` 都会被 `manifest.config.ts` 覆盖；改它会在下一次构建时被还原（历史多次"版本回归 1.0.1"均因此发生）。
+
+**改完必须立即 git 提交**（未提交的工作树改动会被 checkout/IDE 还原/其他工具覆盖）：
+
+```bash
+git add JeecgUniapp/manifest.config.ts
+git commit -m "chore: 版本号升至 x.y.z"
 ```
 
 `versionCode` 必须是递增正整数，且 **大于** 用户手机上已有的值。热更新也要加大这个整数（写入库），但 **不必** 重打 APK；原生 `versionCode` 可以仍是旧壳。
@@ -76,14 +85,22 @@ pnpm pack:apk:local
 3. APK：下载后调起系统安装。首次需允许「安装未知应用」。
 4. 热更新：下载 zip、校验、解压到应用私有目录，切换 Web 根路径后重载。下次覆盖安装新 APK 时，Capacitor 会丢掉这份热更新目录，改用 APK 内资源。
 
-探测失败（后端没开、没跑 SQL）会静默进入登录/首页，不挡启动。
+**壳升级清理（1.0.5+）**：覆盖安装新 APK 后首次启动，APP 检测到壳 `versionCode` 变化会自动：
+- 若 Web 根路径仍指向旧热更新目录 → 重置回 APK 内嵌资源并**自动重载一次**（属正常，勿打断）；
+- 清除热更新版本残留（`homeai_web_version`）。
+此机制用于修复"装新版仍弹旧更新 / Failed to resolve module specifier"类残留问题。
+
+探测失败（后端没开、没跑 SQL）会静默进入登录/首页，不挡启动；壳版本不可读时同样不弹更新（避免死循环误弹）。
 
 ## 7. 检查清单
 
+- [ ] **版本号已改 `manifest.config.ts` 并 git 提交**（勿改 `src/manifest.json`）
 - [ ] `versionCode` 比用户手机上的大
-- [ ] 管理端已保存且「对 APP 生效」已打开
+- [ ] 打包产物核对：`dist/apk/homeai-{版本}-{时间}.apk` 的 versionCode 与 `manifest.config.ts` 一致（可用 `aapt dump badging` 验证）
+- [ ] 管理端已保存且「对 APP 生效」已打开（或 `publish-all` 菜单自动登记）
 - [ ] APK 覆盖：已上传 APK；热更新：zip 根目录有 `index.html`
 - [ ] 加过原生能力时选 APK，不要只发 zip
+- [ ] 下载页更新后提醒用户**强刷/无痕**下载（nginx 已配 `no-store`，旧缓存仍可能残留）
 - [ ] 用户已装带启动页更新检测的包（第 69 轮之后的 Capacitor APK）；更早的包仍只能去下载页重装
 - [ ] API 地址变了必须重打 APK（热更新 zip 里也会带编译进包的地址，但旧壳不会自己改 `VITE_SERVER_BASEURL_APP`）
 
@@ -91,7 +108,7 @@ pnpm pack:apk:local
 
 ## 8. 脚本位置与用途
 
-日常发 APP：**改版本号 →** `pnpm pack:apk:local` **→ 管理端登记 → 可选上传下载页**。若同时要发管理端和后端，用仓库总入口 [`docs/deploy/publish-all.ps1`](../deploy/publish-all.ps1)；只出 APP：`.\publish-all.ps1 -App`。下面按「要跑的 / 被它调用的 / 环境一次性 / 已弃用」列出，勿把内部脚本当入口。
+日常发 APP：**改 `manifest.config.ts` 版本号并 git 提交 →** `publish-all.cmd` 菜单「全部 / 仅 APP」**自动完成**：打包（版本直接读构建源）→ 登记服务端（上传 APK+zip、更新 `homeai_app_version`、enabled=1）→ 上传下载页。命令行等价：`.\publish-all.ps1 -App -UploadApk -RegisterVersion`（壳/原生改动加 `-UpdateMode apk`）。若同时要发管理端和后端，用菜单「全部」；只出 APP：菜单「仅 APP」。下面按「要跑的 / 被它调用的 / 环境一次性 / 已弃用」列出，勿把内部脚本当入口。
 
 工作目录：APP 出包在 `JeecgUniapp/`；下载页与穿透在 `JeecgBoot/deploy/frp/`；一键发布/启停在 `docs/deploy/`。
 
