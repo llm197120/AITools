@@ -102,12 +102,14 @@ export async function resetHotUpdateIfShellChanged(): Promise<void> {
     /* ignore */
   }
   if (lastShell === shellCode) return // 壳未变
+  let resetApplied = false
   try {
     const { WebView } = await import('@capacitor/core')
     const { path } = await WebView.getServerBasePath()
     // 非 APK 内嵌资源（热更新目录）才需要重置
     if (path && !path.includes('/android_asset/public')) {
       await WebView.resetServerBasePath()
+      resetApplied = true
     }
   } catch {
     // 重置失败不阻断启动
@@ -121,6 +123,13 @@ export async function resetHotUpdateIfShellChanged(): Promise<void> {
     uni.setStorageSync(SHELL_CODE_KEY, String(shellCode))
   } catch {
     /* ignore */
+  }
+  // 壳升级且曾指向热更新目录：重置后必须 reload，当前会话才能加载 APK 内嵌新资源
+  // （否则旧页面继续运行，动态 import 的 chunk 名与旧目录不匹配 → Failed to resolve module specifier）
+  if (resetApplied && typeof window !== 'undefined') {
+    setTimeout(() => {
+      window.location.reload()
+    }, 100)
   }
 }
 

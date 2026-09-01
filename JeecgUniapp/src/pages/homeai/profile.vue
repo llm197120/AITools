@@ -304,10 +304,28 @@ async function saveApiBase() {
 
 function showAbout() {
   const sys = uni.getSystemInfoSync()
-  const ver = sys.appVersion || sys.appWgtVersion || '1.0.1'
+  let ver = sys.appVersion || sys.appWgtVersion || ''
+  // Capacitor H5 拿不到 appVersion，改用原生 App.getInfo 读取真实版本
+  if (!ver && (window as any).Capacitor?.isNativePlatform?.()) {
+    import('@capacitor/app')
+      .then(async ({ App }) => {
+        const info = await App.getInfo()
+        uni.showModal({
+          title: '关于',
+          content: `家庭AI小工具 v${info.version || '1.0.0'} (${info.build || ''})\n面向家庭的记账、菜谱、学习与 AI 助手`,
+        })
+      })
+      .catch(() => {
+        uni.showModal({
+          title: '关于',
+          content: `家庭AI小工具 v${ver || '1.0.0'}\n面向家庭的记账、菜谱、学习与 AI 助手`,
+        })
+      })
+    return
+  }
   uni.showModal({
     title: '关于',
-    content: `家庭AI小工具 v${ver}\n面向家庭的记账、菜谱、学习与 AI 助手`,
+    content: `家庭AI小工具 v${ver || '1.0.0'}\n面向家庭的记账、菜谱、学习与 AI 助手`,
   })
 }
 

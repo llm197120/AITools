@@ -82,6 +82,17 @@ function Get-AppWwwDir {
 }
 
 function Get-ManifestVersion {
+    # 构建源优先：manifest.config.ts（@uni-helper/vite-plugin-uni-manifest 会在 build:h5 时
+    # 用它覆盖 src/manifest.json；若在 build 前读 src/manifest.json 会拿到旧版本）
+    $tsConfig = Join-Path (Get-UniappRoot) 'manifest.config.ts'
+    if (Test-Path -LiteralPath $tsConfig) {
+        $ts = Get-Content -LiteralPath $tsConfig -Raw -Encoding UTF8
+        $tsName = if ($ts -match "versionName:\s*'([^']+)'") { $Matches[1] } else { '' }
+        $tsCode = if ($ts -match "versionCode:\s*'([^']+)'") { $Matches[1] } else { '' }
+        if ($tsName -and $tsCode) {
+            return @{ Name = $tsName; Code = $tsCode }
+        }
+    }
     $manifest = Join-Path (Get-UniappRoot) 'src\manifest.json'
     if (-not (Test-Path -LiteralPath $manifest)) {
         return @{ Name = '1.0.0'; Code = '100' }
