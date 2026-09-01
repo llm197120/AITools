@@ -116,6 +116,24 @@ export default ({ command, mode }) => {
           }
         },
       },
+      {
+        // 动态 import chunk 名避免 `..-` 双点前缀（vite-plugin-uni 可能覆盖 build.rollupOptions）：
+        // Capacitor WebView 本地服务器会把 `..-node_modules-...` 当路径穿越，导致
+        // Failed to resolve module specifier '..-node_modules-@capacitor-...'
+        name: 'fix-chunk-names',
+        configResolved(config) {
+          const output = config.build?.rollupOptions?.output
+          const list = Array.isArray(output) ? output : [output]
+          for (const o of list) {
+            if (o && typeof o === 'object') {
+              o.chunkFileNames = (chunkInfo) => {
+                const safe = String(chunkInfo.name || 'chunk').replace(/\.\.-/g, '-')
+                return `assets/${safe}-[hash].js`
+              }
+            }
+          }
+        },
+      },
       UnoCSS(),
       AutoImport({
         imports: ['vue', 'uni-app'],
@@ -202,6 +220,19 @@ export default ({ command, mode }) => {
         compress: {
           drop_console: VITE_DELETE_CONSOLE === 'true',
           drop_debugger: true,
+        },
+      },
+      rollupOptions: {
+        output: {
+          // 动态 import chunk 名避免 `..-` 双点前缀：
+          // Capacitor WebView 本地服务器会把 `..-node_modules-...` 当路径穿越，导致
+          // Failed to resolve module specifier '..-node_modules-@capacitor-...'
+          chunkFileNames: (chunkInfo) => {
+            const safe = String(chunkInfo.name || 'chunk')
+              .replace(/^\.\.-/g, '-')
+              .replace(/\.\.-/g, '-')
+            return `assets/${safe}-[hash].js`
+          },
         },
       },
     },
