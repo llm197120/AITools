@@ -57,7 +57,7 @@ async function preview() {
   parsing.value = true
   uni.showLoading({ title: '解析中...' })
   try {
-    const rows = await billApi.importPreview(filePath.value, importType.value)
+    const rows = await billApi.importPreview(filePath.value, importType.value, fileName.value)
     uni.hideLoading()
     if (!Array.isArray(rows) || !rows.length) {
       uni.showToast({ title: '没有解析到账单', icon: 'none' })

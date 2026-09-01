@@ -79,6 +79,7 @@
 import { reactive, ref } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { get as getApi, post as postApi, put as putApi, del as delApi } from '../../pages-homeai/api/request'
+import { readList } from '../../pages-homeai/offline/dataAccess'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
 import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
 import HomeEmpty from '../../components/HomeEmpty.vue'
@@ -121,10 +122,21 @@ async function loadList(reset = true, silent = false) {
   }
   try {
     const nextPage = reset ? 1 : pageNo.value + 1
-    const res: any = await getApi('/ai/conversations/mine', {
-      pageNo: String(nextPage),
-      pageSize: String(PAGE_SIZE),
-    })
+    let res: any
+    if (reset) {
+      const r = await readList<any>(
+        'ai',
+        'conversations',
+        () => getApi('/ai/conversations/mine', { pageNo: '1', pageSize: String(PAGE_SIZE) }),
+      )
+      res = r.data
+      if (r.offline) uni.showToast({ title: '离线模式，展示本地历史', icon: 'none' })
+    } else {
+      res = await getApi('/ai/conversations/mine', {
+        pageNo: String(nextPage),
+        pageSize: String(PAGE_SIZE),
+      })
+    }
     const records: any[] = Array.isArray(res) ? res : (res?.records || [])
     list.value = reset ? records : list.value.concat(records)
     pageNo.value = nextPage

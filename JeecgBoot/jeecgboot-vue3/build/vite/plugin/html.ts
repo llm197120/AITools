@@ -29,13 +29,12 @@ export function configHtmlPlugin(env: ViteEnv, isBuild: boolean, isQiankunMicro:
         basePublicPath: basePublicPath,
       },
       // 将app.config.js文件注入到模板html中
-            tags: isBuild
+      tags: isBuild
         ? [
             {
               tag: 'script',
               attrs: {
                 src: getAppConfigSrc(),
-                type: 'module',
               },
             },
           ]

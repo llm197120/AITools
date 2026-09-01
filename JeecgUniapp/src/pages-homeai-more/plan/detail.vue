@@ -83,6 +83,7 @@ import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { planApi } from '../../pages-homeai/api/plan'
 import { localDateStr } from '../../pages-homeai/utils/date'
+import { readDetail, mutate } from '../../pages-homeai/offline/dataAccess'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 import { useUserStore } from '../../pages-homeai/stores/user'
@@ -144,22 +145,24 @@ async function loadPlan(silent = false) {
   if (!silent) loading.value = true
   loadFailed.value = false
   try {
-    try {
-      const found = await planApi.instance(instanceId.value)
-      if (found) {
-        plan.value = found
-        return
-      }
-    } catch {
-      // 回退按日列表，兼容旧后端
+    const res = await readDetail<any>(
+      'plan',
+      instanceId.value,
+      async () => {
+        try {
+          const found = await planApi.instance(instanceId.value)
+          if (found) return found
+        } catch {
+          // 回退按日列表，兼容旧后端
+        }
+        const list = (await planApi.byDate(planDate.value)) || []
+        return list.find((p: any) => p.id === instanceId.value) || {}
+      },
+    )
+    plan.value = res.data || {}
+    if (res.offline) {
+      uni.showToast({ title: '离线模式，展示本地数据', icon: 'none' })
     }
-    const list = (await planApi.byDate(planDate.value)) || []
-    const found = list.find((p: any) => p.id === instanceId.value)
-    if (found) {
-      plan.value = found
-      return
-    }
-    if (!plan.value.id) plan.value = {}
   } catch {
     loadFailed.value = !plan.value.id
     if (loadFailed.value) uni.showToast({ title: '计划加载失败', icon: 'none' })
@@ -172,9 +175,19 @@ async function toggleComplete() {
   if (plan.value.status === 'expired' || toggling.value) return
   toggling.value = true
   try {
-    await planApi.toggle(instanceId.value)
-    uni.showToast({ title: '已更新', icon: 'success' })
-    await loadPlan(true)
+    const res = await mutate(
+      'plan',
+      'toggle',
+      { instanceId: instanceId.value },
+      (p) => planApi.toggle(p.instanceId),
+    )
+    if (res.queued) {
+      plan.value.status = plan.value.status === 'completed' ? 'pending' : 'completed'
+      uni.showToast({ title: '已离线保存，联网后同步', icon: 'none' })
+    } else {
+      uni.showToast({ title: '已更新', icon: 'success' })
+      await loadPlan(true)
+    }
   } finally {
     toggling.value = false
   }
@@ -188,12 +201,20 @@ async function doDelete() {
   if (deleting.value) return
   deleting.value = true
   try {
-    await planApi.remove(instanceId.value)
+    const res = await mutate(
+      'plan',
+      'remove',
+      { instanceId: instanceId.value },
+      (p) => planApi.remove(p.instanceId),
+    )
     deleteVisible.value = false
-    uni.showToast({ title: '已删除', icon: 'success' })
+    uni.showToast({
+      title: res.queued ? '已离线删除，联网后同步' : '已删除',
+      icon: res.queued ? 'none' : 'success',
+    })
     setTimeout(() => uni.navigateBack(), 600)
-  } catch {
-    // request 层已 toast
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '删除失败', icon: 'none' })
   } finally {
     deleting.value = false
   }

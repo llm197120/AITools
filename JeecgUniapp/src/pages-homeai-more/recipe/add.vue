@@ -132,6 +132,7 @@
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { recipeApi } from '../../pages-homeai/api/recipe'
+import { mutate } from '../../pages-homeai/offline/dataAccess'
 import { useFamilyStore } from '../../pages-homeai/stores/family'
 import { formatQuantityUnit, parseAmountToQuantityUnit } from '../../pages-homeai/utils/recipeIngredient'
 import HomeFormCard from '../../components/HomeFormCard.vue'
@@ -316,15 +317,21 @@ async function submit() {
       })),
   }
   try {
-    if (editId.value) {
-      await recipeApi.update({ id: editId.value, ...data })
-    } else {
-      const created: any = await recipeApi.create(data)
-      editId.value = created.id
-    }
-    uni.showToast({ title: '保存成功', icon: 'success' })
+    const payload = editId.value ? { id: editId.value, ...data } : data
+    const res = editId.value
+      ? await mutate('recipe', 'update', { data: payload }, (p) => recipeApi.update(p.data))
+      : await mutate('recipe', 'create', { data: payload }, (p) => recipeApi.create(p.data))
+    if (!editId.value && (res.result as any)?.id) editId.value = (res.result as any).id
+    uni.showToast({
+      title: res.queued ? '已离线保存，联网后同步' : '保存成功',
+      icon: res.queued ? 'none' : 'success',
+    })
     setTimeout(() => {
-      uni.redirectTo({ url: `/pages-homeai-more/recipe/detail?id=${editId.value}` })
+      if (res.queued || !editId.value) {
+        uni.navigateBack()
+      } else {
+        uni.redirectTo({ url: `/pages-homeai-more/recipe/detail?id=${editId.value}` })
+      }
     }, 800)
   } catch (e: any) {
     uni.showToast({ title: e.message || '保存失败', icon: 'none' })

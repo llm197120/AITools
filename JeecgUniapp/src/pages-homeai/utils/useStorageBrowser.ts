@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { storageApi } from '../api/storage'
+import { readList } from '../offline/dataAccess'
 import {
   buildBreadcrumb,
   canCreateSubFolder,
@@ -77,9 +78,20 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
     try {
       const nextPage = reset ? 1 : pageNo.value + 1
       const fid = getFolderId()
-      const page = fid
-        ? await storageApi.folderFiles(fid, nextPage, PAGE_SIZE)
-        : await storageApi.rootFiles(nextPage, PAGE_SIZE)
+      let page: any
+      if (reset) {
+        const r = await readList<any>(
+          'storage',
+          'files:' + (fid || 'root'),
+          () => (fid ? storageApi.folderFiles(fid, 1, PAGE_SIZE) : storageApi.rootFiles(1, PAGE_SIZE)),
+        )
+        page = r.data
+        if (r.offline) uni.showToast({ title: '离线模式，展示本地数据', icon: 'none' })
+      } else {
+        page = fid
+          ? await storageApi.folderFiles(fid, nextPage, PAGE_SIZE)
+          : await storageApi.rootFiles(nextPage, PAGE_SIZE)
+      }
       const { records, total } = unwrapFilePage(page)
       const normalized = normalizeStorageFiles(records)
       files.value = reset ? normalized : files.value.concat(normalized)

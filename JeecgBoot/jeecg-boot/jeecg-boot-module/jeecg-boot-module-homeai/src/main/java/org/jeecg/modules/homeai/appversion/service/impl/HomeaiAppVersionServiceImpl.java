@@ -9,6 +9,7 @@ import org.jeecg.modules.homeai.appversion.entity.HomeaiAppVersion;
 import org.jeecg.modules.homeai.appversion.mapper.HomeaiAppVersionMapper;
 import org.jeecg.modules.homeai.appversion.service.IHomeaiAppVersionService;
 import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
+import org.jeecg.modules.homeai.config.HomeaiFileUrlUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.preview.HomeaiPreviewKind;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,8 +63,10 @@ public class HomeaiAppVersionServiceImpl extends ServiceImpl<HomeaiAppVersionMap
         dto.setVersionCode(row.getVersionCode() == null ? 0 : row.getVersionCode());
         dto.setUpdateMode(normalizeMode(row.getUpdateMode()));
         dto.setForceUpdate(row.getForceUpdate() != null && row.getForceUpdate() == 1);
-        dto.setApkUrl(fileStorageService.resolveAccessUrl(row.getApkUrl()));
+        //update-begin---author:cursor---date:2026-08-31---for:【APP更新】apk 走后端代理下载（SDK 拉流），预签名直链被 OSS ApkDownloadForbidden 拦截---
+        dto.setApkUrl(apkDownloadUrl(row.getApkUrl()));
         dto.setResourceUrl(fileStorageService.resolveAccessUrl(row.getResourceUrl()));
+        //update-end---author:cursor---date:2026-08-31---for:【APP更新】apk 走后端代理下载（SDK 拉流）---
         dto.setApkSha256(blankToNull(row.getApkSha256()));
         dto.setResourceSha256(blankToNull(row.getResourceSha256()));
         dto.setMinShellCode(row.getMinShellCode() == null ? 0 : row.getMinShellCode());
@@ -80,8 +83,10 @@ public class HomeaiAppVersionServiceImpl extends ServiceImpl<HomeaiAppVersionMap
         view.setVersionCode(row.getVersionCode());
         view.setUpdateMode(normalizeMode(row.getUpdateMode()));
         view.setForceUpdate(row.getForceUpdate());
-        view.setApkUrl(fileStorageService.resolveAccessUrl(row.getApkUrl()));
+        //update-begin---author:cursor---date:2026-08-31---for:【APP更新】apk 走后端代理下载（SDK 拉流），预签名直链被 OSS ApkDownloadForbidden 拦截---
+        view.setApkUrl(apkDownloadUrl(row.getApkUrl()));
         view.setResourceUrl(fileStorageService.resolveAccessUrl(row.getResourceUrl()));
+        //update-end---author:cursor---date:2026-08-31---for:【APP更新】apk 走后端代理下载（SDK 拉流）---
         view.setApkSha256(row.getApkSha256());
         view.setResourceSha256(row.getResourceSha256());
         view.setMinShellCode(row.getMinShellCode());
@@ -159,7 +164,9 @@ public class HomeaiAppVersionServiceImpl extends ServiceImpl<HomeaiAppVersionMap
             Files.deleteIfExists(tmp);
             file.transferTo(tmp.toFile());
             String sha = sha256Hex(tmp);
+            //update-begin---author:cursor---date:2026-08-31---for:【APP更新】apk 对象由后端代理接口（SDK 拉流）分发，存储 key 恢复 .apk 后缀（预签名直链仍被 OSS 限制）---
             String objectKey = "homeai/app-version/" + type + "-" + System.currentTimeMillis() + "." + ext;
+            //update-end---author:cursor---date:2026-08-31---for:【APP更新】apk 对象由后端代理接口（SDK 拉流）分发---
             String stored = fileStorageService.storeLocalFile(tmp, objectKey);
             Map<String, String> result = new HashMap<>();
             result.put("url", fileStorageService.resolveAccessUrl(stored));
@@ -189,6 +196,20 @@ public class HomeaiAppVersionServiceImpl extends ServiceImpl<HomeaiAppVersionMap
         }
         return "apk";
     }
+
+    //update-begin---author:cursor---date:2026-08-31---for:【APP更新】apk 下载地址统一走后端代理接口（SDK 拉流，实测 OSS 放行）；预签名直链被 ApkDownloadForbidden 拦截---
+    /**
+     * APK 下载地址：OSS 默认域名禁止预签名 URL 直链分发 .apk（ApkDownloadForbidden，实测仅拦
+     * query 签名、放行 Header 签名/SDK 拉流），因此统一返回后端代理下载接口地址。
+     * apkUrl 未配置时返回 null。
+     */
+    private String apkDownloadUrl(String storedReference) {
+        if (oConvertUtils.isEmpty(storedReference)) {
+            return null;
+        }
+        return HomeaiFileUrlUtil.toAbsoluteUrl("/homeai/app/version/package/download");
+    }
+    //update-end---author:cursor---date:2026-08-31---for:【APP更新】apk 下载地址统一走后端代理接口（SDK 拉流）---
 
     private static String blankToNull(String value) {
         return oConvertUtils.isEmpty(value) ? null : value;

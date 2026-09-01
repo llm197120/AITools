@@ -4,6 +4,7 @@
 
 <template>
   <view class="hai-page">
+    <OfflineBanner />
     <view class="month-bar">
       <text class="nav-btn" @click="prevMonth">‹</text>
       <text class="month-label">{{ yearMonthLabel }}</text>
@@ -80,6 +81,8 @@ import { planApi } from '../../pages-homeai/api/index'
 import { localDateStr, toDateStr } from '../../pages-homeai/utils/date'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
 import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
+import { readList, mutate } from '../../pages-homeai/offline/dataAccess'
+import OfflineBanner from '../../pages-homeai/offline/OfflineBanner.vue'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 
@@ -136,7 +139,11 @@ function statusLabel(s: string) {
 
 async function loadCalendar() {
   try {
-    const res: any = await planApi.calendar(yearMonthParam.value)
+    const res: any = await readList(
+      'plan',
+      'calendar:' + yearMonthParam.value,
+      () => planApi.calendar(yearMonthParam.value),
+    ).then((r) => r.data)
     if (Array.isArray(res)) {
       planDates.value = res.map((d: any) => toDateStr(d)).filter(Boolean)
       expiredDates.value = []
@@ -156,7 +163,15 @@ async function loadPlans() {
   if (!silent) loading.value = true
   loadFailed.value = false
   try {
-    plans.value = (await planApi.byDate(selectedDate.value)) || []
+    const res = await readList<any[]>(
+      'plan',
+      'byDate:' + selectedDate.value,
+      () => planApi.byDate(selectedDate.value),
+    )
+    plans.value = res.data || []
+    if (res.offline) {
+      uni.showToast({ title: '离线模式，展示本地数据', icon: 'none' })
+    }
   } catch {
     if (!silent) plans.value = []
     loadFailed.value = plans.value.length === 0
@@ -204,9 +219,22 @@ async function togglePlan(p: any) {
   if (togglingId.value) return
   togglingId.value = p.id
   try {
-    await planApi.toggle(p.id)
-    await loadPlans()
-    await loadCalendar()
+    const nextStatus = p.status === 'completed' ? 'pending' : 'completed'
+    const res = await mutate(
+      'plan',
+      'toggle',
+      { instanceId: p.id },
+      (payload) => planApi.toggle(payload.instanceId),
+    )
+    if (res.queued) {
+      // 离线/网络失败：乐观更新本地
+      p.status = nextStatus
+      uni.showToast({ title: '已离线保存，联网后同步', icon: 'none' })
+      await loadCalendar()
+    } else {
+      await loadPlans()
+      await loadCalendar()
+    }
   } catch (e: any) {
     uni.showToast({ title: e?.message || '操作失败', icon: 'none' })
   } finally {

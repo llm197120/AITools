@@ -113,15 +113,27 @@ async function verifySha(path: string, expected?: string) {
 async function capacitorInstallApk(url: string, sha256: string | undefined, onStatus: (t: string) => void) {
   onStatus('正在下载安装包…')
   const plugin = await nativePlugin()
-  const { path } = await plugin.download({ url, fileName: `homeai-${Date.now()}.apk` })
+  let path = ''
+  try {
+    const ret = await plugin.download({ url, fileName: `homeai-${Date.now()}.apk` })
+    path = ret.path
+  } catch (e: any) {
+    console.error('[updater] APK 下载失败', url, e)
+    const msg = String(e?.message || (e as any)?.errMsg || e || '')
+    throw new Error(msg.startsWith('下载失败') ? msg : `下载失败: ${msg}`)
+  }
   await verifySha(path, sha256)
   onStatus('正在打开安装…')
   try {
     await plugin.installApk({ path })
   } catch (e: any) {
-    const msg = String(e?.message || e || '')
+    const msg = String(e?.message || (e as any)?.errMsg || e || '')
+    console.error('[updater] APK 安装失败', msg)
     if (msg.includes('NEED_PERMISSION')) {
-      throw new Error('请允许本应用安装未知来源应用后重试')
+      throw new Error('安装被系统拦截：请到 设置 → 应用 → 家庭AI小工具 → 允许安装未知来源应用，再点更新')
+    }
+    if (/UPDATE_INCOMPATIBLE|signature/i.test(msg)) {
+      throw new Error('安装失败：安装包签名与当前版本不一致，请卸载旧版后重新安装')
     }
     throw e instanceof Error ? e : new Error(msg || '安装失败')
   }

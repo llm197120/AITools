@@ -70,6 +70,7 @@ import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { planApi, configApi, recipeApi } from '../../pages-homeai/api/index'
 import { localDateStr } from '../../pages-homeai/utils/date'
+import { mutate } from '../../pages-homeai/offline/dataAccess'
 import HomeFormCard from '../../components/HomeFormCard.vue'
 import HomePickerCell from '../../pages-homeai/components/HomePickerCell.vue'
 import HomeDateCell from '../../pages-homeai/components/HomeDateCell.vue'
@@ -284,18 +285,21 @@ async function save() {
   saving.value = true
   try {
     await requestPlanSubscribe()
-    if (editing.value) {
-      await planApi.update(instanceId.value, payload)
-    } else {
-      await planApi.create(payload)
-    }
+    const res = editing.value
+      ? await mutate('plan', 'update', { instanceId: instanceId.value, data: payload }, (p) =>
+          planApi.update(p.instanceId, p.data),
+        )
+      : await mutate('plan', 'create', { data: payload }, (p) => planApi.create(p.data))
     if (form.value.planDate === localDateStr()) {
       await scheduleTodayPlanReminds()
     }
-    uni.showToast({ title: editing.value ? '已保存' : '创建成功', icon: 'success' })
+    uni.showToast({
+      title: res.queued ? '已离线保存，联网后同步' : editing.value ? '已保存' : '创建成功',
+      icon: res.queued ? 'none' : 'success',
+    })
     setTimeout(() => uni.navigateBack(), 800)
-  } catch {
-    // request 层已 toast
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '保存失败', icon: 'none' })
   } finally {
     saving.value = false
   }

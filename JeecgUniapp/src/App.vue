@@ -3,6 +3,39 @@ import { onLaunch, onShow, onHide, onLoad, onReady } from '@dcloudio/uni-app'
 import 'abortcontroller-polyfill/dist/abortcontroller-polyfill-only'
 import { initLocalNotify } from '@/pages-homeai/utils/push'
 import { initStandaloneShell } from '@/pages-homeai/platform/runtime'
+import { initConnectionMonitor, pokeConnection } from '@/pages-homeai/offline/conn'
+import { initSyncLoop, setSyncConfig } from '@/pages-homeai/offline/syncQueue'
+import { registerAllSenders } from '@/pages-homeai/offline/senders'
+import { initPendingUploadFlush } from '@/pages-homeai/offline/pendingUpload'
+import { getServerBaseUrl } from '@/pages-homeai/api/request'
+
+/** 启动拉取后端同步配置（batchSize/intervalMs/maxRetries/imageCacheLimitMB） */
+function loadSyncConfig() {
+  uni.request({
+    url: `${getServerBaseUrl()}/homeai/config/sync`,
+    method: 'GET',
+    timeout: 8000,
+    success: (res: any) => {
+      const d = res.data
+      if (d?.success && d.result) {
+        const cfg = d.result
+        setSyncConfig({
+          batchSize: Number(cfg.batchSize) || 1,
+          intervalMs: Number(cfg.intervalMs) || 5000,
+          maxRetriesPerItemPerDay: Number(cfg.maxRetriesPerDay) || 20,
+          imageCacheLimitMB: Number(cfg.imageCacheLimitMb) || 4096,
+        })
+        try {
+          uni.setStorageSync('homeai_sync_config', {
+            imageCacheLimitMB: Number(cfg.imageCacheLimitMb) || 4096,
+          })
+        } catch {
+          /* ignore */
+        }
+      }
+    },
+  })
+}
 export default {
   onLaunch: function (options) {
     console.log('App Launch')
@@ -13,12 +46,19 @@ export default {
     } catch (e) {
       console.warn('本地通知初始化失败（云打包缺 Push 或 Capacitor 插件未同步）', e)
     }
-    void initStandaloneShell()
+    initStandaloneShell()
+    // 离线能力：连接监控 + 缓慢同步引擎 + 各模块同步执行器 + 离线文件补传 + 同步配置
+    initConnectionMonitor()
+    registerAllSenders()
+    initSyncLoop()
+    initPendingUploadFlush()
+    loadSyncConfig()
   },
   onShow: function (options) {
     console.log('App Show')
     console.log('应用启动路径：', options.path)
-    // 隐私同意与登录分流由 pages/launch 处理
+    // 回到前台立即重探连接（离线恢复后触发同步）
+    pokeConnection()
   },
   onHide: function () {
     console.log('App Hide')

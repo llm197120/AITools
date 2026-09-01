@@ -5,6 +5,7 @@
       <text class="nav" @click="prevMonth">‹</text>
       <text class="month">{{ viewYear }}年{{ viewMonth }}月</text>
       <text class="nav" @click="nextMonth">›</text>
+      <text class="manual-btn" @click="manualVisible = true">+ 补记</text>
     </view>
     <view class="week-head">
       <text v-for="w in weekLabels" :key="w" class="w">{{ w }}</text>
@@ -42,12 +43,34 @@
         <HomeEmpty v-if="displayedRecords.length === 0" :title="emptyTitle" />
       </template>
     </view>
+
+    <wd-popup
+      v-model="manualVisible"
+      position="center"
+      custom-style="width:80%;border-radius:28rpx;overflow:hidden"
+    >
+      <view class="dialog-title">手动补记学习</view>
+      <view class="dialog-body">
+        <text class="dialog-hint">
+          补记所选日期（{{ selectedDate || '今日' }}）的学习时长，联网后自动同步。
+        </text>
+        <view class="manual-row">
+          <text class="manual-label">时长（分钟）</text>
+          <wd-input v-model="manualMinutes" type="number" placeholder="如 30" />
+        </view>
+      </view>
+      <view class="dialog-footer">
+        <wd-button block @click="manualVisible = false">取消</wd-button>
+        <wd-button type="primary" block :loading="manualSaving" @click="saveManual">保存</wd-button>
+      </view>
+    </wd-popup>
   </view>
 </template>
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { learnApi } from '../../pages-homeai/api/learn'
+import { mutate } from '../../pages-homeai/offline/dataAccess'
 import { addMonths, localDateStr, toDateStr, toDateTimeStr } from '../../pages-homeai/utils/date'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
@@ -130,6 +153,39 @@ function selectDate(date: string) {
   loadData(records.value.length > 0)
 }
 
+// 手动补记（离线可用：入队，联网后缓慢同步）
+const manualVisible = ref(false)
+const manualMinutes = ref('30')
+const manualSaving = ref(false)
+
+async function saveManual() {
+  const minutes = Number(manualMinutes.value)
+  if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 1440) {
+    uni.showToast({ title: '请输入 1-1440 的分钟数', icon: 'none' })
+    return
+  }
+  if (manualSaving.value) return
+  manualSaving.value = true
+  try {
+    const res = await mutate(
+      'learn',
+      'addRecord',
+      { materialId: '', duration: minutes, recordType: 'manual', notes: '手动补记' },
+      (p) => learnApi.addRecord(p.materialId, p.duration, p.notes),
+    )
+    manualVisible.value = false
+    uni.showToast({
+      title: res.queued ? '已离线保存，联网后同步' : '已记录',
+      icon: res.queued ? 'none' : 'success',
+    })
+    await loadData(true)
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '保存失败', icon: 'none' })
+  } finally {
+    manualSaving.value = false
+  }
+}
+
 function shiftMonth(delta: number) {
   const next = addMonths(yearMonthParam.value, delta)
   viewYear.value = Number(next.slice(0, 4))
@@ -165,6 +221,22 @@ onShow(() => loadData(records.value.length > 0))
 .month-bar { display: flex; justify-content: center; align-items: center; gap: 40rpx; padding: 12rpx 0 20rpx; }
 .nav { font-size: 36rpx; color: var(--hai-primary); }
 .month { font-size: 30rpx; font-weight: 600; color: var(--hai-text); }
+.manual-btn {
+  font-size: 26rpx;
+  color: var(--hai-primary);
+}
+.dialog-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  text-align: center;
+  padding: 36rpx 24rpx 10rpx;
+  color: var(--hai-text);
+}
+.dialog-body { padding: 12rpx 30rpx 20rpx; }
+.dialog-hint { display: block; font-size: 24rpx; color: var(--hai-text-secondary); line-height: 1.5; margin-bottom: 16rpx; }
+.manual-row { display: flex; align-items: center; gap: 16rpx; }
+.manual-label { font-size: 26rpx; color: var(--hai-text); flex-shrink: 0; }
+.dialog-footer { display: flex; gap: 20rpx; padding: 0 30rpx 30rpx; }
 .week-head { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; margin-bottom: 8rpx; }
 .w { font-size: 22rpx; color: var(--hai-text-muted); }
 .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8rpx; background: var(--hai-card); border-radius: 28rpx; padding: 16rpx; margin-bottom: 20rpx; box-shadow: var(--hai-shadow); }

@@ -46,12 +46,11 @@
         @click="openFile(file)"
         @longpress="showFileActions(file)"
       >
-        <image
+        <OfflineImage
           v-if="file.thumbnailUrl"
           class="file-thumb"
           :src="file.thumbnailUrl"
           mode="aspectFill"
-          lazy-load
         />
         <HomeFileIcon v-else :ext="file.extension" :name="getStorageDisplayName(file)" />
         <view class="file-info">
@@ -133,6 +132,7 @@
 import { onMounted } from 'vue'
 import { useStorageBrowser } from '../../pages-homeai/utils/useStorageBrowser'
 import { useMemberLabel } from '../../pages-homeai/utils/useMemberLabel'
+import OfflineImage from '../../pages-homeai/offline/OfflineImage.vue'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 import { getStorageDisplayName } from '../../pages-homeai/utils/storageFileDisplay'

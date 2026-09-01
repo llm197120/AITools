@@ -65,7 +65,8 @@
         <view class="menu-icon">
           <wd-icon name="setting" size="18px" color="#1B4F8A"></wd-icon>
         </view>
-        <text class="menu-text">服务器地址</text>
+        <text class="menu-text">服务器状态</text>
+        <text class="server-status" :class="'st-' + connState">{{ serverStatusText }}</text>
         <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
       </view>
       <view class="menu-item" @click="showPrivacy">
@@ -95,10 +96,14 @@
       position="center"
       custom-style="width:80%;border-radius:28rpx;overflow:hidden"
     >
-      <view class="dialog-title">服务器地址</view>
+      <view class="dialog-title">服务器设置</view>
       <view class="dialog-body">
-        <text class="dialog-hint">内测换网段时填写电脑局域网地址，例如 http://192.168.1.8:8080/jeecg-boot</text>
+        <text class="dialog-hint">当前状态：{{ serverStatusText }}</text>
+        <text class="dialog-hint">
+          内测换网段时填写电脑局域网地址，例如 http://192.168.1.8:8080/jeecg-boot
+        </text>
         <wd-input v-model="apiBaseInput" placeholder="http://主机:8080/jeecg-boot" />
+        <view class="retest-btn" @click="checkNow">立即重测连接</view>
       </view>
       <view class="dialog-footer">
         <wd-button block @click="apiBaseVisible = false">取消</wd-button>
@@ -109,7 +114,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '../../pages-homeai/stores/user'
 import { useFamilyStore } from '../../pages-homeai/stores/family'
@@ -122,6 +127,12 @@ import { openAuthPage, jumpToGuestAuth, usesPhoneLogin, wechatLogin } from '../.
 import { getServerBaseUrl, setAppBaseUrl, pingAppBaseUrl } from '../../pages-homeai/platform/env'
 import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
 import { useFamilyPoll } from '../../pages-homeai/utils/useFamilyPoll'
+import {
+  getConnState,
+  onConnChange,
+  checkNow,
+  pokeConnection,
+} from '../../pages-homeai/offline/conn'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
@@ -134,6 +145,23 @@ const phoneLoginApp = usesPhoneLogin()
 const showChangePassword = computed(() => {
   if (userStore.userInfo?.loginType === 'phone') return true
   return phoneLoginApp
+})
+
+// 服务器状态（离线能力）：显示可用性而非地址；点击重测并打开改地址弹窗
+const connState = ref<'online' | 'offline' | 'unknown'>(getConnState())
+const serverStatusText = computed(() => {
+  if (connState.value === 'online') return '可用'
+  if (connState.value === 'offline') return '不可用'
+  return '检测中'
+})
+let offConnChange: (() => void) | null = null
+onMounted(() => {
+  offConnChange = onConnChange((s) => {
+    connState.value = s
+  })
+})
+onUnmounted(() => {
+  offConnChange?.()
 })
 
 const stats = ref([
@@ -247,6 +275,9 @@ function showPrivacy() {
 function showApiBase() {
   apiBaseInput.value = getServerBaseUrl()
   apiBaseVisible.value = true
+  // 打开弹窗同时立即重测一次，状态实时刷新
+  checkNow()
+  pokeConnection()
 }
 
 async function saveApiBase() {
@@ -450,6 +481,34 @@ function handleLogout() {
   flex: 1;
   font-size: 28rpx;
   color: var(--hai-text);
+}
+
+.server-status {
+  font-size: 24rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+}
+.server-status.st-online {
+  color: #1a8f4b;
+  background: rgba(26, 143, 75, 0.1);
+}
+.server-status.st-offline {
+  color: var(--hai-danger, #c0392b);
+  background: rgba(192, 57, 43, 0.1);
+}
+.server-status.st-unknown {
+  color: var(--hai-text-muted);
+  background: rgba(138, 133, 124, 0.12);
+}
+
+.retest-btn {
+  margin-top: 12rpx;
+  padding: 16rpx;
+  text-align: center;
+  border-radius: 999rpx;
+  background: var(--hai-primary-soft, rgba(27, 79, 138, 0.1));
+  color: var(--hai-primary, #1b4f8a);
+  font-size: 26rpx;
 }
 
 .logout-btn {

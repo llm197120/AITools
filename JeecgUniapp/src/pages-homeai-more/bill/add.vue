@@ -54,6 +54,7 @@ import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { billApi } from '../../pages-homeai/api/bill'
 import { localDateStr } from '../../pages-homeai/utils/date'
+import { mutate } from '../../pages-homeai/offline/dataAccess'
 import HomeFormCard from '../../components/HomeFormCard.vue'
 import HomePickerCell from '../../pages-homeai/components/HomePickerCell.vue'
 import HomeDateCell from '../../pages-homeai/components/HomeDateCell.vue'
@@ -129,11 +130,19 @@ async function save() {
   form.value.remark = String(form.value.remark || '').trim()
   saving.value = true
   try {
-    await billApi.create({ ...form.value, amount, source: 'manual' })
-    uni.showToast({ title: '保存成功', icon: 'success' })
+    const res = await mutate(
+      'bill',
+      'create',
+      { data: { ...form.value, amount, source: 'manual' } },
+      (p) => billApi.create(p.data),
+    )
+    uni.showToast({
+      title: res.queued ? '已离线保存，联网后同步' : '保存成功',
+      icon: res.queued ? 'none' : 'success',
+    })
     setTimeout(() => uni.navigateBack(), 1000)
-  } catch {
-    // request 层已 toast
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '保存失败', icon: 'none' })
   } finally {
     saving.value = false
   }

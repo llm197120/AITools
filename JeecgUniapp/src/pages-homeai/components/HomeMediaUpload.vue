@@ -74,6 +74,9 @@ import { getServerBaseUrl } from '../api/request'
 import { getToken } from '../utils/auth'
 import { consumeHomeaiUnauthorized } from '../utils/homeaiAuth'
 import { AUDIO_EXTS } from '../platform/fileAccept'
+import { toUploadParams } from '../platform/uploadPath'
+import { getConnState } from '../offline/conn'
+import { savePendingUpload } from '../offline/pendingUpload'
 import { useHomeaiFilePick } from '../utils/useHomeaiFilePick'
 import { previewFile } from '../utils/filePreview'
 import NativeHtmlAudio from './NativeHtmlAudio'
@@ -143,7 +146,7 @@ async function pickAndUpload() {
   uploading.value = true
   progress.value = 0
   try {
-    const url = await uploadFile(files[0].path)
+    const url = await uploadFile(files[0].path, files[0].name)
     emit('change', url)
     emit('update:modelValue', url)
     uni.showToast({ title: '上传成功', icon: 'success' })
@@ -154,11 +157,26 @@ async function pickAndUpload() {
   }
 }
 
-function uploadFile(filePath: string): Promise<string> {
+async function uploadFile(filePath: string, uploadName?: string): Promise<string> {
+  // 离线：文件字节暂存本地，恢复在线后由同步编排补传（返回 pending://key 标记）
+  if (getConnState() === 'offline') {
+    const input = await toUploadParams(filePath, uploadName)
+    if (!input.file) throw new Error('离线无法读取文件')
+    const key = await savePendingUpload({
+      module: 'recipe-media',
+      url: getServerBaseUrl() + props.url,
+      name: 'file',
+      fileName: uploadName || filePath.split(/[/\\]/).pop() || 'file',
+      formData: props.formData || {},
+      blob: input.file,
+    })
+    return 'pending://' + key
+  }
+  const upload = await toUploadParams(filePath, uploadName)
   return new Promise((resolve, reject) => {
     uni.uploadFile({
       url: getServerBaseUrl() + props.url,
-      filePath,
+      ...upload,
       name: 'file',
       formData: props.formData,
       header: { 'X-Access-Token': getToken() || '' },

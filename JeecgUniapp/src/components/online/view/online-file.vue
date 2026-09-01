@@ -16,6 +16,7 @@ import { getEnvBaseUploadUrl,getEnvBaseUrl } from '@/utils'
 import { useUserStore } from '@/store'
 import { getFileAccessHttpUrl } from '@/common/uitls'
 import { isString } from '@/utils/is'
+import { toUploadParams } from '@/pages-homeai/platform/uploadPath'
 import { useToast } from 'wot-design-uni'
 const toast = useToast()
 const VITE_UPLOAD_BASEURL = `${getEnvBaseUrl()}/sys/common/upload`
@@ -63,49 +64,51 @@ const fileList = ref([])
  */
 const customUpload: UploadMethod = (file, formData, options) => {
   const userStore = useUserStore()
-  const uploadTask = uni.uploadFile({
-    url: VITE_UPLOAD_BASEURL,
-    header: {
-      'X-Access-Token': userStore.userInfo.token,
-      'X-Tenant-Id': userStore.userInfo.tenantId,
-      ...options.header,
-    },
-    name: options.name,
-    fileName: options.name,
-    fileType: options.fileType,
-    formData,
-    filePath: file.url,
-    success(res: any) {
-      if (res.statusCode === options.statusCode) {
-        let data = res.data
-        if (data && isString(data)) {
-          data = JSON.parse(data)
-        }
-        // 设置上传成功
-        if (data && data.success) {
-          const file = {
-            id: new Date().getTime(),
-            name: options.name,
-            path: data.message,
-            url: getFileAccessHttpUrl(data.message),
+  toUploadParams(file.url).then((upload) => {
+    const uploadTask = uni.uploadFile({
+      url: VITE_UPLOAD_BASEURL,
+      header: {
+        'X-Access-Token': userStore.userInfo.token,
+        'X-Tenant-Id': userStore.userInfo.tenantId,
+        ...options.header,
+      },
+      name: options.name,
+      fileName: options.name,
+      fileType: options.fileType,
+      formData,
+      ...upload,
+      success(res: any) {
+        if (res.statusCode === options.statusCode) {
+          let data = res.data
+          if (data && isString(data)) {
+            data = JSON.parse(data)
           }
-          fileList.value.unshift(file)
-          changeOnlineFormValue()
+          // 设置上传成功
+          if (data && data.success) {
+            const file = {
+              id: new Date().getTime(),
+              name: options.name,
+              path: data.message,
+              url: getFileAccessHttpUrl(data.message),
+            }
+            fileList.value.unshift(file)
+            changeOnlineFormValue()
+          }
+        } else {
+          // 设置上传失败
+          options.onError({ ...res, errMsg: res.errMsg || '' }, file, formData)
         }
-      } else {
+      },
+      fail(err) {
+        console.info('upload fail', err)
         // 设置上传失败
-        options.onError({ ...res, errMsg: res.errMsg || '' }, file, formData)
-      }
-    },
-    fail(err) {
-      console.info('upload fail', err)
-      // 设置上传失败
-      options.onError(err, file, formData)
-    },
-  })
-  // 设置当前文件加载的百分比
-  uploadTask.onProgressUpdate((res) => {
-    options.onProgress(res, file)
+        options.onError(err, file, formData)
+      },
+    })
+    // 设置当前文件加载的百分比
+    uploadTask.onProgressUpdate((res) => {
+      options.onProgress(res, file)
+    })
   })
 }
 

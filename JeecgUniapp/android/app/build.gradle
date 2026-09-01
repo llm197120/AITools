@@ -7,8 +7,8 @@ android {
         applicationId "com.homeai.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 101
-        versionName "1.0.1+20260823-192316"
+        versionCode 102
+        versionName "1.0.2+20260901-144232"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

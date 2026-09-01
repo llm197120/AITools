@@ -126,6 +126,18 @@ if (Test-Path -LiteralPath (Join-Path $h5Dir 'index.html')) {
     Write-Host "H5 zip: $zipPath"
 }
 
+# 产物元数据：发布脚本据此自动登记版本（publish-all.ps1 -RegisterVersion）
+$zipForMeta = if (Test-Path -LiteralPath (Join-Path $h5Dir 'index.html')) { $zipPath } else { '' }
+$meta = @{
+    apk         = $outApk
+    zip         = $zipForMeta
+    versionName = $ver.Name
+    versionCode = [int]$ver.Code
+} | ConvertTo-Json
+$lastVersion = Join-Path $outDir 'last-version.json'
+Write-Utf8NoBom -Path $lastVersion -Content $meta
+Write-Host "last-version: $lastVersion"
+
 if ($Upload) {
     $uploadScript = (Resolve-Path (Join-Path $uniRoot '..\JeecgBoot\deploy\frp\upload-apk.ps1')).Path
     & $uploadScript -ApkPath $outApk -Version $Version

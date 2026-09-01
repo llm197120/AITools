@@ -4,6 +4,7 @@
 
 <template>
   <view class="hai-page hai-page--bottom-bar">
+    <OfflineBanner />
     <view class="toolbar">
       <view class="month-nav">
         <text class="month-btn" @click="changeMonth(-1)">‹</text>
@@ -69,6 +70,8 @@ import { billApi } from '../../pages-homeai/api/bill'
 import { addMonths, localMonthStr } from '../../pages-homeai/utils/date'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
 import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
+import { readList } from '../../pages-homeai/offline/dataAccess'
+import OfflineBanner from '../../pages-homeai/offline/OfflineBanner.vue'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 
@@ -107,14 +110,24 @@ async function loadData(silent = false) {
   pageNo.value = 1
   try {
     const m = currentMonth.value
-    applyPage(await billApi.entries(m, 1, PAGE_SIZE, keyword.value), false)
-    const sum: any = await billApi.summary(m)
+    const kw = keyword.value.trim() || 'all'
+    const entriesRes = await readList<any>(
+      'bill',
+      'entries:' + m + ':' + kw,
+      () => billApi.entries(m, 1, PAGE_SIZE, keyword.value),
+    )
+    applyPage(entriesRes.data, false)
+    const sumRes = await readList<any>('bill', 'summary:' + m, () => billApi.summary(m))
+    const sum: any = sumRes.data
     summary.value = {
       expense: sum.totalExpense ?? '0',
       income: sum.totalIncome ?? '0',
       balance: sum.balance ?? '0',
     }
-    cats.value = (await billApi.categories()) || []
+    cats.value = (await readList<any[]>('bill', 'cats', () => billApi.categories())).data || []
+    if (entriesRes.offline || sumRes.offline) {
+      uni.showToast({ title: '离线模式，展示本地数据', icon: 'none' })
+    }
   } catch {
     loadFailed.value = allEntries.value.length === 0
     if (silent && allEntries.value.length > 0) {

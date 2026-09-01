@@ -11,6 +11,7 @@
 
 <template>
   <view class="hai-page hai-page--fab">
+    <OfflineBanner />
     <view class="search-bar">
       <input class="search-input" v-model="keyword" placeholder="搜索菜谱..." confirm-type="search" @confirm="search" />
       <text v-if="keyword" class="search-clear" @click="clearSearch">清除</text>
@@ -19,7 +20,7 @@
       <view class="recommend-head"><text class="recommend-title">为你推荐</text></view>
       <view class="recommend-row">
         <view class="recommend-card" v-for="r in recommends" :key="r.id" @click="detail(r.id)">
-          <image class="recommend-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill" lazy-load />
+          <OfflineImage class="recommend-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill" />
           <text class="recommend-name">{{ r.name }}</text>
           <text class="recommend-reason">{{ reasonLabel(r.reason, r.cookCount) }}</text>
         </view>
@@ -29,7 +30,7 @@
       <view class="recommend-head"><text class="recommend-title">新菜尝鲜</text></view>
       <view class="recommend-row">
         <view class="recommend-card" v-for="r in newRecipes" :key="'n-' + r.id" @click="detail(r.id)">
-          <image class="recommend-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill" lazy-load />
+          <OfflineImage class="recommend-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill" />
           <text class="recommend-name">{{ r.name }}</text>
           <text class="recommend-reason">新上架</text>
         </view>
@@ -51,7 +52,7 @@
     />
     <view v-else class="recipe-grid">
       <view class="recipe-card" v-for="r in recipes" :key="r.id" @click="detail(r.id)">
-        <image class="recipe-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill" lazy-load />
+        <OfflineImage class="recipe-img" :src="r.coverUrl || '/static/default-food.png'" mode="aspectFill" />
         <view class="recipe-info">
           <text class="recipe-name">{{ r.name }}</text>
           <view class="recipe-meta-row">
@@ -85,6 +86,9 @@ import { computed, ref } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
 import { recipeApi } from '../../pages-homeai/api/recipe'
+import { readList } from '../../pages-homeai/offline/dataAccess'
+import OfflineBanner from '../../pages-homeai/offline/OfflineBanner.vue'
+import OfflineImage from '../../pages-homeai/offline/OfflineImage.vue'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
@@ -160,7 +164,9 @@ async function load(reset = true, silent = false) {
     if (!silent) loading.value = true
     loadFailed.value = false
     try {
-      recipes.value = (await recipeApi.hot(30)) || []
+      const r = await readList<any[]>('recipe', 'hot', () => recipeApi.hot(30))
+      recipes.value = r.data || []
+      if (r.offline) uni.showToast({ title: '离线模式，展示本地数据', icon: 'none' })
     } catch {
       if (!silent) {
         recipes.value = []
@@ -182,8 +188,23 @@ async function load(reset = true, silent = false) {
   }
   try {
     const nextPage = reset ? 1 : pageNo.value + 1
-    const params = { pageNo: String(nextPage), pageSize: String(PAGE_SIZE) }
-    const res = tab.value === 'favorite' ? await recipeApi.favorites(params) : await recipeApi.list(params)
+    let res: any
+    if (reset) {
+      const kw = keyword.value.trim() || 'all'
+      const r = await readList<any>(
+        'recipe',
+        tab.value + ':' + kw,
+        () =>
+          tab.value === 'favorite'
+            ? recipeApi.favorites({ pageNo: '1', pageSize: String(PAGE_SIZE) })
+            : recipeApi.list({ pageNo: '1', pageSize: String(PAGE_SIZE) }),
+      )
+      res = r.data
+      if (r.offline) uni.showToast({ title: '离线模式，展示本地数据', icon: 'none' })
+    } else {
+      const params = { pageNo: String(nextPage), pageSize: String(PAGE_SIZE) }
+      res = tab.value === 'favorite' ? await recipeApi.favorites(params) : await recipeApi.list(params)
+    }
     const records: any[] = res?.records || (Array.isArray(res) ? res : [])
     recipes.value = reset ? records : recipes.value.concat(records)
     pageNo.value = nextPage

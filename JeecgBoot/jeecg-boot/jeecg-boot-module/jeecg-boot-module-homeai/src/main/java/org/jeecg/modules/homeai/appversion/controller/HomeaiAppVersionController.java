@@ -1,17 +1,22 @@
 package org.jeecg.modules.homeai.appversion.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.jeecg.common.api.vo.Result;
 import org.jeecg.common.aspect.annotation.AutoLog;
 import org.jeecg.common.exception.JeecgBootException;
+import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.appversion.entity.HomeaiAppVersion;
 import org.jeecg.modules.homeai.appversion.service.IHomeaiAppVersionService;
+import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
+import org.jeecg.modules.homeai.preview.HomeaiFileMime;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.file.Path;
 import java.util.Map;
 
 @Slf4j
@@ -22,11 +27,42 @@ public class HomeaiAppVersionController {
     @Autowired
     private IHomeaiAppVersionService appVersionService;
 
+    @Autowired
+    private IHomeaiFileStorageService fileStorageService;
+
     @GetMapping
     @Operation(summary = "APP当前版本（公开，启动页探测）")
     public Result<?> publicCurrent() {
         return Result.OK(appVersionService.toPublic(appVersionService.requireCurrent()));
     }
+
+    //update-begin---author:cursor---date:2026-08-31---for:【APP更新】APK 代理下载（SDK 拉流），绕开 OSS ApkDownloadForbidden 预签名直链限制---
+    /**
+     * APK 下载（匿名公开）：OSS 默认域名禁止预签名 URL 直链分发 .apk（ApkDownloadForbidden），
+     * 由后端用 SDK 拉流（Header 签名，实测放行）后转发给客户端。
+     */
+    @GetMapping("/package/download")
+    public void downloadPackage(HttpServletResponse response) {
+        HomeaiAppVersion row = appVersionService.requireCurrent();
+        if (oConvertUtils.isEmpty(row.getApkUrl())) {
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+        try {
+            Path path = fileStorageService.resolveLocalPath(row.getApkUrl());
+            HomeaiFileMime.writeLocalFile(response, path, "homeai-" + row.getVersionCode() + ".apk", "apk");
+        } catch (Exception e) {
+            log.error("APK 下载失败", e);
+            if (!response.isCommitted()) {
+                try {
+                    response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "APK 读取失败");
+                } catch (Exception ignored) {
+                    // ignore
+                }
+            }
+        }
+    }
+    //update-end---author:cursor---date:2026-08-31---for:【APP更新】APK 代理下载（SDK 拉流）---
 
     @GetMapping("/admin")
     @Operation(summary = "APP版本-管理端查询")

@@ -1,6 +1,7 @@
 // TODO: 别忘加更改环境变量的 VITE_UPLOAD_BASEURL 地址。
 import { getEnvBaseUploadUrl } from '@/utils'
 import { useUserStore } from '@/store/user'
+import { toUploadParams } from '@/pages-homeai/platform/uploadPath'
 
 const VITE_UPLOAD_BASEURL = `${getEnvBaseUploadUrl()}`
 
@@ -63,24 +64,32 @@ export default function useUpload<T = string>(
 
 function uploadFile<T>({ url, tempFilePath, formData, data, error, loading }) {
   const userStore = useUserStore()
-  uni.uploadFile({
-    url: url ?? VITE_UPLOAD_BASEURL,
-    filePath: tempFilePath,
-    name: formData.name ?? 'file',
-    formData,
-    header: {
-      'X-Access-Token': userStore.userInfo.token,
-      'X-Tenant-Id': userStore.userInfo.tenantId,
-    },
-    success: (uploadFileRes) => {
-      data.value = JSON.parse(uploadFileRes.data)
-    },
-    fail: (err) => {
-      console.error('uni.uploadFile err->', err)
+  toUploadParams(tempFilePath, formData.fileName)
+    .then((upload) => {
+      uni.uploadFile({
+        url: url ?? VITE_UPLOAD_BASEURL,
+        ...upload,
+        name: formData.name ?? 'file',
+        formData,
+        header: {
+          'X-Access-Token': userStore.userInfo.token,
+          'X-Tenant-Id': userStore.userInfo.tenantId,
+        },
+        success: (uploadFileRes) => {
+          data.value = JSON.parse(uploadFileRes.data)
+        },
+        fail: (err) => {
+          console.error('uni.uploadFile err->', err)
+          error.value = true
+        },
+        complete: () => {
+          loading.value = false
+        },
+      })
+    })
+    .catch((err) => {
+      console.error('uni.uploadFile 参数构造失败->', err)
       error.value = true
-    },
-    complete: () => {
       loading.value = false
-    },
-  })
+    })
 }

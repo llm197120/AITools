@@ -9,12 +9,17 @@
 #   .\publish-all.ps1 -Backend -Frontend
 #   .\publish-all.ps1 -Target backend,app
 #   .\publish-all.ps1 -App -UploadApk
+#   .\publish-all.ps1 -App -RegisterVersion [-UpdateMode apk]
 param(
     [string[]]$Target = @(),
     [switch]$Frontend,
     [switch]$Backend,
     [switch]$App,
     [switch]$UploadApk,
+    # APP 打包成功后自动登记版本：上传 APK + H5 zip，更新后台版本号并 enabled=1
+    [switch]$RegisterVersion,
+    # 登记时的更新模式（默认 resource 热更新；改过壳/原生代码才用 apk）
+    [string]$UpdateMode = '',
     [switch]$SkipAppBuild,
     [switch]$InitAndroid,
     [switch]$Offline,
@@ -27,10 +32,10 @@ $ErrorActionPreference = 'Stop'
 
 if ($Interactive) {
     $picked = Show-HomeaiConsoleMenu -Title 'HomeAI 发布' -Items @(
-        @{ Id = '1'; Text = '全部（后端 + 前端 + APP）'; Backend = $true; Frontend = $true; App = $true }
+        @{ Id = '1'; Text = '全部（后端 + 前端 + APP，并上传 APK 到下载页）'; Backend = $true; Frontend = $true; App = $true; UploadApk = $true }
         @{ Id = '2'; Text = '仅后端'; Backend = $true; Frontend = $false; App = $false }
         @{ Id = '3'; Text = '仅前端（管理端）'; Backend = $false; Frontend = $true; App = $false }
-        @{ Id = '4'; Text = '仅 APP'; Backend = $false; Frontend = $false; App = $true }
+        @{ Id = '4'; Text = '仅 APP（并上传 APK 到下载页）'; Backend = $false; Frontend = $false; App = $true; UploadApk = $true }
         @{ Id = '5'; Text = '后端 + 前端（不出 APP）'; Backend = $true; Frontend = $true; App = $false }
     )
     if ($null -eq $picked) {
@@ -40,6 +45,7 @@ if ($Interactive) {
     $Backend = [bool]$picked.Backend
     $Frontend = [bool]$picked.Frontend
     $App = [bool]$picked.App
+    $UploadApk = [bool]$picked.UploadApk
 }
 
 $want = Resolve-HomeaiTargets -Target $Target -Frontend:$Frontend -Backend:$Backend -App:$App
@@ -94,6 +100,38 @@ function Invoke-HomeaiAppPublish {
     }
 }
 
+# APP 版本自动登记：读打包产物元数据 last-version.json，登录管理端上传 APK + H5 zip 并更新后台版本号
+function Invoke-HomeaiAppVersionRegister {
+    param([string]$Mode)
+    $metaPath = Join-Path $script:UniDir 'dist\apk\last-version.json'
+    if (-not (Test-Path -LiteralPath $metaPath)) {
+        throw "未找到产物元数据 $metaPath —— 请先执行 APP 打包（pack-apk-local.ps1）"
+    }
+    $meta = Get-Content -LiteralPath $metaPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $apk = [string]$meta.apk
+    $zip = [string]$meta.zip
+    if (-not $apk -or -not (Test-Path -LiteralPath $apk)) {
+        throw "last-version.json 中 APK 路径无效：$apk"
+    }
+    if ($zip -and -not (Test-Path -LiteralPath $zip)) {
+        Write-Host "[APP版本] 提示：H5 zip 不存在（$zip），仅登记 APK"
+        $zip = ''
+    }
+    $mode = if ($Mode) { $Mode } else { 'resource' }
+    $mjs = Join-Path $PSScriptRoot 'register-app-version.mjs'
+    $mjsArgs = @(
+        '--apk', $apk,
+        '--version', [string]$meta.versionName,
+        '--code', [string]$meta.versionCode,
+        '--mode', $mode
+    )
+    if ($zip) { $mjsArgs += @('--zip', $zip) }
+    Write-Host ("[APP版本] 登记 versionName={0} versionCode={1} mode={2}（enabled=1，即刻对 APP 生效）" -f $meta.versionName, $meta.versionCode, $mode)
+    & node $mjs @mjsArgs
+    if ($LASTEXITCODE -ne 0) { throw "版本登记失败，exit=$LASTEXITCODE" }
+    Write-Host '[APP版本] 登记完成'
+}
+
 Write-Host '========== HomeAI 发布 =========='
 Write-Host ("仓库: {0}" -f $script:RepoRoot)
 Write-HomeaiTargetBanner -Want $want -Action '发布'
@@ -125,11 +163,22 @@ if ($want.Frontend) {
 }
 
 if ($want.App) {
+    $appOk = $true
     try {
         Invoke-HomeaiAppPublish
     } catch {
+        $appOk = $false
         Write-Host ("[APP] 失败：{0}" -f $_.Exception.Message)
         $failed += 'APP'
+    }
+    if ($appOk -and $RegisterVersion) {
+        try {
+            Invoke-HomeaiAppVersionRegister -Mode $UpdateMode
+        } catch {
+            Write-Host ("[APP版本] 登记失败：{0}" -f $_.Exception.Message)
+            Write-Host '[APP版本] APK 已打包成功；可稍后手动执行 docs/deploy/register-app-version.mjs 补登记'
+            $failed += 'APP版本登记'
+        }
     }
 }
 
@@ -145,7 +194,11 @@ if ($want.Backend) {
 }
 if ($want.App) {
     Write-Host ("下载页:     http://{0}/app/" -f $cfg['SERVER_IP'])
-    Write-Host 'APP 管理端登记：家庭AI小工具 → APP版本（见 docs/guide/app-release.md）'
+    if ($RegisterVersion) {
+        Write-Host 'APP版本：已自动登记（APK + H5 zip 已上传，enabled=1）'
+    } else {
+        Write-Host 'APP 管理端登记：家庭AI小工具 → APP版本（见 docs/guide/app-release.md）；或下次发布加 -RegisterVersion 自动登记'
+    }
 }
 if ($failed.Count -gt 0) {
     Write-Host ("失败项：{0}" -f ($failed -join '、'))

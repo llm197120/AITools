@@ -53,6 +53,7 @@ import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { billApi } from '../../pages-homeai/api/bill'
 import { localDateStr } from '../../pages-homeai/utils/date'
+import { mutate } from '../../pages-homeai/offline/dataAccess'
 import HomeFormCard from '../../components/HomeFormCard.vue'
 import HomePickerCell from '../../pages-homeai/components/HomePickerCell.vue'
 import HomeDateCell from '../../pages-homeai/components/HomeDateCell.vue'
@@ -156,15 +157,19 @@ async function save() {
   form.value.remark = String(form.value.remark || '').trim()
   saving.value = true
   try {
-    await billApi.update({
-      id: entryId.value,
-      ...form.value,
-      amount,
+    const res = await mutate(
+      'bill',
+      'update',
+      { data: { id: entryId.value, ...form.value, amount } },
+      (p) => billApi.update(p.data),
+    )
+    uni.showToast({
+      title: res.queued ? '已离线保存，联网后同步' : '保存成功',
+      icon: res.queued ? 'none' : 'success',
     })
-    uni.showToast({ title: '保存成功', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 800)
-  } catch {
-    // request 层已 toast
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '保存失败', icon: 'none' })
   } finally {
     saving.value = false
   }
@@ -176,8 +181,16 @@ function remove() {
     content: '删除后不可恢复',
     success: async (res) => {
       if (res.confirm) {
-        await billApi.remove(entryId.value)
-        uni.showToast({ title: '已删除', icon: 'success' })
+        const r = await mutate(
+          'bill',
+          'remove',
+          { id: entryId.value },
+          (p) => billApi.remove(p.id),
+        )
+        uni.showToast({
+          title: r.queued ? '已离线删除，联网后同步' : '已删除',
+          icon: r.queued ? 'none' : 'success',
+        })
         setTimeout(() => uni.navigateBack(), 800)
       }
     },

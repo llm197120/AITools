@@ -104,6 +104,8 @@ import { validateUploadFile } from '../../pages-homeai/utils/fileWhitelist'
 import { useHomeaiFilePick } from '../../pages-homeai/utils/useHomeaiFilePick'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
 import { consumeHomeaiUnauthorized } from '../../pages-homeai/utils/homeaiAuth'
+import { toUploadParams } from '../../pages-homeai/platform/uploadPath'
+import { readList } from '../../pages-homeai/offline/dataAccess'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 
 useHomeaiPageGuard()
@@ -193,7 +195,13 @@ async function refreshQuota() {
 async function loadMessages() {
   if (!conversationId.value) return
   try {
-    messages.value = await getApi(`/ai/conversations/${conversationId.value}/messages`)
+    const r = await readList<any[]>(
+      'ai',
+      'messages:' + conversationId.value,
+      () => getApi(`/ai/conversations/${conversationId.value}/messages`),
+    )
+    messages.value = r.data || []
+    if (r.offline) uni.showToast({ title: '离线模式，展示本地历史', icon: 'none' })
     msgFailed.value = false
     if (!hasQueryTitle.value) {
       const firstUser = messages.value.find((m: any) => m.role === 'user' && m.content)
@@ -647,9 +655,10 @@ async function sendMessage() {
       }
       if (!(await validateUploadFile(img))) continue
       try {
+        const upload = await toUploadParams(img)
         const up = await uni.uploadFile({
           url: getAppBaseUrl() + '/homeai/ai/chat/upload',
-          filePath: img,
+          ...upload,
           name: 'file',
           header: { 'X-Access-Token': token },
           timeout: 120000,
@@ -769,9 +778,10 @@ function showAttachmentPicker() {
           if (!(await validateUploadFile(file.path, file.name))) continue
           try {
             const token = uni.getStorageSync('homeai_token')
+            const upload = await toUploadParams(file.path, file.name)
             const uploadRes = await uni.uploadFile({
               url: getAppBaseUrl() + '/homeai/ai/chat/upload',
-              filePath: file.path,
+              ...upload,
               name: 'file',
               header: { 'X-Access-Token': token },
               timeout: 120000,

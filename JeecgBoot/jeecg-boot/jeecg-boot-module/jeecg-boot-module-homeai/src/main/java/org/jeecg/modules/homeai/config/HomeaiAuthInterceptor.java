@@ -50,8 +50,14 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
             "/homeai/auth/login/password",
             //update-end---author:admin ---date:2026-08-17 for:【Android迁移】手机号密码登录公开接口-----------
             //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R69】APP 版本公开探测-----------
-            "/homeai/app/version"
+            "/homeai/app/version",
             //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R69】APP 版本公开探测-----------
+            //update-begin---author:cursor---date:2026-08-31---for:【APP更新】APK 代理下载公开（所有用户需下载更新包）-----------
+            "/homeai/app/version/package/download",
+            //update-end---author:cursor---date:2026-08-31---for:【APP更新】APK 代理下载公开-----------
+            //update-begin---author:cursor---date:2026-08-31---for:【APP离线】同步配置 App 公开拉取-----------
+            "/homeai/config/sync"
+            //update-end---author:cursor---date:2026-08-31---for:【APP离线】同步配置 App 公开拉取-----------
     );
 
     @Lazy

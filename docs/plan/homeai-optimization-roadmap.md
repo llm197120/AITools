@@ -1,13 +1,13 @@
 ---
 name: 家庭AI小工具 - 迭代优化路线图
 version: v4
-status: 进行中（第 13～118 轮已落地；ComfyUI 专项见仓库根目录 ComfyUI/）
-updated: 2026-08-23
+status: 进行中（第 13～123 轮已落地；ComfyUI 专项见仓库根目录 ComfyUI/）
+updated: 2026-08-31
 ---
 
 # 家庭AI小工具 - 迭代优化路线图
 
-> 本文档汇总第 **1～12 轮**业务迭代，以及 **第 13～118 轮**工程化/业务/视觉/安全优化落地内容。  
+> 本文档汇总第 **1～12 轮**业务迭代，以及 **第 13～120 轮**工程化/业务/视觉/安全优化落地内容。  
 > ComfyUI 本地路线（第 41～42 轮）已拆分至独立目录 [`ComfyUI/`](../../ComfyUI/README.md)（路线图：[comfyui-roadmap.md](../../ComfyUI/docs/comfyui-roadmap.md)）。  
 > 业务模块后续建议见第三节。
 
@@ -1962,6 +1962,93 @@ alter_homeai_preview_pdf_url.sql
 
 ---
 
+### 第 119 轮：APP 文件上传修复（Capacitor 原生路径适配）（2026-08-31）
+
+> APP 是 H5 构建 + Capacitor 壳，`uni.uploadFile` 走 uni-h5 的 Web 实现（XHR + FormData）。原生文件选择器（`HomeaiUpdate.pickFile`）返回文件系统绝对路径（`/data/...`），直接上传会被 `getRealPath` 拼成 origin 下 URL → 404；即使路径可读，multipart 文件名也会退化成 `file-<时间戳>`（丢扩展名）导致后端按扩展名校验失败。表现为「选择文件/视频/音频」必败，「拍照/相册」正常。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| APP | `platform/uploadPath.ts` 新增 | `toUploadablePath()` 绝对路径转 `Capacitor.convertFileSrc` 代理 URL；`toUploadParams()` 取回带原始文件名的 `File`（保扩展名），blob:/data:/http 原样放行 |
+| APP | 7 处 `uni.uploadFile` 调用点接入 | `HomeMediaUpload`（菜谱封面/视频/学习资料）、`useStorageUpload`（资料存储）、`chat.vue` 两处（对话图片/文件）、`bill.ts`（账单导入，`importPreview` 透传 fileName）、`useUpload` 旧钩子、`online-image/online-file`（低代码表单） |
+
+**无迁移 SQL。**
+
+**状态：** 已落地。
+
+---
+
+### 第 120 轮：管理端生产构建修复（_app.config.js 无法解析）（2026-08-31）
+
+> `cf6c306` 误在 html.ts 给注入的 `_app.config.js` 脚本标签加了 `type:'module'`，而该文件是 postBuild 阶段才生成的运行时配置。Vite 8 + rolldown 的 `vite:build-html` 对 module 脚本 src 做解析，找不到文件即硬报错 `Failed to resolve /_app.config.js?v=...`，管理端 `build:docker:prod` 全挂。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 管理端 | `build/vite/plugin/html.ts` | 移除 `type: 'module'`，恢复经典脚本注入（head 内同步执行，bundle 前可用），并修正 `tags` 缩进 |
+| 验证 | `pnpm run build:docker:prod` | 完整跑通：vite build → postBuild 生成 `dist/_app.config.js` → copyChat，EXIT=0 |
+
+**无迁移 SQL。**
+
+**状态：** 已落地。
+
+---
+
+### 第 121 轮：APP 更新 APK 下载修复（OSS ApkDownloadForbidden 代理下载）（2026-08-31）
+
+> 「立即更新」报错。根因：阿里云 OSS **默认域名禁止预签名 URL 直链分发 .apk**（`ApkDownloadForbidden`；实测 query 签名被拦 → 400，Header 签名 / SDK 拉流放行 → 206；`.zip` 不受限）。App 端原生下载 apkUrl 得到 HTTP 400 → toast「下载失败: HTTP 400」。无自定义域名可用，采用**后端代理下载（SDK 拉流）**绕开，存量数据与 App 端零改动。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 后端 | `HomeaiAppVersionController` 新增 `GET /homeai/app/version/package/download` | `resolveLocalPath`（OSS 走 SDK `getObject`，Header 签名实测放行）→ `HomeaiFileMime.writeLocalFile` 流式返回 |
+| 后端 | `HomeaiAppVersionServiceImpl` | `toPublic`/`toAdminView` 的 `apkUrl` 统一改为代理下载地址（`HomeaiFileUrlUtil.toAbsoluteUrl` 拼当前域名）；`uploadPackage` 存储 key 保持 `.apk` |
+| 后端 | `HomeaiAuthInterceptor.PUBLIC_PATHS` | 放行 `/homeai/app/version/package/download`（所有用户需下载更新包） |
+| 兼容 | 存量 `.apk` 对象 | 直接可用，无需重新上传；App 端 `updater.ts` 无需改动（apkUrl 指向后端接口，verifySha/installApk 链路不变） |
+
+**无迁移 SQL。**
+
+**状态：** 已落地。
+
+---
+
+### 第 123 轮：APP 离线可用与缓存优化（2026-08-31）
+
+> 后台临时不可用时，已浏览内容本地可看；计划/账单/学习/菜谱离线可用基本功能；离线写操作入队，恢复后缓慢同步（1 条/批、5s 间隔、单条 24h 限 20 次，后台可配置）；个人中心显示服务器状态。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| APP | `offline/` 基建 | `conn`（连接状态/退避重试）、`cache`（读缓存+版本比对）、`syncQueue`（写队列+限频同步引擎）、`imageCache`（IndexedDB 磁盘 4GB LRU）、`dataAccess`（readList/readDetail/mutate）、`senders`（模块同步执行器）、`pendingUpload`（离线文件暂存补传）、`OfflineImage`/`OfflineBanner` |
+| APP | 个人中心 | 服务器地址 → **服务器状态**（🟢可用/🔴不可用/⏳检测中，点击重测，改地址收进设置弹窗） |
+| APP | 模块接入 | 计划（列表/详情读缓存+toggle/增删改入队）、账单（列表读缓存+记一笔/改删入队）、学习（材料/统计读缓存+目标/停止入队）、菜谱（列表读缓存+封面 OfflineImage+增改入队+离线图片 pending 编排）；资料上传离线暂存 `pendingUpload`；`HomeMediaUpload` 离线存 pending 返回 `pending://key` |
+| APP | AI 历史 | 会话列表 + 消息 readList 缓存，离线可查看历史对话（不能发起新对话） |
+| APP | 学习补记 | 记录页新增「手动补记」入口（时长输入），走 `learn/addRecord`（recordType=manual）入队，离线可用 |
+| 后端 | `image-proxy` | OSS 预签名 URL 无 CORS → 后端同域代理（host 白名单防 SSRF），供图片 blob 缓存；实测 200 字节完整 |
+| 后端 | `sync config` | `homeai_sync_config` 表 + `GET /homeai/config/sync`（公开拉取，实测 200 默认值）+ `PUT /admin`（管理端修改 batchSize/intervalMs/maxRetriesPerDay/imageCacheLimitMB）；App 启动拉取 |
+| 管理端 | `syncConfig.vue` | 同步/缓存参数表单页；菜单挂载 SQL `alter_homeai_menus_sync_config.sql`（挂「APP版本」下，权限 homeai:app:version:edit） |
+| SQL | `alter_homeai_sync_config.sql` + `alter_homeai_menus_sync_config.sql` | 配置表 + 默认行；菜单挂载 |
+
+**迁移 SQL：** `alter_homeai_sync_config.sql`（见第二节清单）。
+
+**状态：** 已落地（SQL 均已执行：配置表 + 菜单「同步配置」menu_type=1；安全修复：image-proxy 白名单收紧至当前 OSS 桶域名（伪造桶 403 已验证）、sync 配置 PUT 登记管理端路径（控制台 JWT 200 已验证）；待办：**HTTPS 上线**（当前公网 HTTP 明文，P0）、生产管理端改密码）。
+
+---
+
+### 第 122 轮：发布脚本自动登记 APP 版本（2026-08-31）
+
+> `publish-all.ps1 -App` 此前只打包，登记版本需手动去管理端。新增 `-RegisterVersion` 一键闭环：打包后自动上传 APK + H5 zip 并更新后台版本号（enabled=1 即刻推送）。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 脚本 | `pack-apk-local.ps1` | 打包完成后写 `dist\apk\last-version.json`（apk/zip/versionName/versionCode），作产物元数据契约 |
+| 脚本 | `publish-all.ps1` | 新增 `-RegisterVersion` / `-UpdateMode` 参数；`Invoke-HomeaiAppVersionRegister` 读 `last-version.json` → 调 `register-app-version.mjs`（登录→传 APK→传 zip→保存版本号）；打包失败不登记、登记失败单独计入失败清单 |
+| 脚本 | `register-app-version.mjs` | 复用（零改动）：AES 密码 + redis-cli 验证码登录；`enabled=1` |
+| 默认 | 更新模式 | `resource`（H5 热更新）；壳/原生改动时用 `-UpdateMode apk` |
+| 验证 | `-App -SkipAppBuild -RegisterVersion` | 全链路跑通：产物 → last-version.json → 双上传 → 保存；后端 `updateMode=resource`、`enabled=true`、apkUrl 走代理下载 |
+
+**无迁移 SQL。**
+
+**状态：** 已落地。
+
+---
+
 ## 二、数据库迁移清单（已有库按序执行）
 
 **权威顺序：** [`sql/alter-order.txt`](../../JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/sql/alter-order.txt)。新库只跑 `init_homeai_*.sql`；已有库按该清单补跑。执行后可用 `smoke_homeai_schema.sql` 检查关键列。`sql/legacy/` 不自动执行。
@@ -2021,6 +2108,13 @@ alter_homeai_menus_iteration69.sql     # 管理端「APP版本」菜单
 
 ```text
 alter_homeai_perf_indexes.sql          # 账单 user+date、学习 user+study_date 复合索引
+```
+
+### 第 123 轮（已有库）
+
+```text
+alter_homeai_sync_config.sql           # 离线同步/缓存配置表 + 默认行
+alter_homeai_menus_sync_config.sql     # 管理端「同步配置」菜单（挂 APP版本 下）
 ```
 
 ### 第 26 轮（已有库）

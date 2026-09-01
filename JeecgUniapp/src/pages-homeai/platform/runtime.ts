@@ -72,9 +72,62 @@ function canPopUniPage(): boolean {
 
 let backButtonBound = false
 
+/** 记录上次运行的壳版本（用于检测 APK 升级/重装） */
+const SHELL_CODE_KEY = 'homeai_last_shell_code'
+/** 热更新版本残留 key（与 updater.ts WEB_VERSION_KEY 一致，避免循环 import） */
+const WEB_VERSION_KEY = 'homeai_web_version'
+
+/**
+ * 壳（APK）升级/重装后清理热更新残留：
+ * Capacitor 的 persistServerBasePath 会把 WebView base path 持久化到旧热更新目录，
+ * APK 升级后仍加载旧目录资源，与当前 bundle 不一致会导致 chunk 加载失败
+ * （Failed to resolve module specifier）与版本误判（装新包仍弹旧更新）。
+ * 检测到壳版本变化时：重置 base path 到 APK 内嵌资源（assets/public）并清除热更新版本。
+ */
+export async function resetHotUpdateIfShellChanged(): Promise<void> {
+  if (!isCapacitorNative()) return
+  let shellCode = 0
+  try {
+    const { App } = await import('@capacitor/app')
+    const info = await App.getInfo()
+    shellCode = Number(info.build)
+    if (!Number.isFinite(shellCode) || shellCode <= 0) return
+  } catch {
+    return
+  }
+  let lastShell = 0
+  try {
+    lastShell = Number(uni.getStorageSync(SHELL_CODE_KEY))
+  } catch {
+    /* ignore */
+  }
+  if (lastShell === shellCode) return // 壳未变
+  try {
+    const { WebView } = await import('@capacitor/core')
+    const { path } = await WebView.getServerBasePath()
+    // 非 APK 内嵌资源（热更新目录）才需要重置
+    if (path && !path.includes('/android_asset/public')) {
+      await WebView.resetServerBasePath()
+    }
+  } catch {
+    // 重置失败不阻断启动
+  }
+  try {
+    uni.removeStorageSync(WEB_VERSION_KEY)
+  } catch {
+    /* ignore */
+  }
+  try {
+    uni.setStorageSync(SHELL_CODE_KEY, String(shellCode))
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Capacitor 壳：状态栏 + 返回键（有栈则返回，无可返回则退出） */
 export async function initStandaloneShell(): Promise<void> {
   if (!isCapacitorNative()) return
+  await resetHotUpdateIfShellChanged()
   try {
     const { StatusBar, Style } = await import('@capacitor/status-bar')
     await StatusBar.setOverlaysWebView({ overlay: false })

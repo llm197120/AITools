@@ -42,6 +42,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.jeecg.modules.homeai.config.HomeaiHttpDeny;
 import org.jeecg.modules.homeai.preview.HomeaiFileMime;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Date;
@@ -1014,6 +1019,97 @@ public class StorageController {
         }
     }
     //update-end---author:cursor---date:2026-08-22---for:【HomeAI-R81】APP 鉴权下载原文件-----------
+
+    //update-begin---author:cursor---date:2026-08-31---for:【APP离线】图片缓存代理（OSS 预签名 URL 未配置 CORS，后端拉取同域转发）---
+    /**
+     * 图片缓存代理：APP 离线图片缓存需读取 blob，OSS 预签名 URL 无 CORS 头，
+     * 浏览器 fetch 会被拦，由后端拉取后同域转发。仅放行阿里云 OSS 与本服务域名（防 SSRF）。
+     */
+    @GetMapping("/image-proxy")
+    public void imageProxy(@RequestParam String url, HttpServletResponse response) {
+        if (oConvertUtils.isEmpty(url) || !isAllowedProxyHost(url)) {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            return;
+        }
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(30000);
+            conn.setInstanceFollowRedirects(true);
+            conn.connect();
+            try {
+                int code = conn.getResponseCode();
+                if (code >= 400) {
+                    response.setStatus(HttpServletResponse.SC_BAD_GATEWAY);
+                    return;
+                }
+                String type = conn.getContentType();
+                if (oConvertUtils.isNotEmpty(type)) {
+                    response.setContentType(type);
+                }
+                long len = conn.getContentLengthLong();
+                if (len > 0) {
+                    response.setContentLengthLong(len);
+                }
+                try (InputStream in = conn.getInputStream(); OutputStream out = response.getOutputStream()) {
+                    in.transferTo(out);
+                    out.flush();
+                }
+            } finally {
+                conn.disconnect();
+            }
+        } catch (Exception e) {
+            log.warn("image-proxy 拉取失败 url={}: {}", url, e.getMessage());
+            if (!response.isCommitted()) {
+                response.setStatus(HttpServletResponse.SC_BAD_GATEWAY);
+            }
+        }
+    }
+
+    private boolean isAllowedProxyHost(String url) {
+        try {
+            String host = new URL(url).getHost();
+            if (oConvertUtils.isEmpty(host)) {
+                return false;
+            }
+            String h = host.toLowerCase();
+            // 本服务域名（本地/内网场景）
+            try {
+                String self = org.jeecg.common.util.SpringContextUtils.getHttpServletRequest().getServerName();
+                if (oConvertUtils.isNotEmpty(self) && h.equals(self.toLowerCase())) {
+                    return true;
+                }
+            } catch (Exception ignored) {
+                // ignore
+            }
+            // 仅允许当前 OSS 桶域名（bucket.endpoint 或 staticDomain），禁止代理任意 .aliyuncs.com（防 SSRF 面过宽）
+            try {
+                String bucket = org.jeecg.common.util.oss.OssBootUtil.getBucketName();
+                String endpoint = org.jeecg.common.util.oss.OssBootUtil.getEndPoint();
+                if (oConvertUtils.isNotEmpty(bucket) && oConvertUtils.isNotEmpty(endpoint)) {
+                    String expected = (bucket + "." + endpoint).toLowerCase();
+                    if (h.equals(expected) || h.endsWith("." + expected)) {
+                        return true;
+                    }
+                }
+                String staticDomain = org.jeecg.common.util.oss.OssBootUtil.getStaticDomain();
+                if (oConvertUtils.isNotEmpty(staticDomain)) {
+                    String sd = staticDomain.toLowerCase()
+                            .replaceFirst("^https?://", "")
+                            .replaceFirst("/.*$", "");
+                    if (oConvertUtils.isNotEmpty(sd) && (h.equals(sd) || h.endsWith("." + sd))) {
+                        return true;
+                    }
+                }
+            } catch (Exception ignored) {
+                // ignore
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    //update-end---author:cursor---date:2026-08-31---for:【APP离线】图片缓存代理（OSS 预签名 URL 未配置 CORS，后端拉取同域转发）---
 
     //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】文件预览-----------
     @GetMapping("/files/{id}/preview")

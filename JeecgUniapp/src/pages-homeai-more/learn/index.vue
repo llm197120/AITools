@@ -11,6 +11,7 @@
 
 <template>
   <view class="hai-page hai-page--fab">
+    <OfflineBanner />
     <view class="stats-card">
       <text class="stats-num">{{ stats.totalRecords || 0 }}</text>
       <text class="stats-label">次学习记录</text>
@@ -131,6 +132,8 @@ import { preloadWhitelist } from '../../pages-homeai/utils/fileWhitelist'
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
 import { scheduleLearnGoalRemind } from '../../pages-homeai/utils/push'
 import { isStandaloneApp } from '../../pages-homeai/platform/runtime'
+import { readList, mutate } from '../../pages-homeai/offline/dataAccess'
+import OfflineBanner from '../../pages-homeai/offline/OfflineBanner.vue'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
 import { confirmStopLearn } from '../../pages-homeai/utils/learnSession'
@@ -247,7 +250,20 @@ async function fetchMaterials(reset = false, silent = false) {
   }
   try {
     const nextPage = reset ? 1 : pageNo.value + 1
-    const page: any = await learnApi.materials(nextPage, PAGE_SIZE, undefined, keyword.value)
+    let page: any
+    if (reset) {
+      const res = await readList<any>(
+        'learn',
+        'materials:' + (keyword.value.trim() || 'all'),
+        () => learnApi.materials(1, PAGE_SIZE, undefined, keyword.value),
+      )
+      page = res.data
+      if (res.offline) {
+        uni.showToast({ title: '离线模式，展示本地数据', icon: 'none' })
+      }
+    } else {
+      page = await learnApi.materials(nextPage, PAGE_SIZE, undefined, keyword.value)
+    }
     const records: any[] = page?.records || (Array.isArray(page) ? page : [])
     if (reset) {
       materials.value = records
@@ -311,11 +327,20 @@ async function onGoalSelect({ index }: { index: number }) {
   const minutes = GOAL_OPTIONS[index]
   if (!minutes) return
   await requestLearnSubscribe()
-  goal.value = (await learnApi.setGoal(minutes)) || goal.value
+  const res = await mutate(
+    'learn',
+    'setGoal',
+    { minutes },
+    (p) => learnApi.setGoal(p.minutes),
+  )
+  goal.value = minutes
   scheduleLearnGoalRemind(goal.value)
   lastStatsAt = 0
   await loadData(true)
-  uni.showToast({ title: '目标已更新', icon: 'success' })
+  uni.showToast({
+    title: res.queued ? '目标已离线保存，联网后同步' : '目标已更新',
+    icon: res.queued ? 'none' : 'success',
+  })
 }
 
 // 统计/目标短 TTL 缓存：避免频繁返回本页重复拉取（列表与进行中会话保持实时）
@@ -328,7 +353,8 @@ async function loadData(forceStats = false, silent = false) {
   await fetchMaterials(true, silent)
   if (forceStats || Date.now() - lastStatsAt >= LEARN_STATS_TTL) {
     try {
-      stats.value = (await learnApi.statistics()) || {}
+      const statsRes = await readList<any>('learn', 'stats', () => learnApi.statistics())
+      stats.value = statsRes.data || {}
       await loadGoal()
       lastStatsAt = Date.now()
     } catch {
@@ -377,8 +403,16 @@ async function stopLearn() {
   if (!(await confirmStopLearn())) return
   stopping.value = true
   try {
-    await learnApi.stop(activeSession.value.materialId)
-    uni.showToast({ title: '已记录学习时长', icon: 'success' })
+    const res = await mutate(
+      'learn',
+      'stop',
+      { materialId: activeSession.value.materialId },
+      (p) => learnApi.stop(p.materialId),
+    )
+    uni.showToast({
+      title: res.queued ? '已离线记录，联网后同步' : '已记录学习时长',
+      icon: res.queued ? 'none' : 'success',
+    })
     activeSession.value = {}
     clearTimer()
     await loadData(true)
