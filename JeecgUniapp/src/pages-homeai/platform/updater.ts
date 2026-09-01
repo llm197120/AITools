@@ -110,7 +110,11 @@ async function verifySha(path: string, expected?: string) {
   }
 }
 
-async function capacitorInstallApk(url: string, sha256: string | undefined, onStatus: (t: string) => void) {
+async function capacitorInstallApk(
+  url: string,
+  sha256: string | undefined,
+  onStatus: (t: string) => void,
+) {
   onStatus('正在下载安装包…')
   const plugin = await nativePlugin()
   let path = ''
@@ -130,7 +134,9 @@ async function capacitorInstallApk(url: string, sha256: string | undefined, onSt
     const msg = String(e?.message || (e as any)?.errMsg || e || '')
     console.error('[updater] APK 安装失败', msg)
     if (msg.includes('NEED_PERMISSION')) {
-      throw new Error('安装被系统拦截：请到 设置 → 应用 → 家庭AI小工具 → 允许安装未知来源应用，再点更新')
+      throw new Error(
+        '安装被系统拦截：请到 设置 → 应用 → 家庭AI小工具 → 允许安装未知来源应用，再点更新',
+      )
     }
     if (/UPDATE_INCOMPATIBLE|signature/i.test(msg)) {
       throw new Error('安装失败：安装包签名与当前版本不一致，请卸载旧版后重新安装')
@@ -139,7 +145,12 @@ async function capacitorInstallApk(url: string, sha256: string | undefined, onSt
   }
 }
 
-async function capacitorHotUpdate(url: string, sha256: string | undefined, versionCode: number, onStatus: (t: string) => void) {
+async function capacitorHotUpdate(
+  url: string,
+  sha256: string | undefined,
+  versionCode: number,
+  onStatus: (t: string) => void,
+) {
   onStatus('正在下载页面更新…')
   const plugin = await nativePlugin()
   const { path: zipPath } = await plugin.download({ url, fileName: `homeai-h5-${versionCode}.zip` })
@@ -193,6 +204,8 @@ export async function checkAndApplyUpdate(hooks: {
   if (!remote) return 'continue'
 
   const shellCode = await readShellCode()
+  // 无法读取壳版本（App.getInfo 异常等）：不弹更新，避免 serverCode>0 导致死循环误弹
+  if (shellCode <= 0) return 'continue'
   let webCode = readWebCode(shellCode)
   if (shellCode > webCode) {
     uni.setStorageSync(WEB_VERSION_KEY, String(shellCode))
