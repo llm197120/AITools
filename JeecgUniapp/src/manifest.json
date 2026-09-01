@@ -2,8 +2,8 @@
   "name": "家庭AI小工具",
   "appid": "__UNI__864D2D7",
   "description": "面向家庭场景的记账、菜谱、学习与 AI 助手",
-  "versionName": "1.0.1",
-  "versionCode": "101",
+  "versionName": "1.0.3",
+  "versionCode": "103",
   "transformPx": false,
   "app-plus": {
     "usingComponents": true,
