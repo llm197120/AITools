@@ -32,10 +32,10 @@ $ErrorActionPreference = 'Stop'
 
 if ($Interactive) {
     $picked = Show-HomeaiConsoleMenu -Title 'HomeAI 发布' -Items @(
-        @{ Id = '1'; Text = '全部（后端 + 前端 + APP，并上传 APK 到下载页）'; Backend = $true; Frontend = $true; App = $true; UploadApk = $true }
+        @{ Id = '1'; Text = '全部（后端 + 前端 + APP，上传 APK 到下载页并登记版本）'; Backend = $true; Frontend = $true; App = $true; UploadApk = $true; RegisterVersion = $true }
         @{ Id = '2'; Text = '仅后端'; Backend = $true; Frontend = $false; App = $false }
         @{ Id = '3'; Text = '仅前端（管理端）'; Backend = $false; Frontend = $true; App = $false }
-        @{ Id = '4'; Text = '仅 APP（并上传 APK 到下载页）'; Backend = $false; Frontend = $false; App = $true; UploadApk = $true }
+        @{ Id = '4'; Text = '仅 APP（上传 APK 到下载页并登记版本）'; Backend = $false; Frontend = $false; App = $true; UploadApk = $true; RegisterVersion = $true }
         @{ Id = '5'; Text = '后端 + 前端（不出 APP）'; Backend = $true; Frontend = $true; App = $false }
     )
     if ($null -eq $picked) {
@@ -46,6 +46,7 @@ if ($Interactive) {
     $Frontend = [bool]$picked.Frontend
     $App = [bool]$picked.App
     $UploadApk = [bool]$picked.UploadApk
+    $RegisterVersion = [bool]$picked.RegisterVersion
 }
 
 $want = Resolve-HomeaiTargets -Target $Target -Frontend:$Frontend -Backend:$Backend -App:$App
