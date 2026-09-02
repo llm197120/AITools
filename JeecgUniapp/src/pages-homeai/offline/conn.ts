@@ -90,3 +90,14 @@ export function initConnectionMonitor() {
 export function pokeConnection() {
   checkNow()
 }
+
+/**
+ * 请求失败时由 request 层联动调用：立即切到离线态（不必等 ping 探测），
+ * 后续读操作自动走本地缓存；同时安排尽快重试恢复。
+ */
+export function markOffline() {
+  if (state === 'offline') return
+  setState('offline')
+  failCount = Math.max(failCount, 1)
+  scheduleNext()
+}

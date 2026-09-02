@@ -4,6 +4,7 @@
 import { getToken } from '../utils/auth'
 import { consumeHomeaiUnauthorized } from '../utils/homeaiAuth'
 import { getServerBaseUrl as getPlatformServerBaseUrl } from '../platform/env'
+import { getConnState, markOffline } from '../offline/conn'
 
 const BASE_URL = '/homeai'
 
@@ -100,6 +101,13 @@ async function request<T = any>(options: RequestOptions): Promise<T> {
         }
       },
       fail: (err) => {
+        // 请求失败立即联动全局离线状态（不必等 ping 探测），后续读操作自动走本地缓存
+        markOffline()
+        // 已处于离线模式：静默失败，不弹"网络异常"（离线提示由 OfflineBanner 统一展示）
+        if (getConnState() === 'offline') {
+          reject(err)
+          return
+        }
         const msg = String((err as any)?.errMsg || '')
         const title = /127\.0\.0\.1|localhost/.test(msg)
           ? '连不上本机 8080，真机请用电脑局域网 IP'
