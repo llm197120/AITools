@@ -61,11 +61,11 @@
         <text class="menu-text">我的家庭</text>
         <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
       </view>
-      <view v-if="phoneLoginApp" class="menu-item" @click="onTapServerStatus">
+      <view v-if="phoneLoginApp" class="menu-item" @click="goSettings">
         <view class="menu-icon">
           <wd-icon name="setting" size="18px" color="#1B4F8A"></wd-icon>
         </view>
-        <text class="menu-text">服务器状态</text>
+        <text class="menu-text">设置</text>
         <text class="server-status" :class="'st-' + connState">{{ serverStatusText }}</text>
         <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
       </view>
@@ -147,13 +147,9 @@ onUnmounted(() => {
   offConnChange?.()
 })
 
-/** 点击服务器状态：立即重测并提示当前状态（不显示/修改地址） */
-async function onTapServerStatus() {
-  const s = await checkNow()
-  uni.showToast({
-    title: s === 'online' ? '服务器状态：可用' : '服务器状态：不可用',
-    icon: 'none',
-  })
+/** 设置页（外观模式 + 服务器状态） */
+function goSettings() {
+  uni.navigateTo({ url: '/pages-homeai-more/settings/index' })
 }
 
 /** 用户协议（我的页面入口） */

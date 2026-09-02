@@ -27,6 +27,30 @@ page {
   --wot-color-theme: #1b4f8a;
 }
 
+/* 夜晚模式：根节点 .dark-mode 覆盖（H5/Capacitor 由 utils/theme.ts 切换） */
+.dark-mode,
+.dark-mode page {
+  --hai-bg: #17181c;
+  --hai-card: #232429;
+  --hai-text: #e8e6e0;
+  --hai-text-secondary: #a8a49a;
+  --hai-text-muted: #7d7971;
+  --hai-text-tertiary: #5c5850;
+  --hai-icon: #d6d2ca;
+  --hai-border: #33343a;
+  --hai-primary: #4d8fd6;
+  --hai-primary-mid: #6aa8e8;
+  --hai-primary-soft: rgba(77, 143, 214, 0.16);
+  --hai-danger: #e07a68;
+  --hai-danger-soft: rgba(224, 122, 104, 0.18);
+  --hai-warning: #e0b64e;
+  --hai-success: #6aa685;
+  --hai-success-soft: rgba(106, 166, 133, 0.2);
+  --hai-on-primary: #ffffff;
+  --hai-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.4);
+  --wot-color-theme: #4d8fd6;
+}
+
 .hai-page {
   min-height: 100vh;
   box-sizing: border-box;

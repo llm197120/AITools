@@ -8,6 +8,7 @@ import { initSyncLoop, setSyncConfig } from '@/pages-homeai/offline/syncQueue'
 import { registerAllSenders } from '@/pages-homeai/offline/senders'
 import { initPendingUploadFlush } from '@/pages-homeai/offline/pendingUpload'
 import { getServerBaseUrl } from '@/pages-homeai/api/request'
+import { initTheme } from '@/pages-homeai/utils/theme'
 
 /** 启动拉取后端同步配置（batchSize/intervalMs/maxRetries/imageCacheLimitMB） */
 function loadSyncConfig() {
@@ -52,6 +53,7 @@ export default {
     registerAllSenders()
     initSyncLoop()
     initPendingUploadFlush()
+    initTheme()
     loadSyncConfig()
   },
   onShow: function (options) {
