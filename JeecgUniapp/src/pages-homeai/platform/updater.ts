@@ -97,6 +97,10 @@ function nativePlugin() {
       sha256: (o: { path: string }) => Promise<{ hash: string }>
       unzip: (o: { zipPath: string; destDirName: string }) => Promise<{ path: string }>
       installApk: (o: { path: string }) => Promise<void>
+      addListener: (
+        event: string,
+        cb: (info: { loaded: number; total: number }) => void,
+      ) => Promise<{ remove: () => void }>
     }>('HomeaiUpdate'),
   )
 }
@@ -114,17 +118,26 @@ async function capacitorInstallApk(
   url: string,
   sha256: string | undefined,
   onStatus: (t: string) => void,
+  onProgress?: (loaded: number, total: number) => void,
 ) {
   onStatus('正在下载安装包…')
   const plugin = await nativePlugin()
   let path = ''
+  let listener: { remove: () => void } | null = null
   try {
+    if (onProgress) {
+      listener = await plugin.addListener('downloadProgress', (e) => {
+        if (e.total > 0) onProgress(Number(e.loaded) || 0, Number(e.total) || 0)
+      })
+    }
     const ret = await plugin.download({ url, fileName: `homeai-${Date.now()}.apk` })
     path = ret.path
   } catch (e: any) {
     console.error('[updater] APK 下载失败', url, e)
     const msg = String(e?.message || (e as any)?.errMsg || e || '')
     throw new Error(msg.startsWith('下载失败') ? msg : `下载失败: ${msg}`)
+  } finally {
+    listener?.remove()
   }
   await verifySha(path, sha256)
   onStatus('正在打开安装…')
@@ -150,10 +163,23 @@ async function capacitorHotUpdate(
   sha256: string | undefined,
   versionCode: number,
   onStatus: (t: string) => void,
+  onProgress?: (loaded: number, total: number) => void,
 ) {
   onStatus('正在下载页面更新…')
   const plugin = await nativePlugin()
-  const { path: zipPath } = await plugin.download({ url, fileName: `homeai-h5-${versionCode}.zip` })
+  let listener: { remove: () => void } | null = null
+  let zipPath = ''
+  try {
+    if (onProgress) {
+      listener = await plugin.addListener('downloadProgress', (e) => {
+        if (e.total > 0) onProgress(Number(e.loaded) || 0, Number(e.total) || 0)
+      })
+    }
+    const ret = await plugin.download({ url, fileName: `homeai-h5-${versionCode}.zip` })
+    zipPath = ret.path
+  } finally {
+    listener?.remove()
+  }
   await verifySha(zipPath, sha256)
   onStatus('正在应用更新…')
   const { path } = await plugin.unzip({ zipPath, destDirName: String(versionCode) })
@@ -197,6 +223,7 @@ function plusInstallApk(url: string, onStatus: (t: string) => void): Promise<voi
  */
 export async function checkAndApplyUpdate(hooks: {
   onStatus: (text: string) => void
+  onProgress?: (loaded: number, total: number) => void
   confirm: (info: { versionName: string; changelog: string; force: boolean; action: UpdateAction }) => Promise<boolean>
 }): Promise<'continue' | 'updating'> {
   if (!isStandaloneApp()) return 'continue'
@@ -248,11 +275,22 @@ export async function checkAndApplyUpdate(hooks: {
         uni.showToast({ title: '请安装新版 APK', icon: 'none' })
         return 'continue'
       }
-      await capacitorHotUpdate(remote.resourceUrl as string, remote.resourceSha256, Number(remote.versionCode), hooks.onStatus)
+      await capacitorHotUpdate(
+        remote.resourceUrl as string,
+        remote.resourceSha256,
+        Number(remote.versionCode),
+        hooks.onStatus,
+        hooks.onProgress,
+      )
       return 'updating'
     }
     if (isCapacitorNative()) {
-      await capacitorInstallApk(remote.apkUrl as string, remote.apkSha256, hooks.onStatus)
+      await capacitorInstallApk(
+        remote.apkUrl as string,
+        remote.apkSha256,
+        hooks.onStatus,
+        hooks.onProgress,
+      )
     } else {
       await plusInstallApk(remote.apkUrl as string, hooks.onStatus)
     }

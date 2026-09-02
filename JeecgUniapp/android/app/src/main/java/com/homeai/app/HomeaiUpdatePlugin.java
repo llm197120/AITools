@@ -53,7 +53,12 @@ public class HomeaiUpdatePlugin extends Plugin {
         JSObject headers = call.getObject("headers");
         new Thread(() -> {
             try {
-                File dest = downloadTo(url, sanitizeName(fileName), headers);
+                File dest = downloadTo(url, sanitizeName(fileName), headers, (loaded, total) -> {
+                    JSObject evt = new JSObject();
+                    evt.put("loaded", loaded);
+                    evt.put("total", total);
+                    notifyListeners("downloadProgress", evt);
+                });
                 JSObject ret = new JSObject();
                 ret.put("path", dest.getAbsolutePath());
                 call.resolve(ret);
@@ -367,7 +372,12 @@ public class HomeaiUpdatePlugin extends Plugin {
         return item;
     }
 
-    private File downloadTo(String url, String fileName, JSObject headers) throws Exception {
+    @FunctionalInterface
+    private interface ProgressCallback {
+        void onProgress(long loaded, long total);
+    }
+
+    private File downloadTo(String url, String fileName, JSObject headers, ProgressCallback progress) throws Exception {
         File dir = new File(getContext().getCacheDir(), "homeai-update");
         if (!dir.exists() && !dir.mkdirs()) {
             throw new Exception("无法创建下载目录");
@@ -386,8 +396,17 @@ public class HomeaiUpdatePlugin extends Plugin {
         try (InputStream in = conn.getInputStream(); FileOutputStream out = new FileOutputStream(dest)) {
             byte[] buf = new byte[8192];
             int n;
+            long total = 0;
+            long contentLength = conn.getContentLengthLong();
+            long nextNotify = 0;
             while ((n = in.read(buf)) > 0) {
                 out.write(buf, 0, n);
+                total += n;
+                // 每 ~256KB 上报一次进度（JS 端 addListener('downloadProgress') 接收）
+                if (progress != null && total >= nextNotify) {
+                    progress.onProgress(total, contentLength);
+                    nextNotify = total + 8192L * 32;
+                }
             }
         } finally {
             conn.disconnect();

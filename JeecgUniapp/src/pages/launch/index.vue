@@ -17,28 +17,6 @@
   </view>
 
   <wd-popup
-    v-model="privacyVisible"
-    position="center"
-    :close-on-click-modal="false"
-    custom-style="width:80%;border-radius:28rpx;overflow:hidden"
-  >
-    <view class="dialog-title">隐私保护指引</view>
-    <view class="dialog-body">
-      <text class="dialog-hint">使用前请阅读</text>
-      <view class="dialog-links">
-        <text class="tip-link" @click="goAgreement">《用户协议》</text>
-        <text class="dialog-hint">与</text>
-        <text class="tip-link" @click="goPrivacy">《隐私政策》</text>
-      </view>
-      <text class="dialog-hint">同意后方可继续。</text>
-    </view>
-    <view class="dialog-footer">
-      <wd-button block @click="declinePrivacy">不同意</wd-button>
-      <wd-button type="primary" block @click="acceptPrivacy">同意并继续</wd-button>
-    </view>
-  </wd-popup>
-
-  <wd-popup
     v-model="updateVisible"
     position="center"
     :close-on-click-modal="false"
@@ -56,6 +34,10 @@
 
   <view v-if="statusText" class="update-mask">
     <text class="dialog-hint">{{ statusText }}</text>
+    <view v-if="progress > 0 && progress < 100" class="progress-wrap">
+      <view class="progress-bar" :style="{ width: progress + '%' }"></view>
+    </view>
+    <text v-if="progress > 0" class="dialog-hint">{{ progress }}%</text>
   </view>
 </template>
 
@@ -65,16 +47,15 @@ import { onLoad } from '@dcloudio/uni-app'
 import { useUserStore } from '../../pages-homeai/stores/user'
 import { HOMEAI_LOGIN_PAGE, HOMEAI_PROFILE_TAB, usesPhoneLogin } from '../../pages-homeai/utils/homeaiAuth'
 import { probeAndCacheAppBaseUrl } from '../../pages-homeai/platform/env'
-import { exitStandaloneApp, isStandaloneApp } from '../../pages-homeai/platform/runtime'
+import { isStandaloneApp } from '../../pages-homeai/platform/runtime'
 import { checkAndApplyUpdate } from '../../pages-homeai/platform/updater'
 
-const PRIVACY_KEY = 'homeai_privacy_agreed'
-const privacyVisible = ref(false)
 const updateVisible = ref(false)
 const updateForce = ref(false)
 const updateTitle = ref('发现新版本')
 const updateLog = ref('')
 const statusText = ref('')
+const progress = ref(0)
 let confirmResolve: ((ok: boolean) => void) | null = null
 
 function goNext() {
@@ -94,6 +75,11 @@ async function proceedAfterPrivacy() {
   const result = await checkAndApplyUpdate({
     onStatus: (text) => {
       statusText.value = text
+    },
+    onProgress: (loaded, total) => {
+      if (total > 0) {
+        progress.value = Math.min(99, Math.round((loaded / total) * 100))
+      }
     },
     confirm: (info) =>
       new Promise((resolve) => {
@@ -121,36 +107,9 @@ function skipUpdate() {
   confirmResolve = null
 }
 
-function goAgreement() {
-  uni.navigateTo({ url: '/pages/agreement/index' })
-}
-
-function goPrivacy() {
-  uni.navigateTo({ url: '/pages/privacy/index' })
-}
-
-function acceptPrivacy() {
-  uni.setStorageSync(PRIVACY_KEY, true)
-  privacyVisible.value = false
-  proceedAfterPrivacy()
-}
-
-function declinePrivacy() {
-  privacyVisible.value = false
-  exitStandaloneApp()
-}
-
 function ensurePrivacyThenGo() {
-  if (!isStandaloneApp()) {
-    goNext()
-    return
-  }
-  const agreed = uni.getStorageSync(PRIVACY_KEY)
-  if (agreed) {
-    proceedAfterPrivacy()
-    return
-  }
-  privacyVisible.value = true
+  // 隐私协议统一在登录页确认，这里不再弹窗（避免打开即弹 + 登录页二次弹出）
+  proceedAfterPrivacy()
 }
 
 onLoad(async () => {
@@ -223,9 +182,24 @@ onLoad(async () => {
   inset: 0;
   background: rgba(243, 242, 238, 0.92);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 48rpx;
   z-index: 99;
+  gap: 16rpx;
+}
+.progress-wrap {
+  width: 70%;
+  height: 12rpx;
+  border-radius: 999rpx;
+  background: rgba(139, 128, 110, 0.2);
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  border-radius: 999rpx;
+  background: var(--hai-primary, #1b4f8a);
+  transition: width 0.3s ease;
 }
 </style>

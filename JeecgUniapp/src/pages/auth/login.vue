@@ -77,7 +77,9 @@
       </view>
 
       <view class="agree-row" @tap="toggleAgreed">
-        <view class="agree-box" :class="{ on: agreed }"></view>
+        <view class="agree-box" :class="{ on: agreed }">
+          <text v-if="agreed" class="agree-check">✓</text>
+        </view>
         <text class="agree-text">我已阅读并同意</text>
         <text class="tip-link" @tap.stop="goAgreement">《用户协议》</text>
         <text class="agree-text">与</text>
@@ -347,6 +349,15 @@ async function handleSubmit() {
   border-radius: 6rpx;
   border: 2rpx solid var(--hai-border, #d9d4cc);
   box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agree-check {
+  color: #fff;
+  font-size: 20rpx;
+  line-height: 1;
 }
 
 .agree-box.on {
