@@ -61,12 +61,19 @@
         <text class="menu-text">我的家庭</text>
         <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
       </view>
-      <view v-if="phoneLoginApp" class="menu-item" @click="showApiBase">
+      <view v-if="phoneLoginApp" class="menu-item" @click="onTapServerStatus">
         <view class="menu-icon">
           <wd-icon name="setting" size="18px" color="#1B4F8A"></wd-icon>
         </view>
         <text class="menu-text">服务器状态</text>
         <text class="server-status" :class="'st-' + connState">{{ serverStatusText }}</text>
+        <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
+      </view>
+      <view class="menu-item" @click="goAgreement">
+        <view class="menu-icon">
+          <wd-icon name="document" size="18px" color="#1B4F8A"></wd-icon>
+        </view>
+        <text class="menu-text">用户协议</text>
         <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
       </view>
       <view class="menu-item" @click="showPrivacy">
@@ -89,27 +96,6 @@
     <view class="logout-btn" v-if="userStore.isLogin" @click="handleLogout">
       <text>退出登录</text>
     </view>
-
-    <wd-popup
-      v-if="phoneLoginApp"
-      v-model="apiBaseVisible"
-      position="center"
-      custom-style="width:80%;border-radius:28rpx;overflow:hidden"
-    >
-      <view class="dialog-title">服务器设置</view>
-      <view class="dialog-body">
-        <text class="dialog-hint">当前状态：{{ serverStatusText }}</text>
-        <text class="dialog-hint">
-          内测换网段时填写电脑局域网地址，例如 http://192.168.1.8:8080/jeecg-boot
-        </text>
-        <wd-input v-model="apiBaseInput" placeholder="http://主机:8080/jeecg-boot" />
-        <view class="retest-btn" @click="checkNow">立即重测连接</view>
-      </view>
-      <view class="dialog-footer">
-        <wd-button block @click="apiBaseVisible = false">取消</wd-button>
-        <wd-button type="primary" block :loading="apiBaseSaving" @click="saveApiBase">保存</wd-button>
-      </view>
-    </wd-popup>
   </view>
 </template>
 
@@ -124,7 +110,7 @@ import { get as getApi } from '../../pages-homeai/api/request'
 import { localMonthStr } from '../../pages-homeai/utils/date'
 import { displayNickname } from '../../pages-homeai/utils/displayName'
 import { openAuthPage, jumpToGuestAuth, usesPhoneLogin, wechatLogin } from '../../pages-homeai/utils/homeaiAuth'
-import { getServerBaseUrl, setAppBaseUrl, pingAppBaseUrl } from '../../pages-homeai/platform/env'
+import { getServerBaseUrl } from '../../pages-homeai/platform/env'
 import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
 import { useFamilyPoll } from '../../pages-homeai/utils/useFamilyPoll'
 import {
@@ -137,9 +123,6 @@ import {
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
 const loginLoading = ref(false)
-const apiBaseVisible = ref(false)
-const apiBaseInput = ref('')
-const apiBaseSaving = ref(false)
 const phoneLoginApp = usesPhoneLogin()
 
 const showChangePassword = computed(() => {
@@ -147,7 +130,7 @@ const showChangePassword = computed(() => {
   return phoneLoginApp
 })
 
-// 服务器状态（离线能力）：显示可用性而非地址；点击重测并打开改地址弹窗
+// 服务器状态（离线能力）：只显示可用性，不展示/不修改服务器地址
 const connState = ref<'online' | 'offline' | 'unknown'>(getConnState())
 const serverStatusText = computed(() => {
   if (connState.value === 'online') return '可用'
@@ -163,6 +146,20 @@ onMounted(() => {
 onUnmounted(() => {
   offConnChange?.()
 })
+
+/** 点击服务器状态：立即重测并提示当前状态（不显示/修改地址） */
+async function onTapServerStatus() {
+  const s = await checkNow()
+  uni.showToast({
+    title: s === 'online' ? '服务器状态：可用' : '服务器状态：不可用',
+    icon: 'none',
+  })
+}
+
+/** 用户协议（我的页面入口） */
+function goAgreement() {
+  uni.navigateTo({ url: '/pages/agreement/index' })
+}
 
 const stats = ref([
   { label: '对话', count: 0, path: '/pages-homeai-ai/ai/conversations' },
@@ -270,36 +267,6 @@ function handleRegister() {
 
 function showPrivacy() {
   uni.navigateTo({ url: '/pages/privacy/index' })
-}
-
-function showApiBase() {
-  apiBaseInput.value = getServerBaseUrl()
-  apiBaseVisible.value = true
-  // 打开弹窗同时立即重测一次，状态实时刷新
-  checkNow()
-  pokeConnection()
-}
-
-async function saveApiBase() {
-  const url = apiBaseInput.value.trim().replace(/\/$/, '')
-  if (!/^https?:\/\/.+/i.test(url)) {
-    uni.showToast({ title: '请输入 http(s) 地址', icon: 'none' })
-    return
-  }
-  if (apiBaseSaving.value) return
-  apiBaseSaving.value = true
-  try {
-    setAppBaseUrl(url)
-    const ok = await pingAppBaseUrl(url)
-    apiBaseVisible.value = false
-    uni.showToast({
-      title: ok ? '已保存，后续请求走新地址' : '已保存，但当前探测未通，请确认电脑与手机同网',
-      icon: 'none',
-      duration: 2500,
-    })
-  } finally {
-    apiBaseSaving.value = false
-  }
 }
 
 function showAbout() {

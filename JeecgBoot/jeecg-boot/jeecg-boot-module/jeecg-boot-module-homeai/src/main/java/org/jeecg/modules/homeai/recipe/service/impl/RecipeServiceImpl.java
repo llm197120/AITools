@@ -1040,10 +1040,10 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
     private static final Set<String> VIDEO_EXTENSIONS = new HashSet<>(Arrays.asList(
             "mp4", "mov", "m4v", "webm", "avi", "mkv"
     ));
-    /** 图片大小上限（10MB） */
-    private static final long MAX_IMAGE_SIZE = 10L * 1024 * 1024;
-    /** 视频大小上限（200MB） */
-    private static final long MAX_VIDEO_SIZE = 200L * 1024 * 1024;
+    /** 图片大小上限（100MB） */
+    private static final long MAX_IMAGE_SIZE = 100L * 1024 * 1024;
+    /** 视频大小上限（2GB） */
+    private static final long MAX_VIDEO_SIZE = 2048L * 1024 * 1024;
 
     /** 从原始文件名中提取安全扩展名（仅保留字母数字，防路径穿越/任意字符） */
     private String sanitizeExtension(MultipartFile file) {

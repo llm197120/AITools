@@ -87,6 +87,10 @@ public class HomeaiAuthInterceptor implements HandlerInterceptor {
         if (PUBLIC_PATHS.contains(path)) {
             return true;
         }
+        // 协议/隐私富文本 GET 公开读取（PUT 走管理端路径校验）
+        if (path.startsWith("/homeai/config/doc/") && HttpMethod.GET.matches(request.getMethod())) {
+            return true;
+        }
 
         String token = securityUtil.getToken(request);
         if (oConvertUtils.isEmpty(token)) {

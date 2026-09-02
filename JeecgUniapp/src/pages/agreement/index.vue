@@ -9,7 +9,8 @@
 
 <template>
   <view class="hai-page">
-    <view class="hai-card doc-card">
+    <mp-html v-if="remoteContent" :content="remoteContent" class="hai-card doc-card doc-html" />
+    <view v-else class="hai-card doc-card">
       <text class="doc-title">用户协议</text>
       <text class="doc-update">更新日期：2026 年 8 月 17 日</text>
       <text class="doc-intro">
@@ -94,4 +95,28 @@
   color: var(--hai-text-secondary);
   margin-top: 8rpx;
 }
+
+.doc-html {
+  padding: 32rpx;
+  line-height: 1.7;
+  font-size: 26rpx;
+  color: var(--hai-text);
+}
 </style>
+
+<script lang="ts" setup>
+import { ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+import { get as getApi } from '../../pages-homeai/api/request'
+
+// 后台富文本配置（管理端可编辑），未配置时回退内置静态内容
+const remoteContent = ref('')
+onLoad(async () => {
+  try {
+    const html: any = await getApi('/config/doc/agreement')
+    remoteContent.value = String(html || '')
+  } catch {
+    /* 离线/失败回退内置 */
+  }
+})
+</script>

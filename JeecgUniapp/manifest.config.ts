@@ -17,8 +17,8 @@ export default defineManifestConfig({
   name: VITE_APP_TITLE,
   appid: VITE_UNI_APPID,
   description: '面向家庭场景的记账、菜谱、学习与 AI 助手',
-  versionName: '1.0.8',
-  versionCode: '108',
+  versionName: '1.0.9',
+  versionCode: '109',
   transformPx: false,
   locale: VITE_FALLBACK_LOCALE, // 'zh-Hans'
   /* 5+App特有相关 */

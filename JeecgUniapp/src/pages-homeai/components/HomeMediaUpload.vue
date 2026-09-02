@@ -94,8 +94,8 @@ const props = defineProps({
   placeholder: { type: String, default: '' },
   /** 辅助提示文案 */
   tip: { type: String, default: '' },
-  /** 最大文件大小（MB） */
-  maxSize: { type: Number, default: 50 },
+  /** 最大文件大小（MB）：图片默认 100；视频/文档等按 2G 兜底 */
+  maxSize: { type: Number, default: 100 },
   /** 视频最长时长（秒） */
   maxVideoDuration: { type: Number, default: 60 },
   /** 图片/空状态高度（rpx） */
@@ -138,8 +138,10 @@ async function pickAndUpload() {
     files = await pickFiles({ count: 1, type: 'all' })
   }
   if (!files[0]) return
-  if (props.maxSize && files[0].size && files[0].size > props.maxSize * 1024 * 1024) {
-    uni.showToast({ title: `文件不能超过 ${props.maxSize}MB`, icon: 'none' })
+  // 图片 100MB；视频/音频/文档按 2GB 上限（后端同步放开）
+  const limitMB = props.mode === 'image' ? props.maxSize || 100 : 2048
+  if (files[0].size && files[0].size > limitMB * 1024 * 1024) {
+    uni.showToast({ title: `文件不能超过 ${limitMB}MB`, icon: 'none' })
     return
   }
   fileName.value = files[0].name || ''

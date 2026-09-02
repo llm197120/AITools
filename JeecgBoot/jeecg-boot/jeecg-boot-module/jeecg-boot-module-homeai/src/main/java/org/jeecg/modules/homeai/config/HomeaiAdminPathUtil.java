@@ -103,8 +103,11 @@ public final class HomeaiAdminPathUtil {
             "/homeai/app/version/upload",
             //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R69】APP 版本管理端-----------
             //update-begin---author:cursor---date:2026-08-31---for:【APP离线】同步配置管理端保存须控制台 JWT-----------
-            "/homeai/config/sync/admin"
+            "/homeai/config/sync/admin",
             //update-end---author:cursor---date:2026-08-31---for:【APP离线】同步配置管理端保存须控制台 JWT-----------
+            //update-begin---author:cursor---date:2026-09-02---for:【协议配置】协议/隐私富文本管理端保存须控制台 JWT-----------
+            "/homeai/config/doc"
+            //update-end---author:cursor---date:2026-09-02---for:【协议配置】协议/隐私富文本管理端保存须控制台 JWT-----------
     );
 
     /**
