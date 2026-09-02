@@ -34,15 +34,19 @@
 
   <view v-if="statusText" class="update-mask">
     <text class="dialog-hint">{{ statusText }}</text>
-    <view v-if="progress > 0 && progress < 100" class="progress-wrap">
-      <view class="progress-bar" :style="{ width: progress + '%' }"></view>
+    <view v-if="downloading" class="progress-wrap">
+      <view
+        class="progress-bar"
+        :class="{ indeterminate: !(progress > 0) }"
+        :style="progress > 0 ? { width: progress + '%' } : {}"
+      ></view>
     </view>
     <text v-if="progress > 0" class="dialog-hint">{{ progress }}%</text>
   </view>
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useUserStore } from '../../pages-homeai/stores/user'
 import { HOMEAI_LOGIN_PAGE, HOMEAI_PROFILE_TAB, usesPhoneLogin } from '../../pages-homeai/utils/homeaiAuth'
@@ -56,6 +60,8 @@ const updateTitle = ref('发现新版本')
 const updateLog = ref('')
 const statusText = ref('')
 const progress = ref(0)
+/** 下载阶段：必有进度条（无百分比时显示流动动画，防止小文件秒下导致不可见） */
+const downloading = computed(() => statusText.value.includes('下载'))
 let confirmResolve: ((ok: boolean) => void) | null = null
 
 function goNext() {
@@ -201,5 +207,17 @@ onLoad(async () => {
   border-radius: 999rpx;
   background: var(--hai-primary, #1b4f8a);
   transition: width 0.3s ease;
+}
+.progress-bar.indeterminate {
+  width: 30% !important;
+  animation: hmu-indeterminate 1.2s ease-in-out infinite;
+}
+@keyframes hmu-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(340%);
+  }
 }
 </style>
