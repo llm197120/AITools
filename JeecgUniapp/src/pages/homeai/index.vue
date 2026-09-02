@@ -38,7 +38,7 @@
     <!-- AI 引导 Hero -->
     <view class="hero-card" @click="goModule('ai')">
       <view class="hero-body">
-        <text class="hero-title">和家庭 AI 聊聊</text>
+        <text class="hero-title">和 AI 聊聊</text>
         <text class="hero-desc">问答、整理资料、规划日常，一句话开始</text>
         <view class="hero-cta">
           <text class="hero-cta-text">开始对话</text>

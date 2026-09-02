@@ -71,7 +71,7 @@
       </view>
       <view class="menu-item" @click="goAgreement">
         <view class="menu-icon">
-          <wd-icon name="document" size="18px" color="#1B4F8A"></wd-icon>
+          <wd-icon name="edit" size="18px" color="#1B4F8A"></wd-icon>
         </view>
         <text class="menu-text">用户协议</text>
         <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>

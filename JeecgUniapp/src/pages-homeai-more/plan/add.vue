@@ -10,8 +10,15 @@
     @action="loadExisting"
   />
   <HomeFormCard v-else>
-    <input class="home-form-input" v-model="form.title" placeholder="计划标题..." />
-    <textarea class="home-form-textarea" v-model="form.content" placeholder="详细内容（可选）" />
+    <view class="plan-field">
+      <text class="plan-label">计划标题</text>
+      <input class="home-form-input" v-model="form.title" placeholder="输入计划标题..." />
+    </view>
+    <view class="plan-divider"></view>
+    <view class="plan-field">
+      <text class="plan-label">详细内容</text>
+      <textarea class="home-form-textarea" v-model="form.content" placeholder="补充细节、备注等（可选）" />
+    </view>
 
     <view class="home-form-group">
       <wd-cell-group border>
@@ -306,6 +313,20 @@ async function save() {
 }
 </script>
 <style scoped>
+.plan-field {
+  margin-bottom: 8rpx;
+}
+.plan-label {
+  display: block;
+  font-size: 24rpx;
+  color: var(--hai-text-secondary);
+  margin-bottom: 12rpx;
+}
+.plan-divider {
+  height: 2rpx;
+  background: var(--hai-border);
+  margin: 24rpx 0 28rpx;
+}
 .edit-hint {
   display: block;
   margin: 8rpx 0 16rpx;
