@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 # 清空现有菜谱业务数据（物理删除），分类表保留，便于重新 Excel 导入。
 # 用法（在仓库根或本目录均可）：
 #   powershell -NoProfile -ExecutionPolicy Bypass -File docs/data/purge_homeai_recipes.ps1

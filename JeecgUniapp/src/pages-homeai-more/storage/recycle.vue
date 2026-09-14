@@ -279,7 +279,7 @@ async function purgeSelected() {
   right: 0;
   bottom: 0;
   padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
-  background: #fff;
+  background: var(--hai-card);
   display: flex;
   align-items: center;
   justify-content: space-between;

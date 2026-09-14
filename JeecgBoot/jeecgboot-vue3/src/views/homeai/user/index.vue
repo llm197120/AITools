@@ -55,7 +55,7 @@
   import { PageWrapper } from '/@/components/Page';
   import { onMounted, ref } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
-  import { useDrawer } from '/@/components/Drawer';
+  import { useModal } from '/@/components/Modal';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { useMethods } from '/@/hooks/system/useMethods';
   import { userApi, familyApi } from '/@/api/homeai';
@@ -68,7 +68,7 @@ import { toFamilySelectOptions } from '../utils/activeFamily';
   const { createMessage, createConfirm } = useMessage();
   const { listFailed, wrapListApi } = useHomeaiListLoad();
   const { handleExportXls, handleImportXls } = useMethods();
-  const [registerDrawer, { openDrawer }] = useDrawer();
+  const [registerDrawer, { openModal: openDrawer }] = useModal();
   const activeTab = ref('list');
   const familyOptions = ref<any[]>([]);
 
@@ -87,7 +87,7 @@ import { toFamilySelectOptions } from '../utils/activeFamily';
   });
 
   const columns = [
-    { title: '微信昵称', dataIndex: 'nickname', width: 150 },
+    { title: '用户姓名', dataIndex: 'nickname', width: 150 },
       { title: 'openid', dataIndex: 'openid', width: 200, customRender: ({ text }: any) => (text ? text.substring(0, 3) + '****' + text.substring(text.length - 4) : '-') },
     { title: '手机号', dataIndex: 'phone', width: 120 },
     { title: '所属家庭', dataIndex: 'familyName', key: 'familyName', width: 150 },
@@ -105,7 +105,7 @@ import { toFamilySelectOptions } from '../utils/activeFamily';
     useSearchForm: true,
     formConfig: {
       schemas: [
-        { field: 'nickname', label: '昵称', component: 'Input' },
+        { field: 'nickname', label: '用户姓名', component: 'Input' },
         { field: 'phone', label: '手机号', component: 'Input' },
         {
           field: 'familyId',

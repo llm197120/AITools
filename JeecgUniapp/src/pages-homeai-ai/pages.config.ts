@@ -11,6 +11,7 @@ export default [
     path: 'ai/chat',
     style: {
       navigationBarTitleText: 'AI对话',
+      disableScroll: true,
     },
   },
 ]

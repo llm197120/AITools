@@ -34,6 +34,7 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { getThemeMode, setThemeMode, applyTheme, ThemeMode } from '../../pages-homeai/utils/theme'
 import { getConnState, onConnChange, checkNow } from '../../pages-homeai/offline/conn'
 
@@ -63,6 +64,9 @@ onMounted(() => {
     connState.value = s
   })
   checkNow()
+})
+onShow(() => {
+  applyTheme()
 })
 onUnmounted(() => {
   offConn?.()

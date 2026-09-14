@@ -3,7 +3,7 @@
   <div class="space-page">
     <div class="header">
       <img class="header-image" :src="loginLogo" />
-      <div class="header-name"> JEECG </div>
+      <div class="header-name">家庭AI小工具</div>
     </div>
     <div class="new-session" @click="handleNewSession">
       <div class="left-box">

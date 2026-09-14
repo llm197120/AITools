@@ -22,14 +22,14 @@
 <script lang="ts" name="homeai-convert-rule" setup>
   import { PageWrapper } from '/@/components/Page';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
-  import { useDrawer } from '/@/components/Drawer';
+  import { useModal } from '/@/components/Modal';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { storageRuleApi } from '/@/api/homeai';
   import type { HomeaiConvertRule, HomeaiPageParams } from '/@/api/homeai';
   import ConvertRuleDrawer from './ConvertRuleDrawer.vue';
 
   const { createMessage, createConfirm } = useMessage();
-  const [registerDrawer, { openDrawer }] = useDrawer();
+  const [registerDrawer, { openModal: openDrawer }] = useModal();
 
   const [registerTable, { reload }] = useTable({
     title: '格式转换规则',

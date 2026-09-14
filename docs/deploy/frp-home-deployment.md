@@ -3,7 +3,7 @@
 > 状态：脚本已就绪，按快速清单落地  
 > 公网 IP：**116.62.115.226**  
 > **先看操作清单：** [JeecgBoot/deploy/frp/README.md](../../JeecgBoot/deploy/frp/README.md)  
-> 适用：家庭/小范围内测。公网服务器只跑 **frps + Nginx**；**管理端 + 后端 + 数据库** 跑在本机。用户用手机下载侧载 APK。  
+> 适用：家庭/小范围内测。公网服务器只跑 **frps + Nginx**；**管理端 + 后端 + 数据库** 跑在家里那台开机的 Windows（当前是开发机；**2026-09 月末计划改挂服务主机**，见 [service-host-migration.md](./service-host-migration.md)）。用户用手机下载侧载 APK。  
 > 与现有 `JeecgBoot/deploy/`（ECS 上跑 Docker 全套）是**另一条路径**，互不替代。
 
 | 谁执行 | 脚本 |
@@ -76,7 +76,7 @@
 | 位置 | 跑什么 | 公网是否可达 |
 |------|--------|----------------|
 | 服务器 | frps、Nginx、APK 静态目录 | 22 / 80 / 443 / 7000 |
-| 本机 | MySQL、Redis、JeecgBoot、管理端 dist、本机 Nginx、frpc | 否（只出站连 frps） |
+| 本机 / 服务主机 | MySQL、Redis、JeecgBoot、管理端 dist、本机 Nginx、frpc | 否（只出站连 frps） |
 | 用户手机 | 侧载 APK | 访问 `PUBLIC_BASE` |
 
 服务器防火墙：**只放行** `22`、`80`、`443`、`7000`。frp 的 `18080` 必须绑在 `127.0.0.1`，禁止对公网监听。

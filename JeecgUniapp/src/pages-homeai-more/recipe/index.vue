@@ -166,7 +166,6 @@ async function load(reset = true, silent = false) {
     try {
       const r = await readList<any[]>('recipe', 'hot', () => recipeApi.hot(30))
       recipes.value = r.data || []
-      if (r.offline) uni.showToast({ title: '离线模式，展示本地数据', icon: 'none' })
     } catch {
       if (!silent) {
         recipes.value = []
@@ -200,7 +199,6 @@ async function load(reset = true, silent = false) {
             : recipeApi.list({ pageNo: '1', pageSize: String(PAGE_SIZE) }),
       )
       res = r.data
-      if (r.offline) uni.showToast({ title: '离线模式，展示本地数据', icon: 'none' })
     } else {
       const params = { pageNo: String(nextPage), pageSize: String(PAGE_SIZE) }
       res = tab.value === 'favorite' ? await recipeApi.favorites(params) : await recipeApi.list(params)

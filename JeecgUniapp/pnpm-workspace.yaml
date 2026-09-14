@@ -1,4 +1,7 @@
 allowBuilds:
+  '@vue-office/docx': set this to true or false
+  '@vue-office/excel': set this to true or false
+  canvas: set this to true or false
   core-js: true
   es5-ext: true
   esbuild: true

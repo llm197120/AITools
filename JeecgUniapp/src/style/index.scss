@@ -15,7 +15,7 @@ page {
   .uni-tabbar__label {
     margin-top: 1px !important;
   }
-  background-color: #f3f2ee;
+  background-color: var(--hai-bg, #f3f2ee);
 
   --UI-BG: #fff;
   --UI-BG-1: #f7f7f7;
@@ -135,6 +135,26 @@ page {
       }
     }
   }
+}
+
+.dark-mode,
+.dark-mode page {
+  --UI-BG: #232429;
+  --UI-BG-1: #17181c;
+  --UI-BG-2: #232429;
+  --UI-BG-3: #17181c;
+  --UI-BG-5: #232429;
+  --UI-FG: #e8e6e0;
+  --UI-FG-0: rgba(232, 230, 224, 0.92);
+  --UI-FG-HALF: rgba(232, 230, 224, 0.92);
+  --UI-FG-1: rgba(232, 230, 224, 0.55);
+  --UI-FG-2: rgba(232, 230, 224, 0.35);
+  --UI-FG-3: rgba(232, 230, 224, 0.12);
+  --wot-input-color: #e8e6e0;
+  --wot-cell-value-color: #a8a49a;
+  --wot-textarea-color: #e8e6e0;
+  --wot-text-info-color: #e8e6e0;
+  --wot-color-theme: #4d8fd6;
 }
 .uni-scroll-view {
   .uni-scroll-view {

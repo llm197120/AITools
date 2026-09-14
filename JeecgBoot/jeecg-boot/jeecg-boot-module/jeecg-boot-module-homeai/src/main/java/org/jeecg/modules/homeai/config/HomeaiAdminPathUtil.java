@@ -103,11 +103,8 @@ public final class HomeaiAdminPathUtil {
             "/homeai/app/version/upload",
             //update-end---author:cursor---date:2026-08-21---for:【HomeAI-R69】APP 版本管理端-----------
             //update-begin---author:cursor---date:2026-08-31---for:【APP离线】同步配置管理端保存须控制台 JWT-----------
-            "/homeai/config/sync/admin",
+            "/homeai/config/sync/admin"
             //update-end---author:cursor---date:2026-08-31---for:【APP离线】同步配置管理端保存须控制台 JWT-----------
-            //update-begin---author:cursor---date:2026-09-02---for:【协议配置】协议/隐私富文本管理端保存须控制台 JWT-----------
-            "/homeai/config/doc"
-            //update-end---author:cursor---date:2026-09-02---for:【协议配置】协议/隐私富文本管理端保存须控制台 JWT-----------
     );
 
     /**
@@ -170,6 +167,9 @@ public final class HomeaiAdminPathUtil {
         }
         if (path.equals("/homeai/learn/category") && ("POST".equals(m) || "PUT".equals(m))) return true;
         if (path.equals("/homeai/config/file-whitelist") && "PUT".equals(m)) return true;
+        //update-begin---author:cursor---date:2026-09-03---for:【HomeAI-R125】协议保存仅 PUT 走管理端，GET 保持 APP 公开-----------
+        if (path.startsWith("/homeai/config/doc/") && "PUT".equals(m)) return true;
+        //update-end---author:cursor---date:2026-09-03---for:【HomeAI-R125】协议保存仅 PUT 走管理端，GET 保持 APP 公开-----------
         //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】存储配额配置管理端-----------
         if (path.equals("/homeai/config/storage") && ("PUT".equals(m) || "GET".equals(m))) return true;
         //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R30】家庭级配额覆盖管理端-----------
@@ -182,6 +182,9 @@ public final class HomeaiAdminPathUtil {
         if (path.equals("/homeai/config/wechat-learn-remind") && "GET".equals(m)) return true;
         //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R31】学习提醒模板联调管理端-----------
         if (path.equals("/homeai/config/plan") && ("PUT".equals(m) || "GET".equals(m))) return true;
+        //update-begin---author:cursor---date:2026-09-07---for:【系统配置】管理端路径-----------
+        if (path.equals("/homeai/config/sys") && ("PUT".equals(m) || "GET".equals(m))) return true;
+        //update-end---author:cursor---date:2026-09-07---for:【系统配置】管理端路径-----------
         //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R23】存储配额配置管理端-----------
         return false;
     }

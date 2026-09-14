@@ -126,7 +126,8 @@
           "type": "page",
           "style": {
             "navigationBarTitleText": "AI对话",
-            "navigationBarBackgroundColor": "#F3F2EE"
+            "navigationBarBackgroundColor": "#F3F2EE",
+            "disableScroll": true
           }
         },
         {
@@ -297,6 +298,14 @@
             "navigationBarBackgroundColor": "#F3F2EE",
             "onReachBottomDistance": 80,
             "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "settings/index",
+          "type": "page",
+          "style": {
+            "navigationBarTitleText": "设置",
+            "navigationBarBackgroundColor": "#F3F2EE"
           }
         },
         {

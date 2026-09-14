@@ -41,7 +41,7 @@ export type PreviewFileInput = {
   extension?: string
 }
 
-/** 跳转资料预览页（支持图片/视频/音频/PDF/Office/TXT） */
+/** 跳转资料预览页（图片/视频/音频/PDF/Office 原文件页内预览/TXT） */
 export function previewFile(file: PreviewFileInput) {
   const qs: string[] = []
   if (file.id) qs.push(`fileId=${encodeURIComponent(file.id)}`)

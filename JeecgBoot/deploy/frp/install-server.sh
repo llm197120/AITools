@@ -215,11 +215,13 @@ write_download_page() {
     ol { padding-left: 1.25rem; color: #4b5563; }
     .hint { font-size: 0.85rem; color: #6b7280; margin-top: 2rem; }
     .warn { font-size: 0.9rem; color: #b45309; margin-top: 0.75rem; display: none; }
+    .ver { font-size: 1rem; color: #1f2937; }
   </style>
 </head>
 <body>
   <h1>家庭AI小工具</h1>
   <p>Android 内测版。仅供家庭成员侧载安装，不上架应用商店。</p>
+  <p class="ver" id="verLine" hidden>当前版本：<strong id="verText"></strong></p>
   <p><a class="btn" id="apkBtn" href="./homeai-latest.apk">下载 APK</a></p>
   <p class="warn" id="apkMissing">安装包还未上传到服务器。请在电脑上打好签名 APK 后执行：<br><code>.\upload-apk.ps1 -ApkPath 你的签名包.apk</code></p>
   <ol>
@@ -228,11 +230,23 @@ write_download_page() {
     <li>安装后用手机号和密码登录。</li>
     <li>连不上时请确认家里电脑已开机。</li>
   </ol>
-  <p class="hint">版本见同目录 <code>version.txt</code>（若有）。覆盖安装请勿更换签名证书。</p>
+  <p class="hint">覆盖安装请勿更换签名证书。</p>
   <script>
     (function () {
       var btn = document.getElementById('apkBtn');
       var warn = document.getElementById('apkMissing');
+      var verLine = document.getElementById('verLine');
+      var verText = document.getElementById('verText');
+      fetch('./version.txt', { cache: 'no-store' }).then(function (r) {
+        if (!r.ok) return '';
+        return r.text();
+      }).then(function (t) {
+        var v = (t || '').replace(/^\uFEFF/, '').trim();
+        if (!v) return;
+        verText.textContent = v;
+        verLine.hidden = false;
+        btn.href = './homeai-latest.apk?v=' + encodeURIComponent(v);
+      }).catch(function () {});
       fetch('./homeai-latest.apk', { method: 'HEAD', cache: 'no-store' }).then(function (r) {
         if (r.ok) return;
         btn.className = 'btn disabled';
@@ -304,6 +318,7 @@ server {
         alias ${APK_DIR}/;
         index index.html;
         autoindex off;
+        add_header Cache-Control "no-store, must-revalidate" always;
     }
 
     location / {

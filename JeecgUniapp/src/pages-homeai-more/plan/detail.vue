@@ -160,9 +160,6 @@ async function loadPlan(silent = false) {
       },
     )
     plan.value = res.data || {}
-    if (res.offline) {
-      uni.showToast({ title: '离线模式，展示本地数据', icon: 'none' })
-    }
   } catch {
     loadFailed.value = !plan.value.id
     if (loadFailed.value) uni.showToast({ title: '计划加载失败', icon: 'none' })

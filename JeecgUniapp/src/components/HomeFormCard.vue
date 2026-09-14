@@ -86,7 +86,7 @@
 .home-form-group .wd-picker,
 .home-form-group .wd-select-picker,
 .home-form-group .wd-datetime-picker {
-  background: #fff !important;
+  background: var(--hai-card, #fff) !important;
 }
 
 .home-form-group .wd-cell__wrapper {

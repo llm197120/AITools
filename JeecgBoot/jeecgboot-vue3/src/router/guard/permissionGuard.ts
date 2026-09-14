@@ -2,7 +2,7 @@ import type { Router, RouteRecordRaw } from 'vue-router';
 
 import { usePermissionStoreWithOut } from '/@/store/modules/permission';
 
-import { PageEnum } from '/@/enums/pageEnum';
+import { PageEnum, isObsoleteJeecgDashboardPath, resolveHomePath } from '/@/enums/pageEnum';
 import { useUserStoreWithOut } from '/@/store/modules/user';
 
 import { PAGE_NOT_FOUND_ROUTE } from '/@/router/routes/basic';
@@ -43,10 +43,10 @@ export function createPermissionGuard(router: Router) {
       from.path === ROOT_PATH &&
       to.path === PageEnum.BASE_HOME &&
       userStore.getUserInfo.homePath &&
-      userStore.getUserInfo.homePath !== PageEnum.BASE_HOME
+      resolveHomePath(userStore.getUserInfo.homePath) !== PageEnum.BASE_HOME
     ) {
       homePathJumpCount++;
-      return userStore.getUserInfo.homePath;
+      return resolveHomePath(userStore.getUserInfo.homePath);
     }
 
     const token = userStore.getToken;
@@ -61,7 +61,11 @@ export function createPermissionGuard(router: Router) {
         
         try {
           if (!isSessionTimeout) {
-            return (to.query?.redirect as string) || '/';
+            const loginRedirect = to.query?.redirect as string;
+            if (loginRedirect && !isObsoleteJeecgDashboardPath(loginRedirect)) {
+              return loginRedirect;
+            }
+            return '/';
           }
         } catch (e) {
           // 登录页 redirect 解析失败时忽略，继续走白名单放行
@@ -149,13 +153,13 @@ export function createPermissionGuard(router: Router) {
       if (isOAuth2DingAppEnv()) {
         return OAUTH2_LOGIN_PAGE_PATH;
       } else {
-        return userStore.getUserInfo.homePath || PageEnum.BASE_HOME;
+        return resolveHomePath(userStore.getUserInfo.homePath);
       }
     }
     //==============================【首次登录并且是企业微信或者钉钉的情况下才会调用】==================
     // Jump to the 404 page after processing the login
-    if (from.path === LOGIN_PATH && to.name === PAGE_NOT_FOUND_NAME_404 && to.fullPath !== (userStore.getUserInfo.homePath || PageEnum.BASE_HOME)) {
-      return userStore.getUserInfo.homePath || PageEnum.BASE_HOME;
+    if (from.path === LOGIN_PATH && to.name === PAGE_NOT_FOUND_NAME_404 && to.fullPath !== resolveHomePath(userStore.getUserInfo.homePath)) {
+      return resolveHomePath(userStore.getUserInfo.homePath);
     }
 
     // // get userinfo while last fetch time is empty
@@ -187,11 +191,17 @@ export function createPermissionGuard(router: Router) {
     // 代码逻辑说明: 【issues/7500】vue-router4.5.0版本路由name:PageNotFound同名导致登录进不去
     if (to.name === PAGE_NOT_FOUND_NAME_404) {
       // 动态添加路由后，此处应当重定向到fullPath，否则会加载404页面内容
-      return { path: to.fullPath, replace: true, query: to.query };
+      const targetPath = isObsoleteJeecgDashboardPath(to.fullPath)
+        ? resolveHomePath(userStore.getUserInfo.homePath)
+        : to.fullPath;
+      return { path: targetPath, replace: true, query: isObsoleteJeecgDashboardPath(to.fullPath) ? {} : to.query };
     } else {
       const redirectPath = (from.query.redirect || to.path) as string;
       const redirect = decodeURIComponent(redirectPath);
-      const nextData = to.path === redirect ? { ...to, replace: true } : { path: redirect };
+      const safeRedirect = isObsoleteJeecgDashboardPath(redirect)
+        ? resolveHomePath(userStore.getUserInfo.homePath)
+        : redirect;
+      const nextData = to.path === safeRedirect ? { ...to, replace: true } : { path: safeRedirect };
       return nextData;
     }
   });

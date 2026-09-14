@@ -1,27 +1,30 @@
 <template>
-  <BasicDrawer v-bind="$attrs" @register="registerDrawer" :title="isUpdate ? '编辑账单' : '新增账单'" width="40%">
+  <HomeaiFormModal v-bind="$attrs" size="medium" @register="registerDrawer" :title="isUpdate ? '编辑账单' : '新增账单'">
     <BasicForm @register="registerForm" @submit="handleSubmit" />
     <template #footer>
-      <a-button type="primary" @click="submit">保存</a-button>
-      <a-button style="margin-left: 8px" @click="closeDrawer()">取消</a-button>
+      <a-button @click="closeDrawer()">取消</a-button>
+      <a-button type="primary" :loading="saving" @click="submit">保存并关闭</a-button>
     </template>
-  </BasicDrawer>
+  </HomeaiFormModal>
 </template>
 
 <script lang="ts" name="homeai-bill-drawer" setup>
   import { ref, onMounted } from 'vue';
-  import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
+  import { useModalInner } from '/@/components/Modal';
   import { BasicForm, useForm } from '/@/components/Form';
   import { billApi } from '/@/api/homeai';
-import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
+  import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { useUserLabel } from '../hooks/useUserLabel';
+  import HomeaiFormModal from '../components/HomeaiFormModal.vue';
+  import { COL_FULL, homeaiGroup, omitHomeaiFormMeta } from '../utils/formLayout';
 
   const emit = defineEmits(['success']);
   const { createMessage } = useMessage();
   const isUpdate = ref(false);
   const recordId = ref('');
   const originalUserId = ref('');
+  const saving = ref(false);
   const categoryOptions = ref<{ label: string; value: string }[]>([]);
   const { userOptions, loadUserOptions } = useUserLabel();
 
@@ -64,7 +67,7 @@ import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
     setFieldsValue({ categoryId: undefined });
   }
 
-  const [registerDrawer, { closeDrawer }] = useDrawerInner(async (data) => {
+  const [registerDrawer, { closeModal: closeDrawer }] = useModalInner(async (data) => {
     isUpdate.value = data.isUpdate || false;
     recordId.value = data.record?.id || '';
     originalUserId.value = data.record?.userId || '';
@@ -80,7 +83,9 @@ import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
 
   const [registerForm, { setFieldsValue, resetFields, submit, updateSchema }] = useForm({
     labelWidth: 100,
+    baseColProps: { span: 12 },
     schemas: [
+      homeaiGroup('基本信息', '_g_basic'),
       {
         field: 'userId',
         label: '所属用户',
@@ -109,7 +114,6 @@ import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
         },
         defaultValue: 'expense',
       },
-      { field: 'amount', label: '金额', component: 'InputNumber', required: true },
       {
         field: 'categoryId',
         label: '分类',
@@ -123,6 +127,7 @@ import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
           placeholder: '请选择分类',
         },
       },
+      { field: 'amount', label: '金额', component: 'InputNumber', required: true },
       {
         field: 'paymentMethod',
         label: '支付方式',
@@ -138,7 +143,7 @@ import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
         },
         defaultValue: '微信',
       },
-      { field: 'remark', label: '备注', component: 'InputTextArea' },
+      { field: 'remark', label: '备注', component: 'InputTextArea', colProps: COL_FULL },
     ],
     showSubmitButton: false,
     showResetButton: false,
@@ -156,12 +161,14 @@ import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
     }
     values.amount = Math.round(amount * 100) / 100;
     if (values.remark != null) values.remark = String(values.remark).trim();
+    const payload = omitHomeaiFormMeta(values);
+    saving.value = true;
     try {
       if (isUpdate.value) {
-        await billApi.edit(recordId.value, values);
+        await billApi.edit(recordId.value, payload);
         createMessage.success('编辑成功');
       } else {
-        await billApi.add(values);
+        await billApi.add(payload);
         createMessage.success('新增成功');
       }
       closeDrawer();
@@ -170,6 +177,8 @@ import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
     } catch (e: any) {
       createMessage.error(e?.message || '操作失败');
       return false;
+    } finally {
+      saving.value = false;
     }
   }
 </script>

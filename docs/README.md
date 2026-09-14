@@ -41,7 +41,9 @@ docs/                          # 文档根目录
 │   └── README.md              # 会议纪要索引
 │
 ├── deploy/                    # 部署文档 + 一键发布/启停
+│   ├── service-host-migration.md  # 9月末：本机开发 + 另一台跑服务
 │   ├── README.md              # 部署文档索引（含 publish-all / start-all / stop-all）
+│   ├── init-windows-host.ps1  # 空系统 Windows 主机装依赖
 │   ├── publish-all.ps1        # 一键发布：后端 + 管理端 + APP
 │   ├── start-all.ps1 / stop-all.ps1
 │   └── github-actions-acr-cicd-design.md  # GitHub Actions + ACR CI/CD（待实施）

@@ -1,32 +1,30 @@
 <template>
-  <BasicDrawer v-bind="$attrs" @register="registerDrawer" :title="title" width="40%">
-    <!-- 查看模式 -->
+  <HomeaiFormModal v-bind="$attrs" size="short" @register="registerDrawer" :title="title">
     <template v-if="isViewMode">
       <Description :column="1" :data="record" :schema="viewSchema" />
     </template>
-    <!-- 编辑/新增模式 -->
     <template v-else>
       <BasicForm @register="registerForm" @submit="handleSubmit" />
     </template>
-    <!-- 底部按钮 -->
     <template #footer>
       <template v-if="!isViewMode">
-        <a-button type="primary" @click="submit">保存</a-button>
-        <a-button style="margin-left: 8px" @click="closeDrawer()">取消</a-button>
+        <a-button @click="closeDrawer()">取消</a-button>
+        <a-button type="primary" @click="submit">保存并关闭</a-button>
       </template>
       <a-button v-else @click="closeDrawer()">关闭</a-button>
     </template>
-  </BasicDrawer>
+  </HomeaiFormModal>
 </template>
 
 <script lang="ts" name="convert-rule-drawer" setup>
   import { ref, computed } from 'vue';
-  import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
+  import { useModalInner } from '/@/components/Modal';
   import { Description } from '/@/components/Description';
   import { BasicForm, useForm } from '/@/components/Form';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { storageRuleApi } from '/@/api/homeai';
   import type { HomeaiPayload } from '/@/api/homeai';
+  import HomeaiFormModal from '../components/HomeaiFormModal.vue';
 
   const emit = defineEmits(['success']);
   const { createMessage } = useMessage();
@@ -51,7 +49,7 @@
     { label: '更新时间', field: 'updateTime' },
   ];
 
-  const [registerDrawer, { closeDrawer }] = useDrawerInner((data) => {
+  const [registerDrawer, { closeModal: closeDrawer }] = useModalInner((data) => {
     isUpdate.value = data?.isUpdate;
     record.value = data?.record || {};
     isViewMode.value = !data?.isUpdate && data?.record?.id;
@@ -62,6 +60,7 @@
 
   const [registerForm, { setFieldsValue, submit }] = useForm({
     labelWidth: 100,
+    baseColProps: { span: 12 },
     schemas: [
       {
         field: 'sourceFormat',
@@ -88,6 +87,7 @@
           ],
         },
         defaultValue: '1',
+        colProps: { span: 24 },
       },
     ],
     showSubmitButton: false,

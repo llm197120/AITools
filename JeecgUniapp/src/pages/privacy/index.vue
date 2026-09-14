@@ -21,7 +21,7 @@
         <text class="doc-h2">一、我们收集哪些信息</text>
         <text class="doc-h3">1. 账号信息</text>
         <text class="doc-p">手机号：用于注册、登录及账号安全验证；</text>
-        <text class="doc-p">昵称：用于在家庭内展示您的身份；</text>
+        <text class="doc-p">姓名：用于在家庭内展示您的身份；</text>
         <text class="doc-p">头像：用于个人资料展示（您可自行选择是否上传）。</text>
         <text class="doc-h3">2. 家庭资料</text>
         <text class="doc-p">家庭名称、家庭成员信息、家庭相册与共享资料，用于实现家庭协作功能。</text>
@@ -149,7 +149,7 @@ const remoteContent = ref('')
 onLoad(async () => {
   try {
     const html: any = await getApi('/config/doc/privacy')
-    remoteContent.value = String(html || '')
+    remoteContent.value = String(html || '').trim()
   } catch {
     /* 离线/失败回退内置 */
   }

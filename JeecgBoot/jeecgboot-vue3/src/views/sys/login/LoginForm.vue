@@ -86,13 +86,12 @@
   <ThirdModal ref="thirdModalRef"></ThirdModal>
 </template>
 <script lang="ts" setup>
-  import { reactive, ref, toRaw, unref, computed, onMounted } from 'vue';
+  import { reactive, ref, toRaw, unref, computed, onMounted, defineAsyncComponent } from 'vue';
 
   import { Checkbox, Form, Input, Row, Col, Button, Divider } from 'ant-design-vue';
   import { GithubFilled, WechatFilled, DingtalkCircleFilled } from '@ant-design/icons-vue';
   import { IconFont } from '/@/utils/iconfont2';
   import LoginFormTitle from './LoginFormTitle.vue';
-  import ThirdModal from './ThirdModal.vue';
   import { useI18n } from '/@/hooks/web/useI18n';
   import { useMessage } from '/@/hooks/web/useMessage';
 
@@ -102,6 +101,7 @@
   import { getCodeInfo } from '/@/api/sys/user';
   import {  encryptAESCBC } from '/@/utils/cipher';
 
+  const ThirdModal = defineAsyncComponent(() => import('./ThirdModal.vue'));
   const ACol = Col;
   const ARow = Row;
   const FormItem = Form.Item;

@@ -1,7 +1,7 @@
 import type { AppRouteModule } from '/@/router/types';
-import { PageEnum } from '/@/enums/pageEnum';
 import { LAYOUT } from '/@/router/constant';
 import { t } from '/@/hooks/web/useI18n';
+import { PageEnum } from '/@/enums/pageEnum';
 
 const dashboard: AppRouteModule = {
   path: '/dashboard',

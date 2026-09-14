@@ -322,7 +322,7 @@ public class LearnController {
             }, new String[]{"分类", "资料数", "记录数", "时长(分钟)"});
             writeMapSheet(wb, "按用户", byUser, new String[]{
                     "nickname", "userId", "recordCount", "durationMinutes", "activeDays"
-            }, new String[]{"昵称", "用户ID", "记录数", "时长(分钟)", "活跃天"});
+            }, new String[]{"用户姓名", "用户ID", "记录数", "时长(分钟)", "活跃天"});
             writeMapSheet(wb, "趋势", trend, new String[]{
                     "date", "recordCount", "durationMinutes"
             }, new String[]{"日期", "记录数", "时长(分钟)"});

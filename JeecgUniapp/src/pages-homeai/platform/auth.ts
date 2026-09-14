@@ -30,7 +30,7 @@ export function loginByPhone(phone: string, password: string): Promise<AuthResul
  * 手机号 + 密码注册（注册成功即自动登录）
  * @param phone 手机号
  * @param password 密码
- * @param nickname 昵称（可选）
+ * @param nickname 用户姓名（可选）
  */
 export function registerByPhone(
   phone: string,

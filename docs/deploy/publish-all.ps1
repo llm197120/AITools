@@ -1,11 +1,13 @@
 ﻿# -*- coding: utf-8 -*-
-# 按目标发布：后端 / 管理端前端 / APP，可单独或组合。
-# 不传目标 = 全部。
+# 按目标发布：后端 / 管理端前端 / APP / 文档预览，可单独或组合。
+# 不传目标 = 全部（含文档预览容器）。
 # 用法：
 #   .\publish-all.ps1
 #   .\publish-all.ps1 -Backend
+#   .\publish-all.ps1 -Backend -SkipDocsPreview
 #   .\publish-all.ps1 -Frontend
 #   .\publish-all.ps1 -App
+#   .\publish-all.ps1 -DocsPreview
 #   .\publish-all.ps1 -Backend -Frontend
 #   .\publish-all.ps1 -Target backend,app
 #   .\publish-all.ps1 -App -UploadApk
@@ -15,6 +17,8 @@ param(
     [switch]$Frontend,
     [switch]$Backend,
     [switch]$App,
+    [switch]$DocsPreview,
+    [switch]$SkipDocsPreview,
     [switch]$UploadApk,
     # APP 打包成功后自动登记版本：上传 APK + H5 zip，更新后台版本号并 enabled=1
     [switch]$RegisterVersion,
@@ -32,11 +36,11 @@ $ErrorActionPreference = 'Stop'
 
 if ($Interactive) {
     $picked = Show-HomeaiConsoleMenu -Title 'HomeAI 发布' -Items @(
-        @{ Id = '1'; Text = '全部（后端 + 前端 + APP，上传 APK 到下载页并登记版本）'; Backend = $true; Frontend = $true; App = $true; UploadApk = $true; RegisterVersion = $true }
-        @{ Id = '2'; Text = '仅后端'; Backend = $true; Frontend = $false; App = $false }
-        @{ Id = '3'; Text = '仅前端（管理端）'; Backend = $false; Frontend = $true; App = $false }
-        @{ Id = '4'; Text = '仅 APP（上传 APK 到下载页并登记版本）'; Backend = $false; Frontend = $false; App = $true; UploadApk = $true; RegisterVersion = $true }
-        @{ Id = '5'; Text = '后端 + 前端（不出 APP）'; Backend = $true; Frontend = $true; App = $false }
+        @{ Id = '1'; Text = '全部（后端 + 前端 + APP，上传 APK 到下载页并登记版本）'; Backend = $true; Frontend = $true; App = $true; UploadApk = $true; RegisterVersion = $true; DocsPreview = $true }
+        @{ Id = '2'; Text = '仅后端（含文档预览）'; Backend = $true; Frontend = $false; App = $false; DocsPreview = $true }
+        @{ Id = '3'; Text = '仅前端（管理端）'; Backend = $false; Frontend = $true; App = $false; DocsPreview = $false }
+        @{ Id = '4'; Text = '仅 APP（上传 APK 到下载页并登记版本）'; Backend = $false; Frontend = $false; App = $true; UploadApk = $true; RegisterVersion = $true; DocsPreview = $false }
+        @{ Id = '5'; Text = '后端 + 前端（不出 APP，含文档预览）'; Backend = $true; Frontend = $true; App = $false; DocsPreview = $true }
     )
     if ($null -eq $picked) {
         Write-Host '已取消。'
@@ -47,9 +51,12 @@ if ($Interactive) {
     $App = [bool]$picked.App
     $UploadApk = [bool]$picked.UploadApk
     $RegisterVersion = [bool]$picked.RegisterVersion
+    $DocsPreview = [bool]$picked.DocsPreview
 }
 
-$want = Resolve-HomeaiTargets -Target $Target -Frontend:$Frontend -Backend:$Backend -App:$App
+$want = Resolve-HomeaiTargets -Target $Target -Frontend:$Frontend -Backend:$Backend -App:$App -DocsPreview:$DocsPreview
+if ($want.Backend -and -not $SkipDocsPreview) { $want.DocsPreview = $true }
+if ($SkipDocsPreview) { $want.DocsPreview = $false }
 
 function Invoke-HomeaiBackendCompile {
     Ensure-HomeaiJavaHome
@@ -92,7 +99,6 @@ function Invoke-HomeaiAppPublish {
     $packArgs = @()
     if ($SkipAppBuild) { $packArgs += '-SkipBuild' }
     if ($InitAndroid) { $packArgs += '-InitAndroid' }
-    if ($UploadApk) { $packArgs += '-Upload' }
     if ($AppVersion) { $packArgs += @('-Version', $AppVersion) }
     & $pack @packArgs
     $apk = Join-Path $script:UniDir 'dist\apk\homeai-release.apk'
@@ -101,18 +107,60 @@ function Invoke-HomeaiAppPublish {
     }
 }
 
+function Invoke-HomeaiDownloadPageUpload {
+    $meta = Get-HomeaiLastAppVersionMeta
+    if (-not $meta) {
+        throw "未找到产物元数据 $($script:UniDir)\dist\apk\last-version.json —— 无法上传下载页"
+    }
+    $apk = [string]$meta.apk
+    if (-not $apk -or -not (Test-Path -LiteralPath $apk)) {
+        throw "last-version.json 中 APK 路径无效：$apk"
+    }
+    $ver = [string]$meta.versionName
+    $uploadScript = Join-Path $script:FrpDir 'upload-apk.ps1'
+    Write-Host ("[下载页] 上传 {0}  ({1})" -f $ver, $apk)
+    & $uploadScript -ApkPath $apk -Version $ver
+    if ($LASTEXITCODE -ne 0) { throw "下载页上传失败，exit=$LASTEXITCODE" }
+}
+
+function Get-HomeaiLastAppVersionMeta {
+    $metaPath = Join-Path $script:UniDir 'dist\apk\last-version.json'
+    if (-not (Test-Path -LiteralPath $metaPath)) {
+        return $null
+    }
+    try {
+        return Get-Content -LiteralPath $metaPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    } catch {
+        return $null
+    }
+}
+
+function Write-HomeaiAppVersionLine {
+    param(
+        [string]$Prefix = '[APP]',
+        [object]$Meta
+    )
+    if (-not $Meta -or -not $Meta.versionName) {
+        return
+    }
+    Write-Host ("{0} 版本号 {1}  (versionCode={2})" -f $Prefix, $Meta.versionName, $Meta.versionCode)
+}
+
 # APP 版本自动登记：读打包产物元数据 last-version.json，登录管理端上传 APK + H5 zip 并更新后台版本号
 function Invoke-HomeaiAppVersionRegister {
     param([string]$Mode)
-    $metaPath = Join-Path $script:UniDir 'dist\apk\last-version.json'
-    if (-not (Test-Path -LiteralPath $metaPath)) {
-        throw "未找到产物元数据 $metaPath —— 请先执行 APP 打包（pack-apk-local.ps1）"
+    $meta = Get-HomeaiLastAppVersionMeta
+    if (-not $meta) {
+        throw "未找到产物元数据 $($script:UniDir)\dist\apk\last-version.json —— 请先执行 APP 打包（pack-apk-local.ps1）"
     }
-    $meta = Get-Content -LiteralPath $metaPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $apk = [string]$meta.apk
     $zip = [string]$meta.zip
     if (-not $apk -or -not (Test-Path -LiteralPath $apk)) {
         throw "last-version.json 中 APK 路径无效：$apk"
+    }
+    if (-not $zip) {
+        $guessZip = Join-Path $script:UniDir ("dist\apk\homeai-h5-" + [string]$meta.versionName + ".zip")
+        if (Test-Path -LiteralPath $guessZip) { $zip = $guessZip }
     }
     if ($zip -and -not (Test-Path -LiteralPath $zip)) {
         Write-Host "[APP版本] 提示：H5 zip 不存在（$zip），仅登记 APK"
@@ -127,10 +175,12 @@ function Invoke-HomeaiAppVersionRegister {
         '--mode', $mode
     )
     if ($zip) { $mjsArgs += @('--zip', $zip) }
-    Write-Host ("[APP版本] 登记 versionName={0} versionCode={1} mode={2}（enabled=1，即刻对 APP 生效）" -f $meta.versionName, $meta.versionCode, $mode)
+    Write-HomeaiAppVersionLine -Prefix '[APP版本] 登记' -Meta $meta
+    Write-Host ("[APP版本] 更新模式 {0}（enabled=1，即刻对 APP 生效）" -f $mode)
     & node $mjs @mjsArgs
     if ($LASTEXITCODE -ne 0) { throw "版本登记失败，exit=$LASTEXITCODE" }
     Write-Host '[APP版本] 登记完成'
+    Write-HomeaiAppVersionLine -Prefix '[APP版本] 已发布' -Meta $meta
 }
 
 Write-Host '========== HomeAI 发布 =========='
@@ -140,6 +190,15 @@ Write-Host ''
 
 $failed = @()
 
+if ($want.Backend -and (Test-HomeaiDockerDatastoresEnabled)) {
+    try {
+        Start-HomeaiRuntimeDatastores
+    } catch {
+        Write-Host ("[数据] 失败：{0}" -f $_.Exception.Message)
+        $failed += 'MySQL/Redis'
+    }
+}
+
 if ($want.Backend) {
     try {
         Invoke-HomeaiBackendCompile
@@ -148,6 +207,15 @@ if ($want.Backend) {
     } catch {
         Write-Host ("[后端] 失败：{0}" -f $_.Exception.Message)
         $failed += '后端'
+    }
+}
+
+if ($want.DocsPreview) {
+    try {
+        Start-HomeaiDocsPreview
+    } catch {
+        Write-Host ("[文档预览] 失败：{0}" -f $_.Exception.Message)
+        $failed += '文档预览'
     }
 }
 
@@ -167,10 +235,19 @@ if ($want.App) {
     $appOk = $true
     try {
         Invoke-HomeaiAppPublish
+        Write-HomeaiAppVersionLine -Prefix '[APP] 已打包' -Meta (Get-HomeaiLastAppVersionMeta)
     } catch {
         $appOk = $false
         Write-Host ("[APP] 失败：{0}" -f $_.Exception.Message)
         $failed += 'APP'
+    }
+    if ($appOk -and $UploadApk) {
+        try {
+            Invoke-HomeaiDownloadPageUpload
+        } catch {
+            Write-Host ("[下载页] 失败：{0}" -f $_.Exception.Message)
+            $failed += '下载页上传'
+        }
     }
     if ($appOk -and $RegisterVersion) {
         try {
@@ -193,10 +270,24 @@ if ($want.Frontend) {
 if ($want.Backend) {
     Write-Host ("本地 API:   http://127.0.0.1:{0}/jeecg-boot/" -f $cfg['BACKEND_PORT'])
 }
+if ($want.DocsPreview) {
+    Write-HomeaiDocsPreviewHint
+}
 if ($want.App) {
     Write-Host ("下载页:     http://{0}/app/" -f $cfg['SERVER_IP'])
-    if ($RegisterVersion) {
+    $endMeta = Get-HomeaiLastAppVersionMeta
+    if ($appOk -and $endMeta) {
+        Write-Host ("APP 版本号: {0}  (versionCode={1})" -f $endMeta.versionName, $endMeta.versionCode)
+    }
+    if ($UploadApk -and $appOk -and ($failed -notcontains '下载页上传')) {
+        Write-Host '下载页：已覆盖 homeai-latest.apk 与 version.txt'
+    } elseif ($UploadApk -and -not $appOk) {
+        Write-Host '下载页：未上传（APP 打包失败）'
+    }
+    if ($RegisterVersion -and $appOk) {
         Write-Host 'APP版本：已自动登记（APK + H5 zip 已上传，enabled=1）'
+    } elseif ($RegisterVersion -and -not $appOk) {
+        Write-Host 'APP版本：未登记（APP 打包失败）'
     } else {
         Write-Host 'APP 管理端登记：家庭AI小工具 → APP版本（见 docs/guide/app-release.md）；或下次发布加 -RegisterVersion 自动登记'
     }

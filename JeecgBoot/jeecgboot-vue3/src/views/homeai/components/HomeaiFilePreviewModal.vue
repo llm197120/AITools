@@ -10,7 +10,10 @@
     <a-spin :spinning="loading">
       <div v-if="error" class="hfp-empty">{{ error }}</div>
       <template v-else-if="preview">
-        <div v-if="preview.kind === 'image' && mediaUrl" class="hfp-media">
+        <div v-if="preview.kkPreviewUrl" class="hfp-pdf">
+          <iframe :src="preview.kkPreviewUrl" class="hfp-iframe" title="文档预览" />
+        </div>
+        <div v-else-if="preview.kind === 'image' && mediaUrl" class="hfp-media">
           <a-image :src="mediaUrl" :preview="true" style="max-height: 70vh" />
         </div>
         <video v-else-if="preview.kind === 'video' && mediaUrl" :src="mediaUrl" controls class="hfp-video" />
@@ -57,6 +60,7 @@
     convertTaskId?: string;
     convertStatus?: string;
     errorMessage?: string;
+    kkPreviewUrl?: string;
   }
 
   const { createMessage } = useMessage();
@@ -113,7 +117,7 @@
     if (data.kind === 'text') {
       await loadText();
     }
-    if (data.kind === 'office' && !data.previewPdfUrl) {
+    if (data.kind === 'office' && !data.previewPdfUrl && !data.kkPreviewUrl) {
       await startOfficeConvert();
     }
   }

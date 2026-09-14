@@ -52,7 +52,11 @@
     <a-modal
       v-model:open="quotaVisible"
       title="家庭存储配额"
+      :centered="true"
+      :maskClosable="false"
+      :width="520"
       :confirm-loading="quotaSaving"
+      wrapClassName="homeai-form-modal"
       @ok="saveFamilyQuota"
     >
       <a-form layout="vertical">
@@ -69,7 +73,7 @@
       <template #footer>
         <a-button @click="quotaVisible = false">取消</a-button>
         <a-button v-if="quotaForm.custom" danger :loading="quotaSaving" @click="clearFamilyQuota">恢复默认</a-button>
-        <a-button type="primary" :loading="quotaSaving" @click="saveFamilyQuota">保存</a-button>
+        <a-button type="primary" :loading="quotaSaving" @click="saveFamilyQuota">保存并关闭</a-button>
       </template>
     </a-modal>
   </PageWrapper>
@@ -79,7 +83,7 @@
   import { PageWrapper } from '/@/components/Page';
   import { ref } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
-  import { useDrawer } from '/@/components/Drawer';
+  import { useModal } from '/@/components/Modal';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { useMethods } from '/@/hooks/system/useMethods';
   import { familyApi, storageApi } from '/@/api/homeai';
@@ -93,8 +97,8 @@ import { useHomeaiListLoad } from '../hooks/useHomeaiListLoad';
   const { createMessage } = useMessage();
   const { listFailed, wrapListApi } = useHomeaiListLoad();
   const { handleExportXls, handleImportXls } = useMethods();
-  const [registerDrawer, { openDrawer }] = useDrawer();
-  const [registerMembersDrawer, { openDrawer: openMembersDrawer }] = useDrawer();
+  const [registerDrawer, { openModal: openDrawer }] = useModal();
+  const [registerMembersDrawer, { openModal: openMembersDrawer }] = useModal();
   const { loadUserOptions, resolveUserLabel } = useUserLabel();
   loadUserOptions();
   const activeTab = ref('list');

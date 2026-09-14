@@ -40,8 +40,20 @@ VALUES ('homeai_menu_dashboard', 'homeai_menu_root', '综合统计', '/homeai/da
 INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `icon`, `sort_no`, `status`, `del_flag`, `create_time`)
 VALUES ('homeai_menu_app_version', 'homeai_menu_root', 'APP版本', '/homeai/config/appVersion', '/views/homeai/config/appVersion', 1, 'homeai:app:version:edit', 1, 'ant-design:mobile-outlined', 2.6, 1, 0, NOW());
 
+INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `icon`, `sort_no`, `status`, `del_flag`, `create_time`)
+VALUES ('homeai_menu_sys_config', 'homeai_menu_root', '系统配置', '/homeai/sysConfig', '/views/homeai/config/sysConfig', 1, 'homeai:config:sys:list', 1, 'ant-design:control-outlined', 2.65, 1, 0, NOW());
+
+INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `sort_no`, `status`, `del_flag`, `create_time`)
+VALUES ('homeai_btn_sys_config_edit', 'homeai_menu_sys_config', '保存配置', NULL, NULL, 0, 'homeai:config:sys:edit', 2, 1.0, 1, 0, NOW());
+
 INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `sort_no`, `status`, `del_flag`, `create_time`)
 VALUES ('homeai_btn_app_version_edit', 'homeai_menu_app_version', '保存配置', NULL, NULL, 0, 'homeai:app:version:edit', 2, 1.0, 1, 0, NOW());
+
+INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `icon`, `sort_no`, `status`, `del_flag`, `create_time`)
+VALUES ('homeai_menu_sync_config', 'homeai_menu_app_version', '同步配置', '/homeai/syncConfig', '/views/homeai/appversion/syncConfig', 1, 'homeai:app:version:edit', 1, 'ant-design:sync-outlined', 9.0, 1, 0, NOW());
+
+INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `icon`, `sort_no`, `status`, `del_flag`, `create_time`)
+VALUES ('homeai_menu_doc_config', 'homeai_menu_app_version', '协议与隐私配置', '/homeai/docConfig', '/views/homeai/config/docConfig', 1, 'homeai:app:version:edit', 1, 'ant-design:file-text-outlined', 10.0, 1, 0, NOW());
 
 -- 家庭管理 - 按钮权限
 INSERT IGNORE INTO `sys_permission` (`id`, `parent_id`, `name`, `url`, `component`, `is_route`, `perms`, `menu_type`, `sort_no`, `status`, `del_flag`, `create_time`)

@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 # 把签名 APK 上传到服务器下载页（一次 SSH，密码只问一次或读 secrets.env）
 param(
     [Parameter(Mandatory = $true)][string]$ApkPath,
@@ -35,13 +35,20 @@ if ($SshIdentityFile) {
     $sshArgs += @('-i', $keyPath)
 }
 
-$verLine = if ($Version) { "echo '$Version' > /var/www/homeai-apk/version.txt;" } else { '' }
+$verEsc = ($Version -replace "'", '').Trim()
+$verLine = if ($verEsc) { "echo '$verEsc' > /var/www/homeai-apk/version.txt;" } else { '' }
 $remoteCmd = "mkdir -p /var/www/homeai-apk && cat > /tmp/homeai.apk && mv /tmp/homeai.apk /var/www/homeai-apk/homeai-latest.apk && chmod 644 /var/www/homeai-apk/homeai-latest.apk && $verLine echo uploaded"
+$indexHtml = Join-Path $PSScriptRoot 'download\index.html'
 
 try {
     Initialize-HomeaiSshAuth -Secrets $sec -Target $target -IdentityFile $keyPath
     Write-Host ("Upload APK in one SSH to " + $target)
+    if ($verEsc) { Write-Host ("Download page version.txt -> " + $verEsc) }
     Invoke-HomeaiSsh -SshArgs $sshArgs -Target $target -RemoteCommand $remoteCmd -StdinFile $ApkPath
+    if (Test-Path -LiteralPath $indexHtml) {
+        Write-Host 'Upload download/index.html'
+        Invoke-HomeaiSsh -SshArgs $sshArgs -Target $target -RemoteCommand 'cat > /var/www/homeai-apk/index.html && chmod 644 /var/www/homeai-apk/index.html && echo html-ok' -StdinFile $indexHtml
+    }
 } finally {
     Clear-HomeaiSshAuth
 }

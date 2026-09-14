@@ -132,6 +132,16 @@ public class StorageOfficeConvertExecutorImpl implements IStorageOfficeConvertEx
         task.setResultFileUrl(fileStorageService.storeLocalFile(converted, objectKey));
         task.setResultFileSize(Files.size(converted));
         task.setErrorMessage(null);
+        //update-begin---author:cursor---date:2026-09-07---for:【格式转换】产物写入原目录并出现在文件管理---
+        if ("format_convert".equals(task.getConvertType())) {
+            fileService.registerConvertedFile(
+                    sourceFile,
+                    task.getResultFileUrl(),
+                    storedName,
+                    targetFormat,
+                    Files.size(converted));
+        }
+        //update-end---author:cursor---date:2026-09-07---for:【格式转换】产物写入原目录并出现在文件管理---
         //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】预览 PDF 回写源文件-----------
         if (IHomeaiFilePreviewService.CONVERT_PREVIEW_PDF.equals(task.getConvertType())
                 || "pdf".equals(targetFormat)) {

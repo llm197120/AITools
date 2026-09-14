@@ -8,10 +8,12 @@ import org.jeecg.common.aspect.annotation.AutoLog;
 import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.modules.homeai.config.dto.HomeaiPlanConfigDto;
 import org.jeecg.modules.homeai.config.dto.HomeaiStorageConfigDto;
+import org.jeecg.modules.homeai.config.dto.HomeaiSysConfigDto;
 import org.jeecg.modules.homeai.config.entity.HomeaiFileWhitelist;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileWhitelistService;
 import org.jeecg.modules.homeai.config.service.IHomeaiPlanConfigService;
 import org.jeecg.modules.homeai.config.service.IHomeaiStorageConfigService;
+import org.jeecg.modules.homeai.config.service.IHomeaiSysConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
@@ -38,6 +40,11 @@ public class HomeaiConfigController {
 
     @Autowired
     private IHomeaiPlanConfigService planConfigService;
+
+    //update-begin---author:cursor---date:2026-09-07---for:【系统配置】yml 项进后台-----------
+    @Autowired
+    private IHomeaiSysConfigService sysConfigService;
+    //update-end---author:cursor---date:2026-09-07---for:【系统配置】yml 项进后台-----------
 
     //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】存储配额配置 API-----------
     @Autowired
@@ -94,6 +101,24 @@ public class HomeaiConfigController {
         planConfigService.saveConfig(config);
         return Result.OK("保存成功");
     }
+
+    //update-begin---author:cursor---date:2026-09-07---for:【系统配置】管理端读写-----------
+    @GetMapping("/sys")
+    @Operation(summary = "系统运行时配置-查询(管理端)")
+    @RequiresPermissions("homeai:config:sys:list")
+    public Result<?> getSysConfig() {
+        return Result.OK(sysConfigService.getConfig());
+    }
+
+    @PutMapping("/sys")
+    @AutoLog(value = "系统运行时配置-更新")
+    @Operation(summary = "系统运行时配置-更新(管理端)")
+    @RequiresPermissions("homeai:config:sys:edit")
+    public Result<?> updateSysConfig(@RequestBody HomeaiSysConfigDto config) {
+        sysConfigService.saveConfig(config);
+        return Result.OK("保存成功");
+    }
+    //update-end---author:cursor---date:2026-09-07---for:【系统配置】管理端读写-----------
 
     //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】存储配额配置 API-----------
     @GetMapping("/storage")
@@ -239,10 +264,13 @@ public class HomeaiConfigController {
     @Operation(summary = "微信公开配置(小程序订阅消息等)")
     public Result<?> getWechatPublicConfig() {
         Map<String, Object> data = new HashMap<>();
-        data.put("planRemindTemplateId", planRemindTemplateId != null ? planRemindTemplateId : "");
-        //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R29】学习提醒模板-----------
-        data.put("learnRemindTemplateId", learnRemindTemplateId != null ? learnRemindTemplateId : "");
-        //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R29】学习提醒模板-----------
+        HomeaiSysConfigDto.Wechat wechat = sysConfigService.getWechat();
+        String planId = wechat != null && wechat.getPlanRemindTemplateId() != null
+                ? wechat.getPlanRemindTemplateId() : (planRemindTemplateId != null ? planRemindTemplateId : "");
+        String learnId = wechat != null && wechat.getLearnRemindTemplateId() != null
+                ? wechat.getLearnRemindTemplateId() : (learnRemindTemplateId != null ? learnRemindTemplateId : "");
+        data.put("planRemindTemplateId", planId);
+        data.put("learnRemindTemplateId", learnId);
         return Result.OK(data);
     }
 

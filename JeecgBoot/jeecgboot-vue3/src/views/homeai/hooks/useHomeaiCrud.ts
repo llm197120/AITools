@@ -122,6 +122,7 @@ export function useHomeaiCrud(options: UseHomeaiCrudOptions) {
     schemas: formSchemas,
     showSubmitButton: false,
     showResetButton: false,
+    baseColProps: { span: 12 },
   });
 
   /** 打开新增弹窗 */

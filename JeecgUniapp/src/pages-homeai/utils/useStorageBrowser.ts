@@ -17,9 +17,9 @@ import {
   pickStorageVisibilityChange,
   type StorageVisibility,
 } from './storageVisibility'
-import { isOfficeExt, previewFile } from './filePreview'
-import { fileSaveActionName } from './contentUrl'
-import { downloadStorageFile } from './fileDownload'
+import { isImageExt, isOfficeExt, isVideoExt, previewFile } from './filePreview'
+import { FILE_OPEN_EXTERNALLY_NAME } from './contentUrl'
+import { downloadStorageFile, openStorageFileExternally } from './fileDownload'
 
 export type StorageSheetAction = { name: string; key: string; color?: string }
 
@@ -86,7 +86,6 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
           () => (fid ? storageApi.folderFiles(fid, 1, PAGE_SIZE) : storageApi.rootFiles(1, PAGE_SIZE)),
         )
         page = r.data
-        if (r.offline) uni.showToast({ title: '离线模式，展示本地数据', icon: 'none' })
       } else {
         page = fid
           ? await storageApi.folderFiles(fid, nextPage, PAGE_SIZE)
@@ -165,13 +164,21 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
     })
   }
 
-  async function downloadFile(file: any) {
-    await downloadStorageFile({
+  function fileDownloadInput(file: any) {
+    return {
       id: file.id,
       fileUrl: file.fileUrl,
       originalName: file.originalName,
       extension: file.extension,
-    })
+    }
+  }
+
+  async function downloadFile(file: any) {
+    await downloadStorageFile(fileDownloadInput(file))
+  }
+
+  async function openFileExternally(file: any) {
+    await openStorageFileExternally(fileDownloadInput(file))
   }
 
   function canDeleteFolder(folder: StorageFolderNode) {
@@ -391,12 +398,15 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
   }
 
   function showFileActions(file: any) {
+    const ext = String(file.extension || '').replace(/^\./, '').toLowerCase()
     const actions: StorageSheetAction[] = [
       { name: '预览', key: 'preview' },
-      { name: fileSaveActionName(file.extension), key: 'download' },
-      { name: '收藏/取消', key: 'favorite' },
+      { name: FILE_OPEN_EXTERNALLY_NAME, key: 'openExternal' },
     ]
-    const ext = String(file.extension || '').replace(/^\./, '').toLowerCase()
+    if (isImageExt(ext) || isVideoExt(ext)) {
+      actions.push({ name: '保存到相册', key: 'download' })
+    }
+    actions.push({ name: '收藏/取消', key: 'favorite' })
     if (isOfficeExt(ext)) {
       actions.push({ name: '格式转换', key: 'convert' })
     }
@@ -414,6 +424,7 @@ export function useStorageBrowser(getFolderId: () => string | null, getUserId: (
     const action = fileSheetActions.value[index]
     if (!file || !action) return
     if (action.key === 'preview') openFile(file)
+    else if (action.key === 'openExternal') await openFileExternally(file)
     else if (action.key === 'download') downloadFile(file)
     else if (action.key === 'convert') {
       const ext = String(file.extension || '').replace(/^\./, '').toLowerCase()

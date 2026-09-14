@@ -180,8 +180,7 @@
   import { PageWrapper } from '/@/components/Page';
   import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
-  import { useDrawer } from '/@/components/Drawer';
-  import { BasicModal } from '/@/components/Modal';
+  import { BasicModal, useModal } from '/@/components/Modal';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { useMethods } from '/@/hooks/system/useMethods';
   import { defHttp } from '/@/utils/http/axios';
@@ -196,7 +195,7 @@
 
   const { createMessage } = useMessage();
   const { handleExportXls, handleImportXls } = useMethods();
-  const [registerDrawer, { openDrawer }] = useDrawer();
+  const [registerDrawer, { openModal: openDrawer }] = useModal();
   const { userOptions, loadUserOptions, resolveUserLabel } = useUserLabel();
   const activeTab = ref('list');
   type CoverItemStatus = 'wait' | 'uploading' | 'ok' | 'fail';

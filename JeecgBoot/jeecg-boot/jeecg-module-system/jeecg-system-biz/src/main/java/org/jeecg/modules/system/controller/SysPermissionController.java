@@ -252,6 +252,9 @@ public class SysPermissionController {
 				return Result.error("请登录系统！");
 			}
 			List<SysPermission> metaList = sysPermissionService.queryByUser(loginUser.getId());
+			//update-begin---author:homeai---date:2026-09-07---for:【管理端】权限接口不下发已隐藏的顶级菜单树---
+			PermissionDataUtil.removeHiddenRootTrees(metaList);
+			//update-end
 			//添加首页路由
 
 			// 代码逻辑说明: 自定义首页地址 LOWCOD-1578

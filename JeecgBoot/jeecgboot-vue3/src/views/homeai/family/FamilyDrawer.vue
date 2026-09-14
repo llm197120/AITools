@@ -1,29 +1,27 @@
 <template>
-  <BasicDrawer v-bind="$attrs" @register="registerDrawer" :title="drawerTitle" width="40%">
-    <!-- 查看模式 -->
+  <HomeaiFormModal v-bind="$attrs" size="short" @register="registerDrawer" :title="drawerTitle">
     <template v-if="!isUpdate">
       <Description :column="1" :data="record" :schema="viewSchema" />
     </template>
-    <!-- 编辑/新增模式 -->
     <BasicForm v-else @register="registerForm" @submit="handleSubmit" />
-    <!-- 底部按钮 -->
     <template #footer>
       <template v-if="isUpdate">
-        <a-button type="primary" @click="submit">保存</a-button>
-        <a-button style="margin-left: 8px" @click="closeDrawer()">取消</a-button>
+        <a-button @click="closeDrawer()">取消</a-button>
+        <a-button type="primary" @click="submit">保存并关闭</a-button>
       </template>
       <a-button v-else @click="closeDrawer()">关闭</a-button>
     </template>
-  </BasicDrawer>
+  </HomeaiFormModal>
 </template>
 
 <script lang="ts" name="homeai-family-drawer" setup>
   import { computed, ref } from 'vue';
-  import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
+  import { useModalInner } from '/@/components/Modal';
   import { Description } from '/@/components/Description';
   import { BasicForm, useForm } from '/@/components/Form';
   import { familyApi } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import HomeaiFormModal from '../components/HomeaiFormModal.vue';
 
   const emit = defineEmits(['success']);
   const { createMessage } = useMessage();
@@ -35,7 +33,7 @@
     return record.value.id ? '编辑家庭' : '新增家庭';
   });
 
-  const [registerDrawer, { closeDrawer }] = useDrawerInner((data) => {
+  const [registerDrawer, { closeModal: closeDrawer }] = useModalInner((data) => {
     isUpdate.value = data.isUpdate || false;
     record.value = data.record || {};
     if (isUpdate.value && data.record?.id) {

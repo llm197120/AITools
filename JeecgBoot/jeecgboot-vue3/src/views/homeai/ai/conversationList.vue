@@ -23,7 +23,7 @@
     </BasicTable>
 
     <!-- 消息详情弹窗 -->
-    <BasicModal @register="registerMsgModal" title="对话消息" width="700px" :footer="null">
+    <BasicModal @register="registerMsgModal" title="对话消息" width="700px" :footer="null" :centered="true" :maskClosable="false" wrapClassName="homeai-form-modal">
       <a-spin :spinning="msgLoading">
         <div class="message-list" v-if="messages.length > 0">
           <div v-for="msg in messages" :key="msg.id" :class="['msg-item', msg.role === 'user' ? 'msg-user' : 'msg-ai']">

@@ -198,6 +198,74 @@ public class StorageFileServiceImpl extends ServiceImpl<StorageFileMapper, Stora
         return sf;
     }
 
+    //update-begin---author:cursor---date:2026-09-07---for:【格式转换】产物写入原目录并出现在文件管理---
+    @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    public StorageFile registerConvertedFile(StorageFile source, String storedRef, String storedName,
+                                             String targetExt, long fileSize) {
+        if (source == null) {
+            throw new JeecgBootException("源文件不存在");
+        }
+        if (oConvertUtils.isEmpty(storedRef) || oConvertUtils.isEmpty(storedName)) {
+            throw new JeecgBootException("转换结果文件缺失");
+        }
+        String ext = targetExt == null ? "" : targetExt.trim().toLowerCase(Locale.ROOT).replace(".", "");
+        if (ext.isEmpty()) {
+            ext = StorageFileNameUtil.extensionOf(storedName);
+        }
+        String originalName = uniqueOriginalName(
+                source.getFolderId(),
+                StorageFileNameUtil.withExtension(source.getOriginalName(), ext));
+        StorageFile sf = new StorageFile();
+        sf.setUserId(source.getUserId());
+        sf.setFamilyId(source.getFamilyId());
+        sf.setFolderId(source.getFolderId());
+        sf.setOriginalName(originalName);
+        sf.setStoredName(storedName);
+        sf.setExtension(ext);
+        sf.setMimeType(org.jeecg.modules.homeai.preview.HomeaiFileMime.mimeOf(ext));
+        sf.setFileSize(fileSize);
+        sf.setFileUrl(storedRef);
+        sf.setVisibility(oConvertUtils.isNotEmpty(source.getVisibility())
+                ? source.getVisibility() : StorageVisibility.PRIVATE);
+        sf.setIsFavorite("0");
+        sf.setDownloadCount(0);
+        sf.setDelFlag(0);
+        sf.setCreateTime(new Date());
+        sf.setUpdateTime(new Date());
+        save(sf);
+        List<String> familyIds = resourceFamilyService.getFileFamilyIds(source.getId());
+        if (familyIds != null && !familyIds.isEmpty()) {
+            resourceFamilyService.replaceFileFamilies(sf.getId(), familyIds);
+        }
+        return sf;
+    }
+
+    private String uniqueOriginalName(String folderId, String desired) {
+        String candidate = desired;
+        int seq = 2;
+        while (originalNameExistsInFolder(folderId, candidate) && seq < 1000) {
+            String ext = StorageFileNameUtil.extensionOf(desired);
+            int dot = desired.lastIndexOf('.');
+            String base = dot > 0 ? desired.substring(0, dot) : desired;
+            candidate = ext.isEmpty() ? base + "(" + seq + ")" : base + "(" + seq + ")." + ext;
+            seq++;
+        }
+        return candidate;
+    }
+
+    private boolean originalNameExistsInFolder(String folderId, String originalName) {
+        LambdaQueryWrapper<StorageFile> q = new LambdaQueryWrapper<>();
+        q.eq(StorageFile::getOriginalName, originalName).eq(StorageFile::getDelFlag, 0);
+        if (oConvertUtils.isEmpty(folderId)) {
+            q.and(w -> w.isNull(StorageFile::getFolderId).or().eq(StorageFile::getFolderId, ""));
+        } else {
+            q.eq(StorageFile::getFolderId, folderId);
+        }
+        return count(q) > 0;
+    }
+    //update-end---author:cursor---date:2026-09-07---for:【格式转换】产物写入原目录并出现在文件管理---
+
     private LambdaQueryWrapper<StorageFile> folderFilesQuery(String folderId) {
         LambdaQueryWrapper<StorageFile> query = new LambdaQueryWrapper<>();
         query.eq(StorageFile::getFolderId, folderId)

@@ -16,8 +16,8 @@ export function configPwaPlugin(isBuild: boolean): PluginOption | PluginOption[]
     injectRegister: 'inline', // 将 Service Worker 注册代码内联到 HTML 中，避免缓存问题
     includeAssets: ['favicon.ico', 'logo.png'],
     manifest: {
-      name: 'JeecgBoot',
-      short_name: 'Jeecg',
+      name: '家庭AI小工具',
+      short_name: '家庭AI',
       theme_color: '#ffffff',
       icons: [
         {

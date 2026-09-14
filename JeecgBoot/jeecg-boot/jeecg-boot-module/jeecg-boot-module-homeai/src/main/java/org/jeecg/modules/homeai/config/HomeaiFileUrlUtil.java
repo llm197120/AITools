@@ -107,6 +107,33 @@ public class HomeaiFileUrlUtil {
                 return null;
             }
             Environment env = SpringContextUtils.getApplicationContext().getEnvironment();
+            //update-begin---author:cursor---date:2026-09-07---for:【系统配置】文件外链优先读后台-----------
+            try {
+                org.jeecg.modules.homeai.config.service.IHomeaiSysConfigService sys =
+                        SpringContextUtils.getBean(org.jeecg.modules.homeai.config.service.IHomeaiSysConfigService.class);
+                if (sys != null) {
+                    String configured = sys.getFileBaseUrl();
+                    if (oConvertUtils.isNotEmpty(configured)) {
+                        return trimTrailingSlash(configured.trim());
+                    }
+                    String scheme = oConvertUtils.getString(sys.getFileScheme(), "http");
+                    String host = oConvertUtils.getString(sys.getFileHost(), "127.0.0.1");
+                    String port = oConvertUtils.getString(env.getProperty("server.port"), "8080");
+                    String contextPath = oConvertUtils.getString(env.getProperty("server.servlet.context-path"), "");
+                    StringBuilder base = new StringBuilder(scheme).append("://").append(host);
+                    int portNum = Integer.parseInt(port);
+                    if (portNum != 80 && portNum != 443) {
+                        base.append(":").append(port);
+                    }
+                    if (oConvertUtils.isNotEmpty(contextPath)) {
+                        base.append(contextPath);
+                    }
+                    return trimTrailingSlash(base.toString());
+                }
+            } catch (Exception ignored) {
+                // 无 Bean 时回退 yml
+            }
+            //update-end---author:cursor---date:2026-09-07---for:【系统配置】文件外链优先读后台-----------
             String configured = env.getProperty("homeai.file.base-url");
             if (oConvertUtils.isNotEmpty(configured)) {
                 return trimTrailingSlash(configured.trim());

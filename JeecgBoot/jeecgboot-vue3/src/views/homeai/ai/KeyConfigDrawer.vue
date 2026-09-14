@@ -1,10 +1,8 @@
 <template>
-  <BasicDrawer v-bind="$attrs" @register="registerDrawer" :title="title" width="40%">
-    <!-- 查看模式：只读详情 -->
+  <HomeaiFormModal v-bind="$attrs" size="medium" @register="registerDrawer" :title="title">
     <template v-if="isViewMode">
-      <Description :column="1" :data="record" :schema="viewSchema" />
+      <Description :column="2" :data="record" :schema="viewSchema" />
     </template>
-    <!-- 编辑/新增模式：表单 -->
     <template v-else>
       <BasicForm @register="registerForm" @submit="handleSubmit">
         <template #providerSlot="{ model, field }">
@@ -19,24 +17,25 @@
         </template>
       </BasicForm>
     </template>
-    <!-- 底部按钮 -->
     <template #footer>
       <template v-if="!isViewMode">
-        <a-button type="primary" @click="submit">保存</a-button>
-        <a-button style="margin-left: 8px" @click="closeDrawer()">取消</a-button>
+        <a-button @click="closeDrawer()">取消</a-button>
+        <a-button type="primary" @click="submit">保存并关闭</a-button>
       </template>
       <a-button v-else @click="closeDrawer()">关闭</a-button>
     </template>
-  </BasicDrawer>
+  </HomeaiFormModal>
 </template>
 
 <script lang="ts" name="homeai-key-drawer" setup>
   import { ref, computed } from 'vue';
-  import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
+  import { useModalInner } from '/@/components/Modal';
   import { Description } from '/@/components/Description';
   import { BasicForm, useForm } from '/@/components/Form';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { keyConfigApi } from '/@/api/homeai';
+  import HomeaiFormModal from '../components/HomeaiFormModal.vue';
+  import { COL_FULL } from '../utils/formLayout';
 
   const emit = defineEmits(['success']);
   const { createMessage } = useMessage();
@@ -69,7 +68,7 @@
     },
   ];
 
-  const [registerDrawer, { closeDrawer }] = useDrawerInner((data) => {
+  const [registerDrawer, { closeModal: closeDrawer }] = useModalInner((data) => {
     isUpdate.value = data?.isUpdate;
     record.value = data?.record || {};
     // 查看模式：isUpdate=false 但有 record 数据
@@ -81,6 +80,7 @@
 
   const [registerForm, { setFieldsValue, submit }] = useForm({
     labelWidth: 100,
+    baseColProps: { span: 12 },
     schemas: [
       {
         field: 'provider',
@@ -97,8 +97,8 @@
         required: false,
         helpMessage: '编辑时留空表示不修改密钥',
       },
-      { field: 'apiBaseUrl', label: 'API地址', component: 'Input' },
-      { field: 'remark', label: '备注', component: 'InputTextArea' },
+      { field: 'apiBaseUrl', label: 'API地址', component: 'Input', colProps: COL_FULL },
+      { field: 'remark', label: '备注', component: 'InputTextArea', colProps: COL_FULL },
       { field: 'sortOrder', label: '排序号', component: 'InputNumber', defaultValue: 0 },
     ],
     showSubmitButton: false,

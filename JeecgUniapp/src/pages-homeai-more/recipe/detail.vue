@@ -23,7 +23,7 @@
           <text>{{ isFavorited ? '已收藏' : '收藏' }}</text>
         </view>
         <view class="act" @click="goEdit" v-if="canEdit">
-          <wd-icon name="edit" size="16px" color="#1B4F8A" />
+          <wd-icon name="edit" size="16px" color="var(--hai-primary)" />
           <text>编辑</text>
         </view>
         <view class="act danger" @click="deleteVisible = true" v-if="canEdit">
@@ -31,7 +31,7 @@
           <text>删除</text>
         </view>
         <view class="act" @click="copyIngredients" v-if="ingredients.length > 0">
-          <wd-icon name="file-copy" size="16px" color="#1B4F8A" />
+          <wd-icon name="file-copy" size="16px" color="var(--hai-primary)" />
           <text>复制食材</text>
         </view>
       </view>

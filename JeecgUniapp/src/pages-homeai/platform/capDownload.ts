@@ -5,6 +5,7 @@
  */
 import { accessTokenHeaders } from './accessToken'
 import { isCapacitorNative } from './runtime'
+import { withTimeout } from '../utils/withTimeout'
 
 type HomeaiNativePlugin = {
   download: (o: {
@@ -86,11 +87,15 @@ export async function capacitorDownloadToTemp(url: string, fileName?: string): P
     return url
   }
   const plugin = await nativePlugin()
-  const { path } = await plugin.download({
-    url,
-    fileName: name,
-    headers: accessTokenHeaders(url),
-  })
+  const { path } = await withTimeout(
+    plugin.download({
+      url,
+      fileName: name,
+      headers: accessTokenHeaders(url),
+    }),
+    90000,
+    '下载超时，请稍后重试',
+  )
   if (!path) throw new Error('下载失败')
   return path
 }
@@ -158,5 +163,9 @@ export async function capacitorOpenDocument(filePath: string, fileName?: string)
     ? await capacitorDownloadToTemp(filePath, fileName)
     : filePath
   const plugin = await nativePlugin()
-  await plugin.openFile({ path: local, mime: guessMime(fileName || local) })
+  await withTimeout(
+    plugin.openFile({ path: local, mime: guessMime(fileName || local) }),
+    15000,
+    '无法唤起其他应用，请确认已安装 WPS 或系统文件打开方式',
+  )
 }

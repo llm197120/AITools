@@ -5,7 +5,7 @@
 <template>
   <view class="search-page">
     <view class="search-bar">
-      <wd-icon name="search" size="16px" color="#A39E94"></wd-icon>
+      <wd-icon name="search" size="16px" color="var(--hai-text-muted)"></wd-icon>
       <input class="search-input" v-model="keyword" type="text" placeholder="搜索文件名..."
         confirm-type="search" @confirm="doSearch" />
       <text v-if="keyword" class="search-clear" @click="clearSearch">清除</text>
@@ -17,7 +17,7 @@
         v-for="file in results"
         :key="file.id"
         @click="openPreview(file)"
-        @longpress="downloadFile(file)"
+        @longpress="showFileMenu(file)"
       >
         <HomeFileIcon :ext="file.extension" :name="getStorageDisplayName(file)" />
         <text class="result-name">{{ getStorageDisplayName(file) }}</text>
@@ -53,9 +53,9 @@
 import { ref } from 'vue'
 import { storageApi } from '../../pages-homeai/api/storage'
 import { getStorageDisplayName, normalizeStorageFiles } from '../../pages-homeai/utils/storageFileDisplay'
-import { previewFile } from '../../pages-homeai/utils/filePreview'
-import { fileSaveActionName } from '../../pages-homeai/utils/contentUrl'
-import { downloadStorageFile } from '../../pages-homeai/utils/fileDownload'
+import { isImageExt, isVideoExt, previewFile } from '../../pages-homeai/utils/filePreview'
+import { FILE_OPEN_EXTERNALLY_NAME } from '../../pages-homeai/utils/contentUrl'
+import { downloadStorageFile, openStorageFileExternally } from '../../pages-homeai/utils/fileDownload'
 import HomeFileIcon from '../../components/HomeFileIcon.vue'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
@@ -73,10 +73,7 @@ const searched = ref(false)
 const searching = ref(false)
 const loadFailed = ref(false)
 const fileSheetVisible = ref(false)
-const fileSheetActions = ref([
-  { name: '预览' },
-  { name: '打开文件' },
-])
+const fileSheetActions = ref<{ name: string; key: string }[]>([])
 const fileSheetTarget = ref<any>(null)
 
 function clearSearch() {
@@ -115,25 +112,39 @@ function openPreview(file: any) {
   })
 }
 
-function downloadFile(file: any) {
+function showFileMenu(file: any) {
+  const ext = String(file.extension || '').replace(/^\./, '').toLowerCase()
   fileSheetTarget.value = file
-  fileSheetActions.value = [{ name: '预览' }, { name: fileSaveActionName(file.extension) }]
+  const actions: { name: string; key: string }[] = [
+    { name: '预览', key: 'preview' },
+    { name: FILE_OPEN_EXTERNALLY_NAME, key: 'openExternal' },
+  ]
+  if (isImageExt(ext) || isVideoExt(ext)) {
+    actions.push({ name: '保存到相册', key: 'download' })
+  }
+  fileSheetActions.value = actions
   fileSheetVisible.value = true
 }
 
-function onFileSheetSelect({ index }: { index: number }) {
+async function onFileSheetSelect({ index }: { index: number }) {
   const file = fileSheetTarget.value
-  if (!file) return
-  if (index === 0) {
+  const action = fileSheetActions.value[index]
+  if (!file || !action) return
+  if (action.key === 'preview') {
     openPreview(file)
     return
   }
-  downloadStorageFile({
+  const input = {
     id: file.id,
     fileUrl: file.fileUrl,
     originalName: file.originalName,
     extension: file.extension,
-  })
+  }
+  if (action.key === 'openExternal') {
+    await openStorageFileExternally(input)
+    return
+  }
+  await downloadStorageFile(input)
 }
 
 function formatSize(bytes: number) {

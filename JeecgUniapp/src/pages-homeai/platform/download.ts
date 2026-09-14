@@ -253,26 +253,43 @@ export function downloadToTemp(url: string, fileName?: string): Promise<string> 
  * - APP：plus.runtime.openFile 原生打开
  * - 小程序：uni.openDocument
  */
-export function openLocalDocument(filePath: string, fileName?: string) {
-  // #ifdef APP-PLUS
-  plus.runtime.openFile(
-    filePath,
-    {},
-    () => uni.showToast({ title: '无法打开该文件', icon: 'none' }),
-  )
-  // #endif
+export function openLocalDocument(filePath: string, fileName?: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // #ifdef APP-PLUS
+    plus.runtime.openFile(
+      filePath,
+      {},
+      () => {
+        uni.showToast({ title: '无法打开该文件', icon: 'none' })
+        reject(new Error('无法打开该文件'))
+      },
+    )
+    resolve()
+    return
+    // #endif
 
-  // #ifdef MP-WEIXIN
-  uni.openDocument({
-    filePath,
-    showMenu: true,
-    fail: () => uni.showToast({ title: '无法打开该文件', icon: 'none' }),
+    // #ifdef MP-WEIXIN
+    uni.openDocument({
+      filePath,
+      showMenu: true,
+      success: () => resolve(),
+      fail: () => {
+        uni.showToast({ title: '无法打开该文件', icon: 'none' })
+        reject(new Error('无法打开该文件'))
+      },
+    })
+    return
+    // #endif
+
+    // #ifdef H5
+    void capacitorOpenDocument(filePath, fileName)
+      .then(() => resolve())
+      .catch((e) => {
+        uni.showToast({ title: (e && e.message) || '无法打开该文件', icon: 'none' })
+        reject(e)
+      })
+    return
+    // #endif
+    resolve()
   })
-  // #endif
-
-  // #ifdef H5
-  void capacitorOpenDocument(filePath, fileName).catch((e) =>
-    uni.showToast({ title: (e && e.message) || '无法打开该文件', icon: 'none' }),
-  )
-  // #endif
 }

@@ -17,7 +17,7 @@
         <text class="nickname">{{ userStore.isLogin ? displayNickname(userStore.userInfo) : '未登录' }}</text>
         <text class="phone" v-if="userStore.isLogin && userStore.userInfo?.phone">{{ userStore.userInfo.phone }}</text>
         <text class="guest-tip" v-if="!userStore.isLogin">登录或注册后可使用全部功能</text>
-        <text class="edit-hint" v-if="userStore.isLogin">点击编辑昵称与头像</text>
+        <text class="edit-hint" v-if="userStore.isLogin">点击编辑姓名与头像</text>
       </view>
       <view class="auth-actions" v-if="!userStore.isLogin">
         <view class="login-btn" :class="{ disabled: loginLoading }" @click.stop="handleLogin">
@@ -40,61 +40,97 @@
 
     <!-- 菜单列表 -->
     <view class="menu-group" v-if="userStore.isLogin">
-      <view class="menu-item" @click="goProfileEdit">
-        <view class="menu-icon">
-          <wd-icon name="edit" size="18px" color="#1B4F8A"></wd-icon>
-        </view>
-        <text class="menu-text">编辑资料</text>
-        <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
-      </view>
       <view class="menu-item" v-if="showChangePassword" @click="goChangePassword">
         <view class="menu-icon">
-          <wd-icon name="lock-on" size="18px" color="#1B4F8A"></wd-icon>
+          <wd-icon name="lock-on" size="18px" color="var(--hai-primary)"></wd-icon>
         </view>
         <text class="menu-text">修改密码</text>
-        <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
+        <wd-icon name="arrow-right" size="14px" color="var(--hai-text-tertiary)"></wd-icon>
       </view>
       <view class="menu-item" @click="goFamily">
         <view class="menu-icon">
-          <wd-icon name="home" size="18px" color="#1B4F8A"></wd-icon>
+          <wd-icon name="home" size="18px" color="var(--hai-primary)"></wd-icon>
         </view>
         <text class="menu-text">我的家庭</text>
-        <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
+        <wd-icon name="arrow-right" size="14px" color="var(--hai-text-tertiary)"></wd-icon>
       </view>
       <view v-if="phoneLoginApp" class="menu-item" @click="goSettings">
         <view class="menu-icon">
-          <wd-icon name="setting" size="18px" color="#1B4F8A"></wd-icon>
+          <wd-icon name="setting" size="18px" color="var(--hai-primary)"></wd-icon>
         </view>
         <text class="menu-text">设置</text>
         <text class="server-status" :class="'st-' + connState">{{ serverStatusText }}</text>
-        <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
+        <wd-icon name="arrow-right" size="14px" color="var(--hai-text-tertiary)"></wd-icon>
       </view>
       <view class="menu-item" @click="goAgreement">
         <view class="menu-icon">
-          <wd-icon name="edit" size="18px" color="#1B4F8A"></wd-icon>
+          <wd-icon name="edit" size="18px" color="var(--hai-primary)"></wd-icon>
         </view>
         <text class="menu-text">用户协议</text>
-        <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
+        <wd-icon name="arrow-right" size="14px" color="var(--hai-text-tertiary)"></wd-icon>
       </view>
       <view class="menu-item" @click="showPrivacy">
         <view class="menu-icon">
-          <wd-icon name="secured" size="18px" color="#1B4F8A"></wd-icon>
+          <wd-icon name="secured" size="18px" color="var(--hai-primary)"></wd-icon>
         </view>
         <text class="menu-text">隐私政策</text>
-        <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
+        <wd-icon name="arrow-right" size="14px" color="var(--hai-text-tertiary)"></wd-icon>
       </view>
       <view class="menu-item" @click="showAbout">
         <view class="menu-icon">
-          <wd-icon name="info" size="18px" color="#1B4F8A"></wd-icon>
+          <wd-icon name="info" size="18px" color="var(--hai-primary)"></wd-icon>
         </view>
         <text class="menu-text">关于</text>
-        <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
+        <wd-icon name="arrow-right" size="14px" color="var(--hai-text-tertiary)"></wd-icon>
       </view>
     </view>
 
     <!-- 退出登录 -->
     <view class="logout-btn" v-if="userStore.isLogin" @click="handleLogout">
       <text>退出登录</text>
+    </view>
+
+    <wd-popup
+      v-model="aboutVisible"
+      position="center"
+      custom-style="width:80%;border-radius:28rpx;overflow:hidden;background:var(--hai-card)"
+    >
+      <view class="dialog-title">关于</view>
+      <view class="dialog-body">
+        <text class="dialog-hint">{{ aboutText }}</text>
+      </view>
+      <view class="dialog-footer dialog-footer-col">
+        <wd-button type="primary" block :loading="checkingUpdate" @click="checkAppUpdate">检查更新</wd-button>
+        <wd-button block @click="aboutVisible = false">关闭</wd-button>
+      </view>
+    </wd-popup>
+
+    <wd-popup
+      v-model="updateVisible"
+      position="center"
+      :close-on-click-modal="!updateForce"
+      custom-style="width:80%;border-radius:28rpx;overflow:hidden;background:var(--hai-card)"
+    >
+      <view class="dialog-title">{{ updateTitle }}</view>
+      <view class="dialog-body">
+        <text class="dialog-hint">{{ updateLog }}</text>
+      </view>
+      <view class="dialog-footer">
+        <wd-button v-if="!updateForce" block @click="skipUpdate">稍后</wd-button>
+        <wd-button type="primary" block @click="acceptUpdate">立即更新</wd-button>
+      </view>
+    </wd-popup>
+
+    <view v-if="statusText" class="update-mask">
+      <text class="dialog-hint">{{ statusText }}</text>
+      <view v-if="downloading" class="progress-wrap">
+        <view
+          class="progress-bar"
+          :class="{ indeterminate: !(progress > 0) }"
+          :style="progress > 0 ? { width: progress + '%' } : {}"
+        ></view>
+      </view>
+      <text v-if="progress > 0" class="dialog-hint">{{ progress }}%</text>
     </view>
   </view>
 </template>
@@ -110,7 +146,14 @@ import { get as getApi } from '../../pages-homeai/api/request'
 import { localMonthStr } from '../../pages-homeai/utils/date'
 import { displayNickname } from '../../pages-homeai/utils/displayName'
 import { openAuthPage, jumpToGuestAuth, usesPhoneLogin, wechatLogin } from '../../pages-homeai/utils/homeaiAuth'
-import { getServerBaseUrl } from '../../pages-homeai/platform/env'
+import { isStandaloneApp } from '../../pages-homeai/platform/runtime'
+import {
+  applyInspectedUpdate,
+  getLocalAppVersion,
+  inspectAppUpdate,
+  type UpdateInspectResult,
+} from '../../pages-homeai/platform/updater'
+import { applyTheme } from '../../pages-homeai/utils/theme'
 import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
 import { useFamilyPoll } from '../../pages-homeai/utils/useFamilyPoll'
 import {
@@ -202,6 +245,7 @@ useHomeaiPullRefresh(async () => {
 const { start: startFamilyPoll, stop: stopFamilyPoll } = useFamilyPoll()
 
 onShow(async () => {
+  applyTheme()
   stopFamilyPoll()
   if (!userStore.isLogin) {
     stats.value = [
@@ -265,31 +309,78 @@ function showPrivacy() {
   uni.navigateTo({ url: '/pages/privacy/index' })
 }
 
-function showAbout() {
-  const sys = uni.getSystemInfoSync()
-  let ver = sys.appVersion || sys.appWgtVersion || ''
-  // Capacitor H5 拿不到 appVersion，改用原生 App.getInfo 读取真实版本
-  if (!ver && (window as any).Capacitor?.isNativePlatform?.()) {
-    import('@capacitor/app')
-      .then(async ({ App }) => {
-        const info = await App.getInfo()
-        uni.showModal({
-          title: '关于',
-          content: `家庭AI小工具 v${info.version || '1.0.0'} (${info.build || ''})\n面向家庭的记账、菜谱、学习与 AI 助手`,
-        })
-      })
-      .catch(() => {
-        uni.showModal({
-          title: '关于',
-          content: `家庭AI小工具 v${ver || '1.0.0'}\n面向家庭的记账、菜谱、学习与 AI 助手`,
-        })
-      })
+const aboutVisible = ref(false)
+const aboutText = ref('')
+const checkingUpdate = ref(false)
+const updateVisible = ref(false)
+const updateForce = ref(false)
+const updateTitle = ref('发现新版本')
+const updateLog = ref('')
+const statusText = ref('')
+const progress = ref(0)
+const downloading = computed(() => statusText.value.includes('下载'))
+let pendingUpdate: Extract<UpdateInspectResult, { kind: 'available' }> | null = null
+
+async function showAbout() {
+  const local = await getLocalAppVersion()
+  const build = local.build ? ` (${local.build})` : ''
+  aboutText.value = `家庭AI小工具 v${local.versionName}${build}\n面向家庭的记账、菜谱、学习与 AI 助手`
+  aboutVisible.value = true
+}
+
+async function checkAppUpdate() {
+  if (checkingUpdate.value) return
+  if (!isStandaloneApp()) {
+    uni.showToast({ title: '仅安装版可检查更新', icon: 'none' })
     return
   }
-  uni.showModal({
-    title: '关于',
-    content: `家庭AI小工具 v${ver || '1.0.0'}\n面向家庭的记账、菜谱、学习与 AI 助手`,
+  checkingUpdate.value = true
+  try {
+    const inspected = await inspectAppUpdate()
+    if (inspected.kind === 'offline') {
+      uni.showToast({ title: '无法连接服务器', icon: 'none' })
+      return
+    }
+    if (inspected.kind === 'skip') {
+      uni.showToast({ title: '当前环境无法检查更新', icon: 'none' })
+      return
+    }
+    if (inspected.kind === 'latest') {
+      uni.showToast({ title: '已是最新版本', icon: 'success' })
+      return
+    }
+    pendingUpdate = inspected
+    updateTitle.value = inspected.remote.versionName
+      ? `发现新版本 ${inspected.remote.versionName}`
+      : '发现新版本'
+    updateLog.value = inspected.remote.changelog || '有新版本可用'
+    updateForce.value = inspected.remote.forceUpdate === true
+    aboutVisible.value = false
+    updateVisible.value = true
+  } finally {
+    checkingUpdate.value = false
+  }
+}
+
+async function acceptUpdate() {
+  if (!pendingUpdate) return
+  updateVisible.value = false
+  const inspected = pendingUpdate
+  pendingUpdate = null
+  const result = await applyInspectedUpdate(inspected, {
+    onStatus: (text) => {
+      statusText.value = text
+    },
+    onProgress: (loaded, total) => {
+      if (total > 0) progress.value = Math.min(99, Math.round((loaded / total) * 100))
+    },
   })
+  if (result === 'failed') statusText.value = ''
+}
+
+function skipUpdate() {
+  updateVisible.value = false
+  pendingUpdate = null
 }
 
 function handleLogout() {
@@ -520,4 +611,37 @@ function handleLogout() {
   margin-bottom: 16rpx;
 }
 .dialog-footer { display: flex; gap: 20rpx; padding: 0 30rpx 30rpx; }
+.dialog-footer-col { flex-direction: column; }
+.update-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(23, 24, 28, 0.72);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48rpx;
+  z-index: 99;
+  gap: 16rpx;
+}
+.progress-wrap {
+  width: 70%;
+  height: 12rpx;
+  border-radius: 999rpx;
+  background: var(--hai-border);
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  background: var(--hai-primary);
+  border-radius: 999rpx;
+}
+.progress-bar.indeterminate {
+  width: 36%;
+  animation: hai-progress-slide 1.1s ease-in-out infinite;
+}
+@keyframes hai-progress-slide {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(280%); }
+}
 </style>

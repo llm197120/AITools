@@ -162,7 +162,11 @@ public class LoginController {
 			log.debug("2 获取用户信息耗时 (首页面配置)" + (System.currentTimeMillis() - start) + "毫秒");
 			
 			obj.put("userInfo",sysUser);
-			obj.put("sysAllDictItems", sysDictService.queryAllDictItems());
+			//update-begin---author:homeai---date:2026-09-07---for:【管理端】vue3 getUserInfo 不再下发全量字典，与登录接口一致---
+			if (oConvertUtils.isEmpty(vue3Version)) {
+				obj.put("sysAllDictItems", sysDictService.queryAllDictItems());
+			}
+			//update-end
 			log.debug("3 获取用户信息耗时 (字典数据)" + (System.currentTimeMillis() - start) + "毫秒");
 			
 			result.setResult(obj);

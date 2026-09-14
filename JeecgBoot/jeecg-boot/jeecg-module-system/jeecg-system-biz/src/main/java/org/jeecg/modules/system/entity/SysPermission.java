@@ -169,7 +169,9 @@ public class SysPermission implements Serializable {
 			this.id = "9502685863ab87f0ad1134142788a385";
 			this.name = DefIndexConst.DEF_INDEX_NAME;
 			this.component = DefIndexConst.DEF_INDEX_COMPONENT;
-			this.componentName = "dashboard-analysis";
+			//update-begin---author:homeai---date:2026-09-07---for:【管理端】默认首页路由名与综合统计对齐---
+			this.componentName = "homeai-dashboard-crossStats";
+			//update-end
 			this.url = DefIndexConst.DEF_INDEX_URL;
         	this.icon="home";
         	this.menuType=0;

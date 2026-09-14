@@ -105,7 +105,7 @@
     { title: '时长(分钟)', dataIndex: 'totalDuration', width: 100 },
   ];
   const userColumns = [
-    { title: '昵称', dataIndex: 'nickname', width: 120 },
+    { title: '用户姓名', dataIndex: 'nickname', width: 120 },
     { title: '用户ID', dataIndex: 'userId', width: 160 },
     { title: '记录数', dataIndex: 'recordCount', width: 80 },
     { title: '时长(分钟)', dataIndex: 'durationMinutes', width: 100 },

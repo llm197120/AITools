@@ -52,21 +52,22 @@
       </template>
     </BasicTable>
   </PageWrapper>
-  <BasicModal @register="registerModal" title="配置用户额度" width="480px">
+  <HomeaiFormModal @register="registerModal" size="short" title="配置用户额度">
     <BasicForm @register="registerForm" @submit="handleSubmit" />
     <template #footer>
       <a-button @click="closeModal()">取消</a-button>
-      <a-button type="primary" @click="submit">保存</a-button>
+      <a-button type="primary" @click="submit">保存并关闭</a-button>
     </template>
-  </BasicModal>
+  </HomeaiFormModal>
 </template>
 
 <script lang="ts" name="homeai-ai-quota" setup>
   import { PageWrapper } from '/@/components/Page';
   import { ref, onMounted } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
-  import { BasicModal, useModal } from '/@/components/Modal';
   import { BasicForm, useForm } from '/@/components/Form';
+  import { useModal } from '/@/components/Modal';
+  import HomeaiFormModal from '../components/HomeaiFormModal.vue';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { quotaApi } from '/@/api/homeai';
   import type { HomeaiQuotaRecord } from '/@/api/homeai';

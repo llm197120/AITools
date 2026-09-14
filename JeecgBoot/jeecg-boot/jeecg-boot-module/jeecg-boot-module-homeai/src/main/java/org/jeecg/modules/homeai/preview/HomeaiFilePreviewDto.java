@@ -36,4 +36,7 @@ public class HomeaiFilePreviewDto implements Serializable {
 
     @Schema(description = "转换失败原因")
     private String errorMessage;
+
+    @Schema(description = "kkFileView 预览页（配置后管理端优先走独立预览服务）")
+    private String kkPreviewUrl;
 }

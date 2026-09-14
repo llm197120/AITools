@@ -11,5 +11,8 @@ SELECT `study_date` FROM `homeai_learn_record` LIMIT 0;
 SELECT `recipe_id` FROM `homeai_plan_master` LIMIT 0;
 SELECT `id` FROM `homeai_recipe_favorite` LIMIT 0;
 SELECT `id` FROM `homeai_app_version` LIMIT 0;
+SELECT `id` FROM `homeai_sync_config` LIMIT 0;
+SELECT `id`, `content` FROM `homeai_doc_config` LIMIT 0;
+SELECT `id`, `content` FROM `homeai_sys_config` LIMIT 0;
 SELECT `extension` FROM `homeai_file_whitelist` LIMIT 0;
 SELECT `del_flag`, `deleted_at` FROM `homeai_ai_conversation` LIMIT 0;

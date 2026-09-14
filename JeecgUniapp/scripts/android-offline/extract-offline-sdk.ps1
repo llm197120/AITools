@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 # 把 Downloads 里的 DCloud Android 离线 SDK zip 解压到 C:\Users\57089\homeai-android-offline
 # 用法：先从 https://nativesupport.dcloud.net.cn/AppDocs/download/android.html 下 zip，再执行本脚本
 #   powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\android-offline\extract-offline-sdk.ps1

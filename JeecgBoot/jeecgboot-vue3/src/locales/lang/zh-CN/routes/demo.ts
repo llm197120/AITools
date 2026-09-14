@@ -11,7 +11,7 @@ export default {
   comp: {
     comp: '组件',
     basic: '基础组件',
-    jeecg: 'Jeecg组件',
+    jeecg: '组件示例',
     transition: '动画组件',
     countTo: '数字动画',
     third: '第三方组件',

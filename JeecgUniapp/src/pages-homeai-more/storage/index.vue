@@ -13,19 +13,19 @@
   <view class="storage-page">
     <view class="top-actions">
       <view class="search-bar hai-press" @click="goSearch">
-        <wd-icon name="search" size="18px" color="#8A857C" />
+        <wd-icon name="search" size="18px" color="var(--hai-text-secondary)" />
         <text class="search-placeholder">搜索文件与文件夹</text>
       </view>
       <view class="recycle-entry hai-press" @click="goGenerate">
-        <wd-icon name="edit" size="18px" color="#1B4F8A" />
+        <wd-icon name="edit" size="18px" color="var(--hai-primary)" />
         <text>AI生成</text>
       </view>
       <view class="recycle-entry hai-press" @click="goHistory">
-        <wd-icon name="clock" size="18px" color="#1B4F8A" />
+        <wd-icon name="clock" size="18px" color="var(--hai-primary)" />
         <text>处理记录</text>
       </view>
       <view class="recycle-entry hai-press" @click="goRecycle">
-        <wd-icon name="delete" size="18px" color="#1B4F8A" />
+        <wd-icon name="delete" size="18px" color="var(--hai-primary)" />
         <text>回收站</text>
       </view>
     </view>

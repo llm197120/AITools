@@ -62,7 +62,7 @@ export const storageApi = {
   convert: (fileId: string, targetFormat: string) =>
     post('/storage/office/convert', { params: { fileId, targetFormat } }),
   preview: (id: string) => get<any>(`/storage/files/${id}/preview`),
-  /** 仅管理端 Office 转 PDF；APP 打开原文件，不要再调用 */
+  /** Office 转 PDF（管理端用；APP 页内预览已改为解析原文件） */
   previewPdf: (id: string) => post(`/storage/files/${id}/preview-pdf`),
   generate: (fileId: string, instruction: string, docType?: string) =>
     post('/storage/office/generate', { params: { fileId, instruction, docType: docType || 'word' } }),

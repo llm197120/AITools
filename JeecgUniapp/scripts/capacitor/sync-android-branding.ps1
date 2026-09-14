@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 # 从 src/static/app/icons/1024x1024.png 生成 Capacitor Android 品牌资源 + favicon
 param(
     [string]$AndroidDir = '',

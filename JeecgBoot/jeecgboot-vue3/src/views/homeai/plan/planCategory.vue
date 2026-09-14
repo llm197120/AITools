@@ -17,20 +17,20 @@
       </template>
     </BasicTable>
   </PageWrapper>
-  <BasicModal @register="registerModal" :title="isUpdate ? '编辑分类' : '新增分类'" width="480px">
+  <HomeaiFormModal @register="registerModal" size="short" :title="isUpdate ? '编辑分类' : '新增分类'">
     <BasicForm @register="registerForm" @submit="handleSubmit" />
     <template #footer>
       <a-button @click="closeModal()">取消</a-button>
-      <a-button type="primary" @click="submit">保存</a-button>
+      <a-button type="primary" @click="submit">保存并关闭</a-button>
     </template>
-  </BasicModal>
+  </HomeaiFormModal>
 </template>
 
 <script lang="ts" name="homeai-plan-category" setup>
   import { PageWrapper } from '/@/components/Page';
   import { BasicTable, TableAction } from '/@/components/Table';
-  import { BasicModal } from '/@/components/Modal';
   import { BasicForm } from '/@/components/Form';
+  import HomeaiFormModal from '../components/HomeaiFormModal.vue';
   import { planApi } from '/@/api/homeai';
   import { useHomeaiCrud } from '../hooks/useHomeaiCrud';
 
@@ -54,7 +54,7 @@
       { title: '状态', dataIndex: 'isEnabled', key: 'isEnabled', width: 80 },
     ],
     formSchemas: [
-      { field: 'name', label: '分类名称', component: 'Input', required: true },
+      { field: 'name', label: '分类名称', component: 'Input', required: true, colProps: { span: 24 } },
       { field: 'icon', label: '图标(emoji)', component: 'Input', componentProps: { placeholder: '如: 📋' } },
       { field: 'color', label: '颜色', component: 'Input', componentProps: { placeholder: '如: #1890ff' } },
       { field: 'sortOrder', label: '排序', component: 'InputNumber', defaultValue: 0 },

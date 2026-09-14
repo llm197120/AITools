@@ -7,7 +7,9 @@ import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.appversion.dto.HomeaiAppVersionPublicDto;
 import org.jeecg.modules.homeai.appversion.entity.HomeaiAppVersion;
 import org.jeecg.modules.homeai.appversion.mapper.HomeaiAppVersionMapper;
+import org.jeecg.modules.homeai.appversion.service.HomeaiAppPackageCache;
 import org.jeecg.modules.homeai.appversion.service.IHomeaiAppVersionService;
+import org.jeecg.modules.homeai.appversion.util.HomeaiAppPackageDownloadPaths;
 import org.jeecg.modules.homeai.config.HomeaiFileMagicUtil;
 import org.jeecg.modules.homeai.config.HomeaiFileUrlUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
@@ -37,6 +39,9 @@ public class HomeaiAppVersionServiceImpl extends ServiceImpl<HomeaiAppVersionMap
     @Autowired
     private IHomeaiFileStorageService fileStorageService;
 
+    @Autowired
+    private HomeaiAppPackageCache appPackageCache;
+
     @Override
     public HomeaiAppVersion requireCurrent() {
         HomeaiAppVersion row = getById(HomeaiAppVersion.CURRENT_ID);
@@ -63,10 +68,10 @@ public class HomeaiAppVersionServiceImpl extends ServiceImpl<HomeaiAppVersionMap
         dto.setVersionCode(row.getVersionCode() == null ? 0 : row.getVersionCode());
         dto.setUpdateMode(normalizeMode(row.getUpdateMode()));
         dto.setForceUpdate(row.getForceUpdate() != null && row.getForceUpdate() == 1);
-        //update-begin---author:cursor---date:2026-08-31---for:【APP更新】apk 走后端代理下载（SDK 拉流），预签名直链被 OSS ApkDownloadForbidden 拦截---
-        dto.setApkUrl(apkDownloadUrl(row.getApkUrl()));
-        dto.setResourceUrl(fileStorageService.resolveAccessUrl(row.getResourceUrl()));
-        //update-end---author:cursor---date:2026-08-31---for:【APP更新】apk 走后端代理下载（SDK 拉流）---
+        //update-begin---author:cursor---date:2026-09-04---for:【APP热更新】H5 zip 与 APK 一样走后端代理下载---
+        dto.setApkUrl(packageDownloadUrl(row.getApkUrl(), false));
+        dto.setResourceUrl(packageDownloadUrl(row.getResourceUrl(), true));
+        //update-end---author:cursor---date:2026-09-04---for:【APP热更新】H5 zip 与 APK 一样走后端代理下载---
         dto.setApkSha256(blankToNull(row.getApkSha256()));
         dto.setResourceSha256(blankToNull(row.getResourceSha256()));
         dto.setMinShellCode(row.getMinShellCode() == null ? 0 : row.getMinShellCode());
@@ -83,10 +88,10 @@ public class HomeaiAppVersionServiceImpl extends ServiceImpl<HomeaiAppVersionMap
         view.setVersionCode(row.getVersionCode());
         view.setUpdateMode(normalizeMode(row.getUpdateMode()));
         view.setForceUpdate(row.getForceUpdate());
-        //update-begin---author:cursor---date:2026-08-31---for:【APP更新】apk 走后端代理下载（SDK 拉流），预签名直链被 OSS ApkDownloadForbidden 拦截---
-        view.setApkUrl(apkDownloadUrl(row.getApkUrl()));
-        view.setResourceUrl(fileStorageService.resolveAccessUrl(row.getResourceUrl()));
-        //update-end---author:cursor---date:2026-08-31---for:【APP更新】apk 走后端代理下载（SDK 拉流）---
+        //update-begin---author:cursor---date:2026-09-04---for:【APP热更新】H5 zip 与 APK 一样走后端代理下载---
+        view.setApkUrl(packageDownloadUrl(row.getApkUrl(), false));
+        view.setResourceUrl(packageDownloadUrl(row.getResourceUrl(), true));
+        //update-end---author:cursor---date:2026-09-04---for:【APP热更新】H5 zip 与 APK 一样走后端代理下载---
         view.setApkSha256(row.getApkSha256());
         view.setResourceSha256(row.getResourceSha256());
         view.setMinShellCode(row.getMinShellCode());
@@ -117,8 +122,16 @@ public class HomeaiAppVersionServiceImpl extends ServiceImpl<HomeaiAppVersionMap
         current.setMinShellCode(body.getMinShellCode() == null ? current.getVersionCode() : body.getMinShellCode());
         current.setChangelog(body.getChangelog());
         current.setEnabled(body.getEnabled() != null && body.getEnabled() == 1 ? 1 : 0);
-        current.setApkUrl(fileStorageService.normalizeStoredReference(body.getApkUrl()));
-        current.setResourceUrl(fileStorageService.normalizeStoredReference(body.getResourceUrl()));
+        //update-begin---author:cursor---date:2026-09-03---for:【HomeAI-R126】管理端展示的是代理下载 URL，保存时不得覆盖真实 OSS 引用---
+        if (oConvertUtils.isNotEmpty(body.getApkUrl())
+                && !HomeaiAppPackageDownloadPaths.isProxyUrl(body.getApkUrl())) {
+            current.setApkUrl(fileStorageService.normalizeStoredReference(body.getApkUrl()));
+        }
+        if (oConvertUtils.isNotEmpty(body.getResourceUrl())
+                && !HomeaiAppPackageDownloadPaths.isProxyUrl(body.getResourceUrl())) {
+            current.setResourceUrl(fileStorageService.normalizeStoredReference(body.getResourceUrl()));
+        }
+        //update-end---author:cursor---date:2026-09-03---for:【HomeAI-R126】管理端展示的是代理下载 URL，保存时不得覆盖真实 OSS 引用---
         if (oConvertUtils.isNotEmpty(body.getApkSha256())) {
             current.setApkSha256(body.getApkSha256().trim().toLowerCase(Locale.ROOT));
         }
@@ -168,6 +181,13 @@ public class HomeaiAppVersionServiceImpl extends ServiceImpl<HomeaiAppVersionMap
             String objectKey = "homeai/app-version/" + type + "-" + System.currentTimeMillis() + "." + ext;
             //update-end---author:cursor---date:2026-08-31---for:【APP更新】apk 对象由后端代理接口（SDK 拉流）分发---
             String stored = fileStorageService.storeLocalFile(tmp, objectKey);
+            //update-begin---author:cursor---date:2026-09-03---for:【HomeAI-R127】上传成功即写入服务器本地缓存---
+            if ("apk".equals(type)) {
+                appPackageCache.rememberApk(tmp, sha, stored);
+            } else {
+                appPackageCache.rememberZip(tmp, sha, stored);
+            }
+            //update-end---author:cursor---date:2026-09-03---for:【HomeAI-R127】上传成功即写入服务器本地缓存---
             Map<String, String> result = new HashMap<>();
             result.put("url", fileStorageService.resolveAccessUrl(stored));
             result.put("stored", stored);
@@ -197,19 +217,19 @@ public class HomeaiAppVersionServiceImpl extends ServiceImpl<HomeaiAppVersionMap
         return "apk";
     }
 
-    //update-begin---author:cursor---date:2026-08-31---for:【APP更新】apk 下载地址统一走后端代理接口（SDK 拉流，实测 OSS 放行）；预签名直链被 ApkDownloadForbidden 拦截---
+    //update-begin---author:cursor---date:2026-09-04---for:【APP热更新】apk/zip 下载地址统一走后端代理接口---
     /**
-     * APK 下载地址：OSS 默认域名禁止预签名 URL 直链分发 .apk（ApkDownloadForbidden，实测仅拦
-     * query 签名、放行 Header 签名/SDK 拉流），因此统一返回后端代理下载接口地址。
-     * apkUrl 未配置时返回 null。
+     * 安装包下载地址：OSS 默认域名禁止预签名 URL 直链分发部分类型，统一返回后端代理下载接口。
+     * 未配置存储引用时返回 null。
      */
-    private String apkDownloadUrl(String storedReference) {
+    private String packageDownloadUrl(String storedReference, boolean resource) {
         if (oConvertUtils.isEmpty(storedReference)) {
             return null;
         }
-        return HomeaiFileUrlUtil.toAbsoluteUrl("/homeai/app/version/package/download");
+        String path = resource ? HomeaiAppPackageDownloadPaths.RESOURCE : HomeaiAppPackageDownloadPaths.APK;
+        return HomeaiFileUrlUtil.toAbsoluteUrl(path);
     }
-    //update-end---author:cursor---date:2026-08-31---for:【APP更新】apk 下载地址统一走后端代理接口（SDK 拉流）---
+    //update-end---author:cursor---date:2026-09-04---for:【APP热更新】apk/zip 下载地址统一走后端代理接口---
 
     private static String blankToNull(String value) {
         return oConvertUtils.isEmpty(value) ? null : value;

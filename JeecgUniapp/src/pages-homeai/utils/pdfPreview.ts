@@ -1,31 +1,21 @@
 /**
- * APP / H5 页内 PDF 渲染：CDN 加载 pdf.js，disableWorker 避免 file:// worker 失败
+ * APP / H5 页内 PDF：打包 pdf.js，disableWorker 避免 file:// worker 失败
  */
-const PDFJS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
+import { withTimeout } from './withTimeout'
 
 let pdfjsLoading: Promise<any> | null = null
 
 function loadPdfJs(): Promise<any> {
-  const w = typeof window !== 'undefined' ? (window as any) : null
-  if (w?.pdfjsLib) return Promise.resolve(w.pdfjsLib)
-  if (typeof document === 'undefined') {
-    return Promise.reject(new Error('当前平台不支持页内 PDF'))
+  if (typeof window !== 'undefined' && (window as any).pdfjsLib) {
+    return Promise.resolve((window as any).pdfjsLib)
   }
   if (!pdfjsLoading) {
-    pdfjsLoading = new Promise((resolve, reject) => {
-      const s = document.createElement('script')
-      s.src = PDFJS_CDN
-      s.onload = () => {
-        const lib = (window as any).pdfjsLib
-        if (!lib) {
-          reject(new Error('PDF 引擎加载失败'))
-          return
-        }
-        lib.disableWorker = true
-        resolve(lib)
-      }
-      s.onerror = () => reject(new Error('PDF 引擎加载失败'))
-      document.head.appendChild(s)
+    pdfjsLoading = import('pdfjs-dist/build/pdf').then((mod) => {
+      const lib = (mod as any).default || mod
+      if (!lib?.getDocument) throw new Error('PDF 引擎加载失败')
+      lib.disableWorker = true
+      if (lib.GlobalWorkerOptions) lib.GlobalWorkerOptions.workerSrc = ''
+      return lib
     })
   }
   return pdfjsLoading
@@ -49,13 +39,17 @@ export async function renderPdfPage(data: ArrayBuffer, canvas: HTMLCanvasElement
   return total
 }
 
-export async function fetchPdfBuffer(url: string): Promise<ArrayBuffer> {
+export async function fetchPreviewBuffer(url: string, fileName = `preview-${Date.now()}.bin`): Promise<ArrayBuffer> {
   const { isCapacitorNative } = await import('../platform/runtime')
   if (isCapacitorNative()) {
     const { capacitorDownloadToTemp, capacitorReadBase64, base64ToArrayBuffer } = await import(
       '../platform/capDownload'
     )
-    const path = await capacitorDownloadToTemp(url, `preview-${Date.now()}.pdf`)
+    const path = await withTimeout(
+      capacitorDownloadToTemp(url, fileName),
+      90000,
+      '文件下载超时',
+    )
     return base64ToArrayBuffer(await capacitorReadBase64(path))
   }
   const { accessTokenHeaders } = await import('../platform/accessToken')
@@ -74,7 +68,7 @@ export async function fetchPdfBuffer(url: string): Promise<ArrayBuffer> {
       header: headers,
       success: (res) => {
         if (res.statusCode === 200 && res.tempFilePath) resolve(res.tempFilePath)
-        else reject(new Error('PDF 下载失败'))
+        else reject(new Error('文件下载失败'))
       },
       fail: reject,
     })
@@ -86,7 +80,7 @@ export async function fetchPdfBuffer(url: string): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     const fsm: any = uni.getFileSystemManager?.()
     if (!fsm) {
-      reject(new Error('无法读取 PDF'))
+      reject(new Error('无法读取文件'))
       return
     }
     fsm.readFile({
@@ -95,4 +89,8 @@ export async function fetchPdfBuffer(url: string): Promise<ArrayBuffer> {
       fail: reject,
     })
   })
+}
+
+export async function fetchPdfBuffer(url: string): Promise<ArrayBuffer> {
+  return fetchPreviewBuffer(url, `preview-${Date.now()}.pdf`)
 }

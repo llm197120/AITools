@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 # 一次性初始化：把 HomeAI overlay 写入本机 DCloud 离线工程
 # 用法（在 JeecgUniapp 目录）：
 #   pnpm pack:apk:init

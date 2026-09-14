@@ -22,10 +22,14 @@ export function readCache<T>(module: string, scope: string): CacheEntry<T> | nul
   try {
     const raw = uni.getStorageSync(cacheKey(module, scope))
     if (!raw) return null
-    if (typeof raw === 'object' && raw.data !== undefined) {
-      return raw as CacheEntry<T>
+    let parsed: any = raw
+    if (typeof raw === 'string') {
+      parsed = JSON.parse(raw)
     }
-    return JSON.parse(String(raw)) as CacheEntry<T>
+    if (parsed && typeof parsed === 'object' && parsed.data !== undefined) {
+      return parsed as CacheEntry<T>
+    }
+    return null
   } catch {
     return null
   }
@@ -34,7 +38,7 @@ export function readCache<T>(module: string, scope: string): CacheEntry<T> | nul
 export function writeCache<T>(module: string, scope: string, data: T, version: string): void {
   const entry: CacheEntry<T> = { data, fetchedAt: Date.now(), version }
   try {
-    uni.setStorageSync(cacheKey(module, scope), entry)
+    uni.setStorageSync(cacheKey(module, scope), JSON.stringify(entry))
   } catch {
     // 容量超限时静默失败（localStorage 满）
   }

@@ -58,7 +58,7 @@
   import { PageWrapper } from '/@/components/Page';
   import { ref, onMounted } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
-  import { useDrawer } from '/@/components/Drawer';
+  import { useModal } from '/@/components/Modal';
   import { useMethods } from '/@/hooks/system/useMethods';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { billApi } from '/@/api/homeai';
@@ -72,7 +72,7 @@
   const { handleExportXls, handleImportXls } = useMethods();
   const { createMessage } = useMessage();
   const { userOptions, loadUserOptions, resolveUserLabel } = useUserLabel();
-  const [registerDrawer, { openDrawer }] = useDrawer();
+  const [registerDrawer, { openModal: openDrawer }] = useModal();
   const activeTab = ref('list');
   const categoryOptions = ref<{ label: string; value: string }[]>([]);
 

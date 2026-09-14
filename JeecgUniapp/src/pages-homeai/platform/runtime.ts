@@ -71,6 +71,51 @@ function canPopUniPage(): boolean {
 }
 
 let backButtonBound = false
+const hardwareBackHandlers: Array<() => boolean> = []
+
+/** 返回 true 表示已消费返回键（如关掉图片蒙层），不再 navigateBack */
+export function registerHardwareBackHandler(handler: () => boolean): () => void {
+  hardwareBackHandlers.push(handler)
+  return () => {
+    const i = hardwareBackHandlers.lastIndexOf(handler)
+    if (i >= 0) hardwareBackHandlers.splice(i, 1)
+  }
+}
+
+function consumeHardwareBack(): boolean {
+  if (dismissPreviewImageOverlay()) return true
+  for (let i = hardwareBackHandlers.length - 1; i >= 0; i--) {
+    try {
+      if (hardwareBackHandlers[i]()) return true
+    } catch {
+      // 单个处理器异常不阻断后续返回
+    }
+  }
+  return false
+}
+
+/** uni.previewImage 在 H5 壳里是页面蒙层；系统返回必须先关掉它 */
+export function dismissPreviewImageOverlay(): boolean {
+  if (typeof document === 'undefined') return false
+  const root = document.getElementById('u-a-p')
+  const opened = !!(root && root.childElementCount > 0)
+  if (!opened) return false
+  try {
+    const closer = (uni as any).closePreviewImage
+    if (typeof closer === 'function') {
+      closer()
+      return true
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    root.remove()
+    return true
+  } catch {
+    return false
+  }
+}
 
 /** 记录上次运行的壳版本（用于检测 APK 升级/重装） */
 const SHELL_CODE_KEY = 'homeai_last_shell_code'
@@ -138,18 +183,22 @@ export async function initStandaloneShell(): Promise<void> {
   if (!isCapacitorNative()) return
   await resetHotUpdateIfShellChanged()
   try {
-    const { StatusBar, Style } = await import('@capacitor/status-bar')
+    const { StatusBar } = await import('@capacitor/status-bar')
     await StatusBar.setOverlaysWebView({ overlay: false })
-    await StatusBar.setBackgroundColor({ color: '#F3F2EE' })
-    await StatusBar.setStyle({ style: Style.Light })
   } catch {
-    // 无 StatusBar 插件时忽略
+    // 无 StatusBar 插件时忽略；颜色由 theme.applyTheme 按昼夜同步
   }
   if (backButtonBound) return
   try {
     const { App } = await import('@capacitor/app')
     await App.addListener('backButton', () => {
+      if (consumeHardwareBack()) return
       if (canPopUniPage()) {
+        try {
+          uni.hideLoading()
+        } catch {
+          // ignore
+        }
         uni.navigateBack({})
         return
       }

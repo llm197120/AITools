@@ -37,8 +37,8 @@ spring:
     clean-disabled: true
   servlet:
     multipart:
-      max-file-size: 200MB
-      max-request-size: 200MB
+      max-file-size: 2048MB
+      max-request-size: 2048MB
   mail:
     # 定时任务发送邮件
     timeJobSend: false
@@ -403,6 +403,10 @@ homeai:
     powershell-path: powershell
     # 单次转换超时（秒）
     convert-timeout-seconds: 120
+    # Gotenberg / kkFileView 可选，填了才启用。日常用 start-all.ps1 / publish-all.ps1 会 docker compose up
+    # JeecgBoot/deploy/docs-preview/docker-compose.yml（:3000 / :8012）；也可手动 docker compose up -d
+    gotenberg-url: ""
+    kkfileview-url: ""
   file:
     # 异步/定时任务无 HTTP 请求时用于拼接文件绝对地址；留空则自动使用 server.port + context-path
     # base-url: http://127.0.0.1:8080/jeecg-boot

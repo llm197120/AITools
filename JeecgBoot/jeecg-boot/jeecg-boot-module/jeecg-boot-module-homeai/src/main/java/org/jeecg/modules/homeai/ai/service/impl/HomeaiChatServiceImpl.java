@@ -25,6 +25,7 @@ import org.jeecg.modules.airag.llm.handler.AIChatHandler;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 
 import org.jeecg.modules.homeai.ai.entity.AiConversation;
+import org.jeecg.modules.homeai.ai.util.HomeaiConversationTitle;
 
 import org.jeecg.modules.homeai.ai.entity.AiKeyConfig;
 
@@ -179,7 +180,7 @@ public class HomeaiChatServiceImpl implements IHomeaiChatService {
 
         if (conversationId == null || conversationId.isEmpty()) {
 
-            conversation = conversationService.createConversation(userId, truncateTitle(content), modelName);
+            conversation = conversationService.createConversation(userId, HomeaiConversationTitle.fromUserMessage(content), modelName);
 
         } else {
 
@@ -190,6 +191,15 @@ public class HomeaiChatServiceImpl implements IHomeaiChatService {
                 throw new RuntimeException("对话不存在");
 
             }
+            //update-begin---author:homeai---date:2026-09-07---for:【AI对话】已有会话若仍是「新对话」则用首问改名---
+            if (HomeaiConversationTitle.isPlaceholder(conversation.getTitle())) {
+                String nextTitle = HomeaiConversationTitle.fromUserMessage(content);
+                if (!HomeaiConversationTitle.isPlaceholder(nextTitle)) {
+                    conversationService.renameConversation(conversation.getId(), nextTitle);
+                    conversation.setTitle(nextTitle);
+                }
+            }
+            //update-end---author:homeai---date:2026-09-07---for:【AI对话】已有会话若仍是「新对话」则用首问改名---
 
         }
 
@@ -580,22 +590,5 @@ public class HomeaiChatServiceImpl implements IHomeaiChatService {
 
     }
 
-
-
-    private String truncateTitle(String content) {
-
-        if (content == null || content.isEmpty()) {
-
-            return "新对话";
-
-        }
-
-        String clean = content.replaceAll("[\\n\\r]+", " ");
-
-        return clean.length() > 30 ? clean.substring(0, 30) + "..." : clean;
-
-    }
-
 }
-
 

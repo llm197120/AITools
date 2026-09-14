@@ -130,7 +130,6 @@ async function loadList(reset = true, silent = false) {
         () => getApi('/ai/conversations/mine', { pageNo: '1', pageSize: String(PAGE_SIZE) }),
       )
       res = r.data
-      if (r.offline) uni.showToast({ title: '离线模式，展示本地历史', icon: 'none' })
     } else {
       res = await getApi('/ai/conversations/mine', {
         pageNo: String(nextPage),
@@ -179,7 +178,7 @@ async function createAndGo(tip?: string) {
   creating.value = true
   try {
     const conv = await postApi('/ai/conversations', {})
-    goChat(conv.id, tip, conv.title)
+    goChat(conv.id, tip)
   } catch (e) {
     console.error('创建对话失败', e)
     uni.showToast({ title: '创建对话失败', icon: 'none' })
@@ -191,7 +190,8 @@ async function createAndGo(tip?: string) {
 function goChat(id: string, initialMsg?: string, title?: string) {
   const parts = [`id=${id}`]
   if (initialMsg) parts.push('initial=' + encodeURIComponent(initialMsg))
-  if (title) parts.push('title=' + encodeURIComponent(title))
+  const t = String(title || '').trim()
+  if (t && t !== '新对话') parts.push('title=' + encodeURIComponent(t))
   uni.navigateTo({ url: `/pages-homeai-ai/ai/chat?${parts.join('&')}` })
 }
 

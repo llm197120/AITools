@@ -4,7 +4,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
+import org.jeecg.modules.homeai.config.dto.HomeaiSysConfigDto;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
+import org.jeecg.modules.homeai.config.service.IHomeaiSysConfigService;
+import org.jeecg.modules.homeai.storage.util.HomeaiKkFileViewUrl;
 import org.jeecg.modules.homeai.recipe.entity.LearnMaterial;
 import org.jeecg.modules.homeai.recipe.service.ILearnService;
 import org.jeecg.modules.homeai.storage.entity.StorageConvertTask;
@@ -31,6 +34,9 @@ public class HomeaiFilePreviewServiceImpl implements IHomeaiFilePreviewService {
 
     @Autowired
     private IHomeaiFileStorageService fileStorageService;
+
+    @Autowired
+    private IHomeaiSysConfigService sysConfigService;
 
     @Autowired
     private IStorageConvertTaskService convertTaskService;
@@ -62,6 +68,7 @@ public class HomeaiFilePreviewServiceImpl implements IHomeaiFilePreviewService {
         } else if (HomeaiPreviewKind.isOffice(dto.getKind())) {
             attachLatest(dto, file.getId(), CONVERT_PREVIEW_PDF);
         }
+        attachKkPreview(dto);
         return dto;
     }
 
@@ -79,6 +86,7 @@ public class HomeaiFilePreviewServiceImpl implements IHomeaiFilePreviewService {
         } else if (HomeaiPreviewKind.isOffice(dto.getKind())) {
             attachLatest(dto, material.getId(), CONVERT_PREVIEW_PDF_LEARN);
         }
+        attachKkPreview(dto);
         return dto;
     }
 
@@ -148,7 +156,24 @@ public class HomeaiFilePreviewServiceImpl implements IHomeaiFilePreviewService {
         if ("COMPLETED".equals(task.getStatus()) && oConvertUtils.isNotEmpty(task.getResultFileUrl())) {
             preview.setPreviewPdfUrl(fileStorageService.resolveAccessUrl(task.getResultFileUrl()));
         }
+        attachKkPreview(preview);
         return preview;
+    }
+
+    private void attachKkPreview(HomeaiFilePreviewDto dto) {
+        if (dto == null || sysConfigService == null) {
+            return;
+        }
+        String kind = dto.getKind();
+        if (!"office".equals(kind) && !"pdf".equals(kind) && !"archive".equals(kind)) {
+            return;
+        }
+        HomeaiSysConfigDto.Office office = sysConfigService.getOffice();
+        if (office == null) {
+            return;
+        }
+        dto.setKkPreviewUrl(HomeaiKkFileViewUrl.build(
+                office.getKkFileViewUrl(), dto.getFileUrl(), dto.getFileName()));
     }
 
     private void attachLatest(HomeaiFilePreviewDto dto, String sourceId, String convertType) {

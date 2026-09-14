@@ -3,7 +3,7 @@ import type { ErrorMessageMode } from '/#/axios';
 import { defineStore } from 'pinia';
 import { store } from '/@/store';
 import { RoleEnum } from '/@/enums/roleEnum';
-import { PageEnum } from '/@/enums/pageEnum';
+import { PageEnum, isObsoleteJeecgDashboardPath, resolveHomePath } from '/@/enums/pageEnum';
 import { ROLES_KEY, TOKEN_KEY, USER_INFO_KEY, LOGIN_INFO_KEY, DB_DICT_DATA_KEY, TENANT_ID, OAUTH2_THIRD_LOGIN_TENANT_ID } from '/@/enums/cacheEnum';
 import { getAuthCache, setAuthCache, removeAuthCache } from '/@/utils/auth';
 import { GetUserInfoModel, LoginParams, ThirdLoginParams } from '/@/api/sys/model/userModel';
@@ -100,6 +100,9 @@ export const useUserStore = defineStore('app-user', {
       setAuthCache(ROLES_KEY, roleList);
     },
     setUserInfo(info: UserInfo | null) {
+      if (info) {
+        info = { ...info, homePath: resolveHomePath(info.homePath) };
+      }
       this.userInfo = info;
       this.lastUpdateTime = new Date().getTime();
       setAuthCache(USER_INFO_KEY, info);
@@ -200,21 +203,17 @@ export const useUserStore = defineStore('app-user', {
 
         // 代码逻辑说明: 修复登录成功后，没有正确重定向的问题
         let redirect = router.currentRoute.value?.query?.redirect as string;
-        // 判断是否有 redirect 重定向地址
-        // 代码逻辑说明: 【QQYUN-5195】登录之后直接刷新页面导致没有进入创建组织页面------------
-        if (redirect && goHome) {
-          // router.options.history.base可替代之前的publicPath
-          // 当前页面打开
+        const homePath = resolveHomePath(userInfo?.homePath);
+        if (redirect && goHome && !isObsoleteJeecgDashboardPath(redirect) && redirect !== '/' && !String(redirect).startsWith('/login')) {
           window.open(`${router.options.history.base}${redirect}`, '_self');
           return data;
         }
 
-        // 代码逻辑说明: 【issues/1102】设置单点登录后页面，进入首页提示404，也没有绘制侧边栏 #1102---
         let ticket = getUrlParam('ticket');
         if(ticket){
-          goHome && (window.location.replace((userInfo && userInfo.homePath) || PageEnum.BASE_HOME));
+          goHome && (window.location.replace(homePath));
         }else{
-          goHome && (await router.replace((userInfo && userInfo.homePath) || PageEnum.BASE_HOME));
+          goHome && (await router.replace(homePath));
         }
       }
       return data;

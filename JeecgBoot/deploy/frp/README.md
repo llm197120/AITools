@@ -56,7 +56,7 @@ bash install-server.sh
 
 ## 2. 本机（约 1–3 分钟，不含构建管理端）
 
-前置：MySQL、Redis、JeecgBoot 后端已在 `8080` 运行（和平时开发一样）。
+前置：Git / JDK 17 / Maven / Node / Docker。**空系统新电脑**先跑仓库 `docs/deploy/init-windows-host.ps1`（管理员），再执行下面的 `setup-local.ps1`。开发机若已有这些工具可跳过。
 
 ```powershell
 .\setup-local.ps1

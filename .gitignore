@@ -16,3 +16,10 @@
 # ComfyUI 本地运行日志（勿提交仓库）
 /comfyui.log
 /comfyui.log.err
+/.agents
+/.codegraph
+/.cursor
+/.idea
+/.vscode
+/JeecgBoot/deploy/runtime/.env
+/docs/deploy/host.env

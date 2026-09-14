@@ -57,6 +57,20 @@ public interface IStorageFileService extends IService<StorageFile> {
     void deletePermanently(Collection<String> ids);
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R22】资料文件回收站-----------
 
+    //update-begin---author:cursor---date:2026-09-07---for:【格式转换】产物写入原目录并出现在文件管理---
+    /**
+     * 格式转换完成后登记为资料文件：与源文件同一文件夹、同一可见性与家庭关联。
+     *
+     * @param source     源文件
+     * @param storedRef  已写入存储的引用（oss: 或本地路径）
+     * @param storedName 磁盘/OSS 对象名
+     * @param targetExt  目标扩展名
+     * @param fileSize   字节数
+     */
+    StorageFile registerConvertedFile(StorageFile source, String storedRef, String storedName,
+                                      String targetExt, long fileSize);
+    //update-end---author:cursor---date:2026-09-07---for:【格式转换】产物写入原目录并出现在文件管理---
+
     //update-begin---author:admin ---date:2026-08-12 for：【HomeAI-R23】用户存储用量-----------
     /** 用户已用空间（仅未删除文件） */
     long sumUsedBytesByUser(String userId);

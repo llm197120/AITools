@@ -17,7 +17,7 @@ export const learnApi = {
     return Array.isArray(list) ? list[0] : list?.records?.[0]
   },
   preview: (id: string) => get<any>(`/learn/materials/${id}/preview`),
-  /** 仅管理端 Office 转 PDF；APP 打开原文件，不要再调用 */
+  /** Office 转 PDF（管理端用；APP 页内预览已改为解析原文件） */
   previewPdf: (id: string) => post(`/learn/materials/${id}/preview-pdf`),
   categories: () => get<any[]>('/learn/category/all'),
   statistics: () => get<any>('/learn/statistics'),

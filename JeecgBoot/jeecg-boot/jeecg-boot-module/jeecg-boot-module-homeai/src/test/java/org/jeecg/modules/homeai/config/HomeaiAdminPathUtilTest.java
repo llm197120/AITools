@@ -49,6 +49,11 @@ class HomeaiAdminPathUtilTest {
         assertTrue(HomeaiAdminPathUtil.isAdminPath("/homeai/recipe/category", "POST"));
         assertTrue(HomeaiAdminPathUtil.isAdminPath("/homeai/app/version/admin", "GET"));
         assertTrue(HomeaiAdminPathUtil.isAdminPath("/homeai/app/version/upload", "POST"));
+        assertTrue(HomeaiAdminPathUtil.isAdminPath("/homeai/config/doc/agreement/admin", "PUT"));
+        assertTrue(HomeaiAdminPathUtil.isAdminPath("/homeai/config/sys", "GET"));
+        assertTrue(HomeaiAdminPathUtil.isAdminPath("/homeai/config/sys", "PUT"));
+        assertFalse(HomeaiAdminPathUtil.isAdminPath("/homeai/config/doc/agreement", "GET"));
+        assertFalse(HomeaiAdminPathUtil.isAdminPath("/homeai/config/doc/privacy", "GET"));
     }
 
     @Test

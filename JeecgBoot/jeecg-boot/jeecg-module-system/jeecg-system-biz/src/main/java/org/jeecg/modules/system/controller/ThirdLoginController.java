@@ -259,8 +259,12 @@ public class ThirdLoginController {
 		this.setUserTenantAndDepart(sysUser,obj,result);		
 		//用户登录信息
 		obj.put("userInfo", sysUser);
-		//获取字典缓存【解决 #jeecg-boot/issues/3998】
-		obj.put("sysAllDictItems", sysDictService.queryAllDictItems());
+		//update-begin---author:homeai---date:2026-09-07---for:【管理端】vue3 第三方登录不回传全量字典---
+		HttpServletRequest dictRequest = SpringContextUtils.getHttpServletRequest();
+		if (dictRequest == null || oConvertUtils.isEmpty(dictRequest.getHeader(CommonConstant.VERSION))) {
+			obj.put("sysAllDictItems", sysDictService.queryAllDictItems());
+		}
+		//update-end
 		//token 信息
 		obj.put("token", token);
 		result.setResult(obj);

@@ -102,7 +102,7 @@
   import { computed, ref, onMounted } from 'vue';
   import dayjs from 'dayjs';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
-  import { useDrawer } from '/@/components/Drawer';
+  import { useModal } from '/@/components/Modal';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { useMethods } from '/@/hooks/system/useMethods';
   import { planApi } from '/@/api/homeai';
@@ -116,7 +116,7 @@
 
   const { createMessage } = useMessage();
   const { handleExportXls, handleImportXls } = useMethods();
-  const [registerDrawer, { openDrawer }] = useDrawer();
+  const [registerDrawer, { openModal: openDrawer }] = useModal();
   const activeTab = ref('list');
   const completion = ref<Array<{ userId?: string; total?: number; completed?: number; rate?: number }>>([]);
   const categoryOptions = ref<{ label: string; value: string }[]>([]);

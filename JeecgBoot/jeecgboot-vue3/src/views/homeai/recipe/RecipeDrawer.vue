@@ -1,5 +1,5 @@
 <template>
-  <BasicDrawer v-bind="$attrs" @register="registerDrawer" :title="isUpdate ? '编辑菜谱' : '新增菜谱'" width="40%">
+  <HomeaiFormModal v-bind="$attrs" size="long" @register="registerDrawer" :title="isUpdate ? '编辑菜谱' : '新增菜谱'">
     <BasicForm @register="registerForm" @submit="handleSubmit">
       <template #coverUrlSlot="{ model, field }">
         <HomeaiMediaUpload v-model:value="model[field]" mode="image" :upload-url="`${BASE}/recipe/cover`" tip="支持 jpg/png/webp，建议比例 16:9" />
@@ -45,21 +45,23 @@
     </a-card>
 
     <template #footer>
-      <a-button type="primary" :loading="saving" @click="submit">保存</a-button>
-      <a-button style="margin-left: 8px" @click="closeDrawer()">取消</a-button>
+      <a-button @click="closeDrawer()">取消</a-button>
+      <a-button type="primary" :loading="saving" @click="submit">保存并关闭</a-button>
     </template>
-  </BasicDrawer>
+  </HomeaiFormModal>
 </template>
 
 <script lang="ts" name="homeai-recipe-drawer" setup>
   import { ref } from 'vue';
-  import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
+  import { useModalInner } from '/@/components/Modal';
   import { BasicForm, useForm } from '/@/components/Form';
   import { recipeApi, familyApi } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';
   import type { HomeaiCategory, HomeaiRecipe, HomeaiRecipeStep } from '/@/api/homeai';
   import type { HomeaiRecipeIngredient } from '/@/api/homeai/types';
   import HomeaiMediaUpload from '/@/views/homeai/components/HomeaiMediaUpload.vue';
+  import HomeaiFormModal from '../components/HomeaiFormModal.vue';
+  import { COL_FULL, homeaiGroup, omitHomeaiFormMeta } from '../utils/formLayout';
   import { toFamilySelectOptions } from '../utils/activeFamily';
   import { formatQuantityUnit, parseAmountToQuantityUnit } from '../utils/recipeIngredient';
 
@@ -84,7 +86,7 @@
     }
   }
 
-  const [registerDrawer, { closeDrawer }] = useDrawerInner(async (data: { isUpdate?: boolean; record?: HomeaiRecipe }) => {
+  const [registerDrawer, { closeModal: closeDrawer }] = useModalInner(async (data: { isUpdate?: boolean; record?: HomeaiRecipe }) => {
     isUpdate.value = data.isUpdate || false;
     recordId.value = data.record?.id || '';
     resetFields();
@@ -143,8 +145,10 @@
 
   const [registerForm, { setFieldsValue, resetFields, submit, updateSchema }] = useForm({
     labelWidth: 100,
+    baseColProps: { span: 12 },
     schemas: [
-      { field: 'name', label: '菜名', component: 'Input', required: true },
+      homeaiGroup('基本信息', '_g_basic'),
+      { field: 'name', label: '菜名', component: 'Input', required: true, colProps: COL_FULL },
       {
         field: 'categoryId',
         label: '分类',
@@ -190,9 +194,10 @@
         ifShow: ({ values }) => values.visibility === 'family',
         required: true,
       },
+      homeaiGroup('封面与视频', '_g_media'),
       { field: 'coverUrl', label: '封面', component: 'Input', slot: 'coverUrlSlot' },
       { field: 'videoUrl', label: '视频', component: 'Input', slot: 'videoUrlSlot' },
-      { field: 'tips', label: '小贴士', component: 'InputTextArea' },
+      { field: 'tips', label: '小贴士', component: 'InputTextArea', colProps: COL_FULL },
     ],
     showSubmitButton: false,
     showResetButton: false,
@@ -219,7 +224,7 @@
       }
       saving.value = true;
       const payload = {
-        ...values,
+        ...omitHomeaiFormMeta(values),
         familyId: values.visibility === 'family' ? values.familyId : null,
         ingredients: ingredients.value
           .filter((x: any) => String(x.name || '').trim())

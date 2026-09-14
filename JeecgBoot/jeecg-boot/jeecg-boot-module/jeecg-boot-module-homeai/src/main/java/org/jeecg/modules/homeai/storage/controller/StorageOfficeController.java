@@ -22,8 +22,10 @@ import org.jeecg.modules.homeai.family.service.IFamilyService;
 import org.jeecg.modules.homeai.storage.entity.StorageConvertTask;
 import org.jeecg.modules.homeai.storage.entity.StorageFile;
 import org.jeecg.modules.homeai.storage.entity.StorageFolder;
+import org.jeecg.modules.homeai.storage.service.IConvertRuleService;
 import org.jeecg.modules.homeai.storage.service.IStorageConvertTaskService;
 import org.jeecg.modules.homeai.storage.service.IStorageFileService;
+import org.jeecg.modules.homeai.storage.util.ConvertRuleFormatUtil;
 import org.jeecg.modules.homeai.storage.service.IStorageFolderService;
 import org.jeecg.modules.homeai.storage.service.IStorageResourceFamilyService;
 import org.jeecg.modules.homeai.storage.util.StorageAccessUtil;
@@ -45,6 +47,11 @@ public class StorageOfficeController {
 
     @Autowired
     private IStorageConvertTaskService taskService;
+
+    //update-begin---author:cursor---date:2026-09-04---for:【转换规则】提交前校验已启用规则---
+    @Autowired
+    private IConvertRuleService convertRuleService;
+    //update-end---author:cursor---date:2026-09-04---for:【转换规则】提交前校验已启用规则---
 
     @Autowired
     private HomeaiSecurityUtil securityUtil;
@@ -138,7 +145,16 @@ public class StorageOfficeController {
         } catch (JeecgBootException e) {
             return Result.error(e.getMessage());
         }
-        StorageConvertTask task = taskService.submitConvertTask(userId, fileId, sourceFormat, targetFormat);
+        //update-begin---author:cursor---date:2026-09-04---for:【转换规则】仅允许后台已启用的源→目标---
+        String src = ConvertRuleFormatUtil.normalize(sourceFormat);
+        String dst = ConvertRuleFormatUtil.normalize(targetFormat);
+        boolean allowed = convertRuleService.getTargetFormats(src).stream()
+                .anyMatch(rule -> ConvertRuleFormatUtil.samePair(src, dst, rule.getSourceFormat(), rule.getTargetFormat()));
+        if (!allowed) {
+            return Result.error("不支持该格式转换，请在管理端配置转换规则");
+        }
+        StorageConvertTask task = taskService.submitConvertTask(userId, fileId, src, dst);
+        //update-end---author:cursor---date:2026-09-04---for:【转换规则】仅允许后台已启用的源→目标---
         return Result.OK(task);
     }
 

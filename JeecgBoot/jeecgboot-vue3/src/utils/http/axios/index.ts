@@ -55,8 +55,11 @@ const transform: AxiosTransform = {
     const hasSuccess = data && Reflect.has(data, 'code') && (code === ResultEnum.SUCCESS || code === 200);
     if (hasSuccess) {
       if (success && message && options.successMessageMode === 'success') {
-        //信息成功提示
-        createMessage.success(message);
+        // homeai 页面自己会 toast；拦截器再弹一次就会出现两条「保存成功」
+        const reqUrl = String(res?.config?.url || '');
+        if (!reqUrl.includes('/homeai/')) {
+          createMessage.success(message);
+        }
       }
       return result;
     }

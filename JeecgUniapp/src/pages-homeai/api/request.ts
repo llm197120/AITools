@@ -96,7 +96,9 @@ async function request<T = any>(options: RequestOptions): Promise<T> {
         if (data.success) {
           resolve(data.result)
         } else {
-          uni.showToast({ title: data.message || '请求失败', icon: 'none' })
+          if (getConnState() !== 'offline') {
+            uni.showToast({ title: data.message || '请求失败', icon: 'none' })
+          }
           reject(new Error(data.message || '请求失败'))
         }
       },

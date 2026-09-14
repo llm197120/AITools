@@ -3,10 +3,10 @@
     <!-- 已上传内容预览 -->
     <view v-if="modelValue && !uploading" class="hmu-preview">
       <!-- 图片预览 -->
-      <view v-if="mode === 'image'" class="hmu-img-wrap">
+      <view v-if="mode === 'image'" class="hmu-img-wrap" :class="{ 'is-square': square }">
         <image
           class="hmu-img"
-          :style="{ height: props.height + 'rpx' }"
+          :style="square ? undefined : { height: props.height + 'rpx' }"
           :src="modelValue"
           mode="aspectFill"
         />
@@ -46,7 +46,12 @@
     </view>
 
     <!-- 上传中：进度反馈 -->
-    <view v-else-if="uploading" class="hmu-empty" :style="{ minHeight: props.height + 'rpx' }">
+    <view
+      v-else-if="uploading"
+      class="hmu-empty"
+      :class="{ 'is-square': square }"
+      :style="square ? undefined : { minHeight: props.height + 'rpx' }"
+    >
       <view class="hmu-empty-icon">⏳</view>
       <text class="hmu-empty-text">上传中 {{ progress }}%</text>
       <view class="hmu-progress">
@@ -58,7 +63,8 @@
     <view
       v-else
       class="hmu-empty"
-      :style="{ minHeight: props.height + 'rpx' }"
+      :class="{ 'is-square': square }"
+      :style="square ? undefined : { minHeight: props.height + 'rpx' }"
       @click="pickAndUpload"
     >
       <view class="hmu-empty-icon">{{ emptyIcon }}</view>
@@ -98,8 +104,10 @@ const props = defineProps({
   maxSize: { type: Number, default: 100 },
   /** 视频最长时长（秒） */
   maxVideoDuration: { type: Number, default: 60 },
-  /** 图片/空状态高度（rpx） */
+  /** 图片/空状态高度（rpx）；square 时忽略，改为 1:1 */
   height: { type: Number, default: 320 },
+  /** 头像等：预览与空状态为正方形 */
+  square: { type: Boolean, default: false },
   /** 额外收窄扩展名（如学习资料按 type） */
   allowedExt: { type: Array, default: () => [] },
 })
@@ -226,10 +234,20 @@ function clearValue() {
   border-radius: var(--hai-radius-md, 24rpx);
   overflow: hidden;
 }
+.hmu-img-wrap.is-square {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
 .hmu-img {
   width: 100%;
   height: 320rpx;
   display: block;
+}
+.hmu-img-wrap.is-square .hmu-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 .hmu-mask {
   position: absolute;
@@ -308,14 +326,20 @@ function clearValue() {
   color: var(--hai-danger, #e54d42);
 }
 .hmu-empty {
-  border: 2rpx dashed var(--hai-border, #d9d9d9);
+  background: var(--hai-card);
+  border: 2rpx dashed var(--hai-border);
   border-radius: var(--hai-radius-md, 24rpx);
-  background: var(--hai-bg, #f3f2ee);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8rpx;
+}
+.hmu-empty.is-square {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 0;
+  box-sizing: border-box;
 }
 .hmu-empty-icon {
   font-size: 56rpx;

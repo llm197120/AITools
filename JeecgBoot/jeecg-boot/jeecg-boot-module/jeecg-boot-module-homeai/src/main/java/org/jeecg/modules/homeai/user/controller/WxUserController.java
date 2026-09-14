@@ -114,7 +114,7 @@ public class WxUserController {
 
     //update-begin---author:cursor---date:2026-08-20---for:【Android体验】APP 修改昵称/头像-----------
     /**
-     * 当前用户修改昵称/头像（APP；路径第一段为 info，不进管理端拦截）
+     * 当前用户修改姓名/头像（APP；路径第一段为 info，不进管理端拦截）
      */
     @PutMapping("/info")
     @Operation(summary = "当前用户-修改资料")
@@ -130,10 +130,10 @@ public class WxUserController {
         if (nickname != null) {
             nickname = nickname.trim();
             if (nickname.isEmpty()) {
-                return Result.error("请输入昵称");
+                return Result.error("请输入用户姓名");
             }
             if (nickname.length() > 20) {
-                return Result.error("昵称最多 20 字");
+                return Result.error("用户姓名最多 20 字");
             }
             user.setNickname(nickname);
         }

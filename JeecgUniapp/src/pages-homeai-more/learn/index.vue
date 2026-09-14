@@ -93,7 +93,7 @@
             <text class="mat-title">{{ m.title }}</text>
             <text class="mat-cat">{{ m.category }} · {{ m.type }}</text>
           </view>
-          <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
+          <wd-icon name="arrow-right" size="14px" color="var(--hai-text-tertiary)"></wd-icon>
         </view>
         <HomeEmpty
           v-if="materials.length === 0 && !loadingMore"
@@ -258,9 +258,6 @@ async function fetchMaterials(reset = false, silent = false) {
         () => learnApi.materials(1, PAGE_SIZE, undefined, keyword.value),
       )
       page = res.data
-      if (res.offline) {
-        uni.showToast({ title: '离线模式，展示本地数据', icon: 'none' })
-      }
     } else {
       page = await learnApi.materials(nextPage, PAGE_SIZE, undefined, keyword.value)
     }
@@ -294,8 +291,11 @@ async function fetchMaterials(reset = false, silent = false) {
 
 async function loadGoal() {
   try {
-    goal.value = (await learnApi.goal()) || goal.value
-    scheduleLearnGoalRemind(goal.value)
+    const res = await readList<any>('learn', 'goal', () => learnApi.goal())
+    if (res.data) {
+      goal.value = res.data
+      scheduleLearnGoalRemind(goal.value)
+    }
   } catch {
     // 目标加载失败不阻断页面
   }

@@ -114,7 +114,7 @@ const remoteContent = ref('')
 onLoad(async () => {
   try {
     const html: any = await getApi('/config/doc/agreement')
-    remoteContent.value = String(html || '')
+    remoteContent.value = String(html || '').trim()
   } catch {
     /* 离线/失败回退内置 */
   }

@@ -33,6 +33,7 @@ interface NavigateToOptions {
        "/pages-homeai-more/recipe/category" |
        "/pages-homeai-more/recipe/detail" |
        "/pages-homeai-more/recipe/index" |
+       "/pages-homeai-more/settings/index" |
        "/pages-homeai-more/storage/files" |
        "/pages-homeai-more/storage/index" |
        "/pages-homeai-more/storage/office-convert" |

@@ -21,12 +21,14 @@ export function resolveContentUrl(input: {
   return input.fileUrl || ''
 }
 
-/** 图片/视频是「保存到相册」，文档实际是下载后系统打开 */
+/** 图片/视频是「保存到相册」；文档请用「用其他应用打开」 */
 export function fileSaveActionName(ext?: string): string {
   const e = (ext || '').toLowerCase()
   if (isImageExt(e) || isVideoExt(e)) return '保存到相册'
-  return '打开文件'
+  return '用其他应用打开'
 }
+
+export const FILE_OPEN_EXTERNALLY_NAME = '用其他应用打开'
 
 export function downloadFailTitle(err: unknown): string {
   const raw = String((err as { message?: string })?.message || err || '')

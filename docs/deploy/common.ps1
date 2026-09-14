@@ -11,6 +11,12 @@ $script:UniDir = Join-Path $script:RepoRoot 'JeecgUniapp'
 $script:StartModule = 'jeecg-module-system/jeecg-system-start'
 $script:StartDir = Join-Path $script:BootDir ($script:StartModule -replace '/', '\')
 $script:DefaultJavaHome = 'C:\Program Files\Java\jdk-17'
+$script:DocsPreviewDir = Join-Path $script:RepoRoot 'JeecgBoot\deploy\docs-preview'
+$script:RuntimeDir = Join-Path $script:RepoRoot 'JeecgBoot\deploy\runtime'
+$script:GotenbergPort = 3000
+$script:KkFileViewPort = 8012
+$script:GotenbergUrl = 'http://127.0.0.1:3000'
+$script:KkFileViewUrl = 'http://127.0.0.1:8012'
 
 function Get-HomeaiDeployRepoRoot { return $script:RepoRoot }
 
@@ -185,28 +191,35 @@ function Resolve-HomeaiTargets {
         [string[]]$Target = @(),
         [switch]$Frontend,
         [switch]$Backend,
-        [switch]$App
+        [switch]$App,
+        [switch]$DocsPreview
     )
-    $want = @{ Frontend = $false; Backend = $false; App = $false }
+    $want = @{ Frontend = $false; Backend = $false; App = $false; DocsPreview = $false }
     $named = $false
     foreach ($t in @($Target)) {
         if ([string]::IsNullOrWhiteSpace($t)) { continue }
         $k = $t.Trim().ToLowerInvariant()
         if ($k -in @('all', '*')) {
-            return @{ Frontend = $true; Backend = $true; App = $true }
+            return @{ Frontend = $true; Backend = $true; App = $true; DocsPreview = $true }
         }
         if ($k -in @('frontend', 'front', 'admin', 'vue')) { $want.Frontend = $true; $named = $true }
         elseif ($k -in @('backend', 'back', 'java', 'api')) { $want.Backend = $true; $named = $true }
         elseif ($k -in @('app', 'apk', 'android')) { $want.App = $true; $named = $true }
-        else { throw "未知目标 '$t'。可用：frontend / backend / app / all" }
+        elseif ($k -in @('docs', 'preview', 'docspreview', 'gotenberg', 'kkfileview', 'office')) {
+            $want.DocsPreview = $true
+            $named = $true
+        }
+        else { throw "未知目标 '$t'。可用：frontend / backend / app / docs / all" }
     }
     if ($Frontend) { $want.Frontend = $true; $named = $true }
     if ($Backend) { $want.Backend = $true; $named = $true }
     if ($App) { $want.App = $true; $named = $true }
+    if ($DocsPreview) { $want.DocsPreview = $true; $named = $true }
     if (-not $named) {
         $want.Frontend = $true
         $want.Backend = $true
         $want.App = $true
+        $want.DocsPreview = $true
     }
     return $want
 }
@@ -217,6 +230,7 @@ function Write-HomeaiTargetBanner {
     if ($Want.Backend) { $parts += '后端' }
     if ($Want.Frontend) { $parts += '前端' }
     if ($Want.App) { $parts += 'APP' }
+    if ($Want.DocsPreview) { $parts += '文档预览' }
     Write-Host ("目标: {0}（{1}）" -f ($parts -join ' + '), $Action)
 }
 
@@ -365,4 +379,159 @@ function Start-HomeaiFrontendTunnel {
     }
     Write-Host '[前端] 启动本机 Nginx / frpc'
     & $startPs1
+}
+
+function Test-HomeaiDockerReady {
+    $docker = Get-Command docker.exe -ErrorAction SilentlyContinue
+    if (-not $docker) { $docker = Get-Command docker -ErrorAction SilentlyContinue }
+    if (-not $docker) { return $false }
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & docker info --format '{{.ServerVersion}}' 2>$null | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+}
+
+function Test-HomeaiDocsPreviewUp {
+    return (Test-HomeaiTcpPort -Port $script:GotenbergPort) -and (Test-HomeaiTcpPort -Port $script:KkFileViewPort)
+}
+
+function Write-HomeaiDocsPreviewHint {
+    Write-Host ("文档预览 Gotenberg:  {0}" -f $script:GotenbergUrl)
+    Write-Host ("文档预览 kkFileView: {0}" -f $script:KkFileViewUrl)
+    Write-Host '管理端「系统配置 → Office」填写上述本机地址后保存才会启用（只允许本机/局域网）。'
+}
+
+function Invoke-HomeaiComposeDir {
+    param(
+        [Parameter(Mandatory = $true)][string]$Dir,
+        [Parameter(Mandatory = $true)][string[]]$ComposeArgs
+    )
+    $file = Join-Path $Dir 'docker-compose.yml'
+    if (-not (Test-Path -LiteralPath $file)) {
+        throw "找不到 compose：$file"
+    }
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $code = 1
+    Push-Location $Dir
+    try {
+        & docker compose @ComposeArgs
+        $code = $LASTEXITCODE
+    } finally {
+        Pop-Location
+        $ErrorActionPreference = $prev
+    }
+    if ($code -ne 0) {
+        throw ("docker compose {0} 失败，exit={1}" -f ($ComposeArgs -join ' '), $code)
+    }
+}
+
+function Invoke-HomeaiDocsPreviewCompose {
+    param([Parameter(Mandatory = $true)][string[]]$ComposeArgs)
+    Invoke-HomeaiComposeDir -Dir $script:DocsPreviewDir -ComposeArgs $ComposeArgs
+}
+
+function Get-HomeaiDockerDatastoresFlagPath {
+    return (Join-Path (Get-HomeaiHomeRoot) 'use-docker-datastores')
+}
+
+function Test-HomeaiDockerDatastoresEnabled {
+    return (Test-Path -LiteralPath (Get-HomeaiDockerDatastoresFlagPath))
+}
+
+function Enable-HomeaiDockerDatastoresFlag {
+    $root = Get-HomeaiHomeRoot
+    New-Item -ItemType Directory -Force -Path $root | Out-Null
+    $flag = Get-HomeaiDockerDatastoresFlagPath
+    if (-not (Test-Path -LiteralPath $flag)) {
+        $utf8 = New-Object System.Text.UTF8Encoding $false
+        [System.IO.File]::WriteAllText($flag, "mysql+redis via JeecgBoot/deploy/runtime`n", $utf8)
+    }
+}
+
+function Start-HomeaiRuntimeDatastores {
+    param([switch]$Required)
+    $file = Join-Path $script:RuntimeDir 'docker-compose.yml'
+    if (-not (Test-Path -LiteralPath $file)) {
+        $msg = "[数据] 找不到 $file"
+        if ($Required) { throw $msg }
+        Write-Host $msg
+        return
+    }
+    $mysqlUp = Test-HomeaiTcpPort -Port 3306
+    $redisUp = Test-HomeaiTcpPort -Port 6379
+    if ($mysqlUp -and $redisUp) {
+        Write-Host '[数据] MySQL :3306 与 Redis :6379 已在监听，跳过启动'
+        return
+    }
+    if (-not (Test-HomeaiDockerReady)) {
+        $msg = '[数据] 未检测到 Docker Desktop，跳过 MySQL / Redis 容器'
+        if ($Required) { throw $msg }
+        Write-Host $msg
+        return
+    }
+    Write-Host '[数据] docker compose up -d（MySQL :3306，Redis :6379）'
+    try {
+        Invoke-HomeaiComposeDir -Dir $script:RuntimeDir -ComposeArgs @('up', '-d')
+    } catch {
+        if ($Required) { throw }
+        Write-Host ("[数据] 启动失败（已跳过）：{0}" -f $_.Exception.Message)
+        return
+    }
+    [void](Wait-HomeaiPort -Port 3306 -TimeoutSec 120 -Label 'MySQL')
+    [void](Wait-HomeaiPort -Port 6379 -TimeoutSec 60 -Label 'Redis')
+}
+
+function Start-HomeaiDocsPreview {
+    param([switch]$Required)
+    if (Test-HomeaiDocsPreviewUp) {
+        Write-Host ("[文档预览] 已在监听 :{0} / :{1}，跳过启动" -f $script:GotenbergPort, $script:KkFileViewPort)
+        return
+    }
+    if (-not (Test-HomeaiDockerReady)) {
+        $msg = '[文档预览] 未检测到 Docker Desktop，跳过 Gotenberg / kkFileView。安装并启动 Docker 后可再执行 start-all.ps1 -DocsPreview'
+        if ($Required) { throw $msg }
+        Write-Host $msg
+        return
+    }
+    Write-Host '[文档预览] docker compose up -d（Gotenberg :3000，kkFileView :8012）'
+    try {
+        Invoke-HomeaiDocsPreviewCompose -ComposeArgs @('up', '-d')
+    } catch {
+        if ($Required) { throw }
+        Write-Host ("[文档预览] 启动失败（已跳过）：{0}" -f $_.Exception.Message)
+        return
+    }
+    $okG = Wait-HomeaiPort -Port $script:GotenbergPort -TimeoutSec 90 -Label 'Gotenberg'
+    $okK = Wait-HomeaiPort -Port $script:KkFileViewPort -TimeoutSec 90 -Label 'kkFileView'
+    if (-not ($okG -and $okK)) {
+        $msg = '[文档预览] 容器已拉起，但端口尚未全部就绪。可稍后重试或查看 docker logs homeai-gotenberg / homeai-kkfileview'
+        if ($Required) { throw $msg }
+        Write-Host $msg
+    }
+}
+
+function Stop-HomeaiDocsPreview {
+    if (-not (Test-HomeaiDockerReady)) {
+        Write-Host '[文档预览] Docker 未运行，跳过停止'
+        return
+    }
+    $file = Join-Path $script:DocsPreviewDir 'docker-compose.yml'
+    if (-not (Test-Path -LiteralPath $file)) {
+        Write-Host '[文档预览] 未找到 docker-compose.yml，跳过'
+        return
+    }
+    Write-Host '[文档预览] docker compose stop'
+    try {
+        Invoke-HomeaiDocsPreviewCompose -ComposeArgs @('stop')
+        Write-Host '[文档预览] 已停止'
+    } catch {
+        Write-Host ("[文档预览] 停止失败：{0}" -f $_.Exception.Message)
+    }
 }

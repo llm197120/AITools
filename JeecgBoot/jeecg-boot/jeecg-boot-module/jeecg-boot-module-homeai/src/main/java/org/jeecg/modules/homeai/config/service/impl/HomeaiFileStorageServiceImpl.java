@@ -7,13 +7,18 @@ import org.jeecg.common.util.oss.OssBootUtil;
 import org.jeecg.modules.homeai.config.HomeaiFileUrlUtil;
 import org.jeecg.modules.homeai.config.HomeaiImageProcess;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
+import org.jeecg.modules.homeai.config.service.IHomeaiSysConfigService;
+import org.jeecg.modules.homeai.preview.HomeaiFileMime;
 import org.jeecg.modules.homeai.storage.entity.StorageFile;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -36,6 +41,12 @@ public class HomeaiFileStorageServiceImpl implements IHomeaiFileStorageService {
     @Value("${homeai.oss.presign-expire-seconds:7200}")
     private long presignExpireSeconds;
 
+    //update-begin---author:cursor---date:2026-09-07---for:【系统配置】OSS 私有桶/预签名走后台覆盖-----------
+    @Autowired
+    @Lazy
+    private IHomeaiSysConfigService sysConfigService;
+    //update-end---author:cursor---date:2026-09-07---for:【系统配置】OSS 私有桶/预签名走后台覆盖-----------
+
     @Override
     public boolean isOssEnabled() {
         return CommonConstant.UPLOAD_TYPE_OSS.equals(uploadType);
@@ -43,7 +54,8 @@ public class HomeaiFileStorageServiceImpl implements IHomeaiFileStorageService {
 
     @Override
     public boolean isPrivateOssBucket() {
-        return isOssEnabled() && privateOssBucket;
+        boolean privateBucket = sysConfigService != null ? sysConfigService.isPrivateOssBucket() : privateOssBucket;
+        return isOssEnabled() && privateBucket;
     }
 
     @Override
@@ -132,7 +144,7 @@ public class HomeaiFileStorageServiceImpl implements IHomeaiFileStorageService {
         }
         if (isPrivateOssBucket()) {
             String objectKey = extractObjectKey(storedReference);
-            String signed = OssBootUtil.getPresignedUrl(objectKey, presignExpireSeconds, process);
+            String signed = OssBootUtil.getPresignedUrl(objectKey, presignExpireNow(), process);
             if (oConvertUtils.isEmpty(signed)) {
                 log.warn("预签名 URL 生成失败: {}", storedReference);
                 return storedReference;
@@ -140,6 +152,10 @@ public class HomeaiFileStorageServiceImpl implements IHomeaiFileStorageService {
             return signed;
         }
         return appendOssProcess(toPublicOssUrl(extractObjectKey(storedReference)), process);
+    }
+
+    private long presignExpireNow() {
+        return sysConfigService != null ? sysConfigService.getPresignExpireSeconds() : presignExpireSeconds;
     }
 
     private String appendOssProcess(String url, String process) {
@@ -202,6 +218,89 @@ public class HomeaiFileStorageServiceImpl implements IHomeaiFileStorageService {
         }
         return Paths.get(uploadPath, storedReference);
     }
+
+    //update-begin---author:cursor---date:2026-09-03---for:【HomeAI-R126】APK 等大文件流式写出，避免先整包落地再响应---
+    @Override
+    public void writeToResponse(String storedReference, jakarta.servlet.http.HttpServletResponse response,
+                                String downloadName, String extension) throws IOException {
+        writeToResponse(storedReference, response, downloadName, extension, null);
+    }
+
+    @Override
+    public void writeToResponse(String storedReference, jakarta.servlet.http.HttpServletResponse response,
+                                String downloadName, String extension, Path cacheFile) throws IOException {
+        if (oConvertUtils.isEmpty(storedReference)) {
+            response.sendError(jakarta.servlet.http.HttpServletResponse.SC_NOT_FOUND, "文件不存在");
+            return;
+        }
+        if (storedReference.contains("/homeai/app/version/package/download")) {
+            throw new IllegalArgumentException("安装包存储引用无效，请在管理端重新上传 APK");
+        }
+        response.setContentType(HomeaiFileMime.mimeOf(extension));
+        response.setHeader("Content-Disposition", HomeaiFileMime.contentDisposition(downloadName, extension));
+        if (isOssEnabled() && (isOssStoredReference(storedReference) || isRemoteUrl(storedReference))) {
+            InputStream in = OssBootUtil.getOssFile(extractObjectKey(storedReference), null);
+            if (in == null) {
+                response.sendError(jakarta.servlet.http.HttpServletResponse.SC_NOT_FOUND, "文件不存在");
+                return;
+            }
+            streamToResponseAndMaybeCache(in, response, cacheFile);
+            return;
+        }
+        Path path = resolveLocalPath(storedReference);
+        if (cacheFile != null && Files.isRegularFile(path)) {
+            try {
+                Files.createDirectories(cacheFile.getParent());
+                Files.copy(path, cacheFile, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException e) {
+                log.warn("复制安装包到本地缓存失败", e);
+            }
+        }
+        HomeaiFileMime.writeLocalFile(response, path, downloadName, extension);
+    }
+
+    private void streamToResponseAndMaybeCache(InputStream in, jakarta.servlet.http.HttpServletResponse response,
+                                               Path cacheFile) throws IOException {
+        Path part = null;
+        boolean complete = false;
+        try (InputStream stream = in; OutputStream out = response.getOutputStream()) {
+            OutputStream cacheOut = null;
+            if (cacheFile != null) {
+                Files.createDirectories(cacheFile.getParent());
+                part = cacheFile.resolveSibling(cacheFile.getFileName().toString() + ".part");
+                cacheOut = Files.newOutputStream(part);
+            }
+            try {
+                response.flushBuffer();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = stream.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                    if (cacheOut != null) {
+                        cacheOut.write(buf, 0, n);
+                    }
+                }
+                out.flush();
+                if (cacheOut != null) {
+                    cacheOut.flush();
+                }
+                complete = true;
+            } finally {
+                if (cacheOut != null) {
+                    cacheOut.close();
+                }
+            }
+        } finally {
+            if (part != null) {
+                if (complete && cacheFile != null) {
+                    Files.move(part, cacheFile, StandardCopyOption.REPLACE_EXISTING);
+                } else {
+                    Files.deleteIfExists(part);
+                }
+            }
+        }
+    }
+    //update-end---author:cursor---date:2026-09-03---for:【HomeAI-R126】APK 等大文件流式写出，避免先整包落地再响应---
 
     @Override
     public void deleteIfExists(String storedReference) {

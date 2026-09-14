@@ -11,7 +11,7 @@
     align-right
     center
     label-width="180rpx"
-    checked-color="#1B4F8A"
+    checked-color="var(--hai-primary)"
     value-key="value"
     label-key="label"
   />

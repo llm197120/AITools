@@ -35,7 +35,7 @@
           </text>
         </view>
         <text v-if="canEditFolder(folder)" class="action-hint" @click.stop="showFolderActions(folder)">管理</text>
-        <wd-icon name="arrow-right" size="14px" color="#A39E94" />
+        <wd-icon name="arrow-right" size="14px" color="var(--hai-text-muted)" />
       </view>
 
       <!-- 文件列表（根目录与子文件夹均展示） -->
@@ -218,7 +218,7 @@ function formatTime(t: string) {
 }
 .crumb { font-size: 26rpx; color: var(--hai-primary); }
 .crumb.active { color: var(--hai-text); font-weight: 600; }
-.sep { color: #c4bfb6; }
+.sep { color: var(--hai-text-tertiary); }
 .loading-wrap { padding: 20rpx; }
 .folder-item, .file-item {
   display: flex; align-items: center; gap: 16rpx;
@@ -231,7 +231,7 @@ function formatTime(t: string) {
   height: 72rpx;
   border-radius: 12rpx;
   flex-shrink: 0;
-  background: #ece9e2;
+  background: var(--hai-bg);
 }
 .folder-info, .file-info { flex: 1; min-width: 0; }
 .load-more-wrap {

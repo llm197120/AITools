@@ -8,6 +8,7 @@ import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.config.entity.HomeaiDocConfig;
 import org.jeecg.modules.homeai.config.mapper.HomeaiDocConfigMapper;
+import org.jeecg.modules.homeai.config.util.HomeaiDocHtmlUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -52,17 +53,20 @@ public class HomeaiDocConfigController {
         if (!validType(type)) {
             throw new JeecgBootException("type 只能是 agreement 或 privacy");
         }
+        //update-begin---author:cursor---date:2026-09-03---for:【HomeAI-R125】协议富文本长度与 XSS 过滤-----------
+        String content = HomeaiDocHtmlUtil.sanitize(body == null ? null : body.getContent());
+        //update-end---author:cursor---date:2026-09-03---for:【HomeAI-R125】协议富文本长度与 XSS 过滤-----------
         HomeaiDocConfig row = mapper.selectById(type);
         Date now = new Date();
         if (row == null) {
             row = new HomeaiDocConfig();
             row.setId(type);
-            row.setContent(body == null ? "" : body.getContent());
+            row.setContent(content);
             row.setCreateTime(now);
             row.setUpdateTime(now);
             mapper.insert(row);
         } else {
-            row.setContent(body == null ? "" : body.getContent());
+            row.setContent(content);
             row.setUpdateTime(now);
             mapper.updateById(row);
         }

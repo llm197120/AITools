@@ -122,4 +122,18 @@ class StorageFileNameUtilTest {
         assertEquals("", StorageFileNameUtil.extensionOf(""));
         assertEquals("", StorageFileNameUtil.extensionOf("a."));
     }
+
+    // ---------- withExtension ----------
+
+    @Test
+    void withExtensionReplacesSuffix() {
+        assertEquals("report.pdf", StorageFileNameUtil.withExtension("report.docx", "pdf"));
+        assertEquals("a.b.xlsx", StorageFileNameUtil.withExtension("a.b.ppt", "xlsx"));
+    }
+
+    @Test
+    void withExtensionEmptyKeepsName() {
+        assertEquals("report.docx", StorageFileNameUtil.withExtension("report.docx", ""));
+        assertEquals("unknown.pdf", StorageFileNameUtil.withExtension("///", "pdf"));
+    }
 }

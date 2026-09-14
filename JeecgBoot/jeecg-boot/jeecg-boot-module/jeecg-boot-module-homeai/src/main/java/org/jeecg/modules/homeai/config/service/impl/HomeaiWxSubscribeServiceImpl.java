@@ -4,6 +4,8 @@ import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.util.RedisUtil;
 import org.jeecg.common.util.oConvertUtils;
+import org.jeecg.modules.homeai.config.dto.HomeaiSysConfigDto;
+import org.jeecg.modules.homeai.config.service.IHomeaiSysConfigService;
 import org.jeecg.modules.homeai.config.service.IHomeaiWxSubscribeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -66,12 +68,17 @@ public class HomeaiWxSubscribeServiceImpl implements IHomeaiWxSubscribeService {
     @Autowired
     private RedisUtil redisUtil;
 
+    //update-begin---author:cursor---date:2026-09-07---for:【系统配置】订阅模板走后台覆盖-----------
+    @Autowired
+    private IHomeaiSysConfigService sysConfigService;
+    //update-end---author:cursor---date:2026-09-07---for:【系统配置】订阅模板走后台覆盖-----------
+
     @Override
     public boolean sendPlanRemind(String openid, String planTitle, String planTimeText) {
         if (oConvertUtils.isEmpty(openid)) {
             return false;
         }
-        if (oConvertUtils.isEmpty(planRemindTemplateId) || oConvertUtils.isEmpty(appid) || oConvertUtils.isEmpty(secret)) {
+        if (oConvertUtils.isEmpty(planTemplateId()) || oConvertUtils.isEmpty(appid) || oConvertUtils.isEmpty(secret)) {
             //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R24】模拟推送不记成功，避免 dedupe 跳过真发-----------
             log.info("[计划提醒-模拟推送] openid={}, title={}, time={}", openid, planTitle, planTimeText);
             return false;
@@ -81,7 +88,7 @@ public class HomeaiWxSubscribeServiceImpl implements IHomeaiWxSubscribeService {
             String accessToken = getAccessToken();
             JSONObject body = new JSONObject();
             body.put("touser", openid);
-            body.put("template_id", planRemindTemplateId);
+            body.put("template_id", planTemplateId());
             body.put("page", "pages-homeai-more/plan/index");
             JSONObject data = new JSONObject();
             data.put("thing1", typedField("thing1", planTitle));
@@ -116,7 +123,7 @@ public class HomeaiWxSubscribeServiceImpl implements IHomeaiWxSubscribeService {
         }
         JSONObject data = buildLearnRemindData(goalMinutes, todayMinutes);
         String tip = "今日已学" + todayMinutes + "分钟，目标" + goalMinutes + "分钟";
-        if (oConvertUtils.isEmpty(learnRemindTemplateId) || oConvertUtils.isEmpty(appid) || oConvertUtils.isEmpty(secret)) {
+        if (oConvertUtils.isEmpty(learnTemplateId()) || oConvertUtils.isEmpty(appid) || oConvertUtils.isEmpty(secret)) {
             //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R24】模拟推送不记成功，避免 dedupe 跳过真发-----------
             log.info("[学习提醒-模拟推送] openid={}, tip={}, data={}", openid, tip, data);
             return false;
@@ -126,7 +133,7 @@ public class HomeaiWxSubscribeServiceImpl implements IHomeaiWxSubscribeService {
             String accessToken = getAccessToken();
             JSONObject body = new JSONObject();
             body.put("touser", openid);
-            body.put("template_id", learnRemindTemplateId);
+            body.put("template_id", learnTemplateId());
             body.put("page", "pages-homeai-more/learn/index");
             body.put("data", data);
 
@@ -153,27 +160,26 @@ public class HomeaiWxSubscribeServiceImpl implements IHomeaiWxSubscribeService {
     @Override
     public Map<String, Object> describeLearnRemindTemplate() {
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("titleField", nullToEmpty(learnRemindTitleField));
-        fields.put("progressField", nullToEmpty(learnRemindProgressField));
-        fields.put("goalField", nullToEmpty(learnRemindGoalField));
-        fields.put("dateField", nullToEmpty(learnRemindDateField));
-        fields.put("titleText", nullToEmpty(learnRemindTitleText));
+        fields.put("titleField", nullToEmpty(titleField()));
+        fields.put("progressField", nullToEmpty(progressField()));
+        fields.put("goalField", nullToEmpty(goalField()));
+        fields.put("dateField", nullToEmpty(dateField()));
+        fields.put("titleText", nullToEmpty(titleText()));
 
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("templateIdConfigured", oConvertUtils.isNotEmpty(learnRemindTemplateId));
+        out.put("templateIdConfigured", oConvertUtils.isNotEmpty(learnTemplateId()));
         out.put("fields", fields);
         out.put("sampleData", buildLearnRemindData(30, 12));
-        out.put("hint", "请在微信公众平台选用含 thing/number/time 的订阅消息模板，"
-                + "并通过 homeai.wechat.learn-remind-*-field 与模板关键词对齐");
+        out.put("hint", "请在微信公众平台选用含 thing/number/time 的订阅消息模板，并在管理端「系统配置」与模板关键词对齐");
         return out;
     }
 
     private JSONObject buildLearnRemindData(int goalMinutes, int todayMinutes) {
         JSONObject data = new JSONObject();
-        putLearnField(data, learnRemindTitleField, nullToEmpty(learnRemindTitleText));
-        putLearnField(data, learnRemindProgressField, String.valueOf(Math.max(todayMinutes, 0)));
-        putLearnField(data, learnRemindGoalField, String.valueOf(Math.max(goalMinutes, 0)));
-        putLearnField(data, learnRemindDateField, LocalDate.now().format(CN_DATE));
+        putLearnField(data, titleField(), nullToEmpty(titleText()));
+        putLearnField(data, progressField(), String.valueOf(Math.max(todayMinutes, 0)));
+        putLearnField(data, goalField(), String.valueOf(Math.max(goalMinutes, 0)));
+        putLearnField(data, dateField(), LocalDate.now().format(CN_DATE));
         return data;
     }
 
@@ -211,6 +217,51 @@ public class HomeaiWxSubscribeServiceImpl implements IHomeaiWxSubscribeService {
             max = 20;
         }
         return s.length() <= max ? s : s.substring(0, max);
+    }
+
+    private String planTemplateId() {
+        HomeaiSysConfigDto.Wechat w = wechatCfg();
+        if (w != null && w.getPlanRemindTemplateId() != null) {
+            return w.getPlanRemindTemplateId();
+        }
+        return planRemindTemplateId;
+    }
+
+    private String learnTemplateId() {
+        HomeaiSysConfigDto.Wechat w = wechatCfg();
+        if (w != null && w.getLearnRemindTemplateId() != null) {
+            return w.getLearnRemindTemplateId();
+        }
+        return learnRemindTemplateId;
+    }
+
+    private String titleField() {
+        HomeaiSysConfigDto.Wechat w = wechatCfg();
+        return w != null && w.getLearnRemindTitleField() != null ? w.getLearnRemindTitleField() : learnRemindTitleField;
+    }
+
+    private String progressField() {
+        HomeaiSysConfigDto.Wechat w = wechatCfg();
+        return w != null && w.getLearnRemindProgressField() != null ? w.getLearnRemindProgressField() : learnRemindProgressField;
+    }
+
+    private String goalField() {
+        HomeaiSysConfigDto.Wechat w = wechatCfg();
+        return w != null && w.getLearnRemindGoalField() != null ? w.getLearnRemindGoalField() : learnRemindGoalField;
+    }
+
+    private String dateField() {
+        HomeaiSysConfigDto.Wechat w = wechatCfg();
+        return w != null && w.getLearnRemindDateField() != null ? w.getLearnRemindDateField() : learnRemindDateField;
+    }
+
+    private String titleText() {
+        HomeaiSysConfigDto.Wechat w = wechatCfg();
+        return w != null && w.getLearnRemindTitleText() != null ? w.getLearnRemindTitleText() : learnRemindTitleText;
+    }
+
+    private HomeaiSysConfigDto.Wechat wechatCfg() {
+        return sysConfigService == null ? null : sysConfigService.getWechat();
     }
 
     private static String nullToEmpty(String s) {

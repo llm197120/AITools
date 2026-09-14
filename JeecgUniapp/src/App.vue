@@ -8,7 +8,7 @@ import { initSyncLoop, setSyncConfig } from '@/pages-homeai/offline/syncQueue'
 import { registerAllSenders } from '@/pages-homeai/offline/senders'
 import { initPendingUploadFlush } from '@/pages-homeai/offline/pendingUpload'
 import { getServerBaseUrl } from '@/pages-homeai/api/request'
-import { initTheme } from '@/pages-homeai/utils/theme'
+import { initTheme, applyTheme } from '@/pages-homeai/utils/theme'
 
 /** 启动拉取后端同步配置（batchSize/intervalMs/maxRetries/imageCacheLimitMB） */
 function loadSyncConfig() {
@@ -61,6 +61,8 @@ export default {
     console.log('应用启动路径：', options.path)
     // 回到前台立即重探连接（离线恢复后触发同步）
     pokeConnection()
+    // 切回前台时再刷标题栏/Tab（部分机型会还原系统栏颜色）
+    applyTheme()
   },
   onHide: function () {
     console.log('App Hide')

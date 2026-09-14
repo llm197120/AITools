@@ -46,6 +46,20 @@ public interface IHomeaiFileStorageService {
     /** Office 转换等需要本地 Path 的场景（OSS 时会下载到临时文件） */
     Path resolveLocalPath(String storedReference);
 
+    /**
+     * 把存储对象流式写入 HTTP 响应（OSS 边下边写，避免先整包落地再输出导致客户端一直停在「下载中」）。
+     */
+    void writeToResponse(String storedReference, jakarta.servlet.http.HttpServletResponse response,
+                         String downloadName, String extension) throws java.io.IOException;
+
+    /**
+     * 同 {@link #writeToResponse(String, jakarta.servlet.http.HttpServletResponse, String, String)}，
+     * 若 cacheFile 非空则在写出的同时落一份完整本地副本（仅完整成功后替换），供下次免 OSS。
+     */
+    void writeToResponse(String storedReference, jakarta.servlet.http.HttpServletResponse response,
+                         String downloadName, String extension, java.nio.file.Path cacheFile)
+            throws java.io.IOException;
+
     void deleteIfExists(String storedReference);
 
     /** 从持久化引用或历史 URL 解析 OSS objectKey */

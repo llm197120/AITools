@@ -64,3 +64,13 @@ alter_homeai_preview_pdf_url.sql
 alter_homeai_app_version.sql
 alter_homeai_menus_iteration69.sql
 alter_homeai_perf_indexes.sql
+alter_homeai_sync_config.sql
+alter_homeai_menus_sync_config.sql
+alter_homeai_doc_config.sql
+alter_homeai_menus_doc_config.sql
+alter_homeai_convert_rules_common.sql
+alter_homeai_menus_hide_jeecg_builtin.sql
+alter_homeai_wx_user_nickname_comment.sql
+alter_homeai_sys_config.sql
+alter_homeai_menus_sys_config.sql
+alter_homeai_def_index.sql

@@ -23,6 +23,8 @@ page {
   --hai-radius-sm: 20rpx;
   --hai-radius-md: 24rpx;
   --hai-serif: 'Songti SC', 'STSong', 'Noto Serif SC', serif;
+  --hai-dual-recipe: linear-gradient(165deg, #fff8f3 0%, #ffffff 55%);
+  --hai-dual-learn: linear-gradient(165deg, #f2f6f4 0%, #ffffff 55%);
   /* 与 wot-design 对齐，避免全局旧蓝泄漏 */
   --wot-color-theme: #1b4f8a;
 }
@@ -35,8 +37,8 @@ page {
   --hai-text: #e8e6e0;
   --hai-text-secondary: #a8a49a;
   --hai-text-muted: #7d7971;
-  --hai-text-tertiary: #5c5850;
-  --hai-icon: #d6d2ca;
+  --hai-text-tertiary: #9a958c;
+  --hai-icon: #e8e6e0;
   --hai-border: #33343a;
   --hai-primary: #4d8fd6;
   --hai-primary-mid: #6aa8e8;
@@ -49,6 +51,81 @@ page {
   --hai-on-primary: #ffffff;
   --hai-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.4);
   --wot-color-theme: #4d8fd6;
+  --hai-dual-recipe: linear-gradient(165deg, #3d2f2a 0%, #2a2624 58%);
+  --hai-dual-learn: linear-gradient(165deg, #24352e 0%, #232429 58%);
+  --UI-BG: #232429;
+  --UI-BG-1: #17181c;
+  --UI-BG-2: #232429;
+  --UI-BG-3: #17181c;
+  --UI-BG-5: #232429;
+  --UI-FG: #e8e6e0;
+  --UI-FG-0: rgba(232, 230, 224, 0.92);
+  --UI-FG-HALF: rgba(232, 230, 224, 0.92);
+  --UI-FG-1: rgba(232, 230, 224, 0.55);
+  --UI-FG-2: rgba(232, 230, 224, 0.35);
+  --UI-FG-3: rgba(232, 230, 224, 0.12);
+  --wot-input-color: #e8e6e0;
+  --wot-cell-value-color: #a8a49a;
+  --wot-textarea-color: #e8e6e0;
+  --wot-text-info-color: #e8e6e0;
+  --wot-cell-title-color: #e8e6e0;
+  --wot-color-bg: #17181c;
+  --wot-dark-background: #17181c;
+  --wot-dark-background2: #232429;
+  --wot-dark-background3: #2c2d33;
+  --wot-dark-color: #e8e6e0;
+  --wot-dark-color2: #a8a49a;
+  --wot-dark-border-color: #33343a;
+  color-scheme: dark;
+}
+
+/* Uni H5 标题栏 / TabBar 用 pages.json 内联浅色，夜晚模式强制覆盖 */
+.dark-mode uni-page-head,
+.dark-mode .uni-page-head,
+.dark-mode .uni-page-head-placeholder,
+.dark-mode .uni-navbar,
+.dark-mode .uni-placeholder {
+  background-color: #17181c !important;
+  background-image: none !important;
+  color: #e8e6e0 !important;
+}
+
+.dark-mode .uni-page-head .uni-page-head-title,
+.dark-mode .uni-page-head .uni-btn-icon,
+.dark-mode .uni-page-head .uni-page-head-btn {
+  color: #e8e6e0 !important;
+}
+
+.dark-mode uni-tabbar,
+.dark-mode .uni-tabbar,
+.dark-mode .uni-tabbar-bottom,
+.dark-mode .uni-tabbar__bd,
+.dark-mode .uni-tabbar-border {
+  background-color: #17181c !important;
+  background-image: none !important;
+  border-color: #33343a !important;
+}
+
+.dark-mode .uni-tabbar:after,
+.dark-mode .uni-tabbar-border:after,
+.dark-mode .uni-border-top:after {
+  background-color: #33343a !important;
+}
+
+.dark-mode .uni-tabbar__label {
+  color: #a8a49a !important;
+}
+
+.dark-mode .uni-tabbar__item.uni-tabbar__item--active .uni-tabbar__label,
+.dark-mode .uni-tabbar__item.uni-tabbar__item--selected .uni-tabbar__label,
+.dark-mode .uni-tabbar__item.uni-tabbar__item--hover .uni-tabbar__label {
+  color: #4d8fd6 !important;
+}
+
+.dark-mode uni-page-wrapper,
+.dark-mode uni-page-body,
+.dark-mode uni-page-refresh {
+  background-color: #17181c !important;
 }
 
 .hai-page {
@@ -177,4 +254,96 @@ page {
 .wd-datetime-picker__action--cancel {
   color: var(--hai-text-secondary) !important;
   font-weight: 400;
+}
+
+/* 夜晚模式：wot / uni 弹层、单元格、选择器，避免组件默认白底 */
+.dark-mode .wd-cell,
+.dark-mode .wd-cell-group,
+.dark-mode .wd-cell-group__body,
+.dark-mode .wd-picker,
+.dark-mode .wd-select-picker,
+.dark-mode .wd-datetime-picker,
+.dark-mode .wd-input,
+.dark-mode .wd-textarea,
+.dark-mode .wd-search,
+.dark-mode .wd-search__block,
+.dark-mode .wd-search__input,
+.dark-mode .wd-calendar,
+.dark-mode .wd-tabs,
+.dark-mode .wd-tabs__nav {
+  background: var(--hai-card) !important;
+  color: var(--hai-text) !important;
+}
+
+.dark-mode .wd-cell__title,
+.dark-mode .wd-cell__label,
+.dark-mode .wd-cell__left,
+.dark-mode .wd-input__label,
+.dark-mode .wd-picker__label {
+  color: var(--hai-text) !important;
+}
+
+.dark-mode .wd-cell__value,
+.dark-mode .wd-input__inner,
+.dark-mode .wd-textarea__inner,
+.dark-mode .wd-picker__value,
+.dark-mode .wd-select-picker .wd-cell__value {
+  color: var(--hai-text-secondary) !important;
+}
+
+.dark-mode .wd-popup,
+.dark-mode .wd-popup__content,
+.dark-mode .wd-action-sheet,
+.dark-mode .wd-action-sheet__popup,
+.dark-mode .wd-action-sheet__panel,
+.dark-mode .wd-picker__popup,
+.dark-mode .wd-select-picker__popup,
+.dark-mode .wd-select-picker__wrapper,
+.dark-mode .wd-datetime-picker__popup,
+.dark-mode .wd-message-box,
+.dark-mode .wd-toast {
+  background: var(--hai-card) !important;
+  color: var(--hai-text) !important;
+}
+
+.dark-mode .wd-action-sheet__item,
+.dark-mode .wd-action-sheet__cell,
+.dark-mode .wd-picker-view,
+.dark-mode .wd-picker-view-column,
+.dark-mode .wd-radio,
+.dark-mode .wd-checkbox {
+  background: transparent !important;
+  color: var(--hai-text) !important;
+}
+
+.dark-mode .wd-action-sheet__cancel,
+.dark-mode .uni-actionsheet,
+.dark-mode .uni-actionsheet__menu,
+.dark-mode .uni-actionsheet__action,
+.dark-mode .uni-actionsheet__cell {
+  background-color: #232429 !important;
+  color: #e8e6e0 !important;
+}
+
+.dark-mode .uni-actionsheet__cell {
+  border-bottom-color: #33343a !important;
+}
+
+.dark-mode .uni-modal,
+.dark-mode .uni-modal__hd,
+.dark-mode .uni-modal__bd,
+.dark-mode .uni-modal__ft {
+  background-color: #232429 !important;
+  color: #e8e6e0 !important;
+}
+
+.dark-mode input,
+.dark-mode textarea {
+  color: var(--hai-text);
+  background-color: transparent;
+}
+
+.dark-mode input::placeholder,
+.dark-mode textarea::placeholder {
+  color: var(--hai-text-muted);
 }

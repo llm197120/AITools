@@ -1,21 +1,23 @@
 <template>
-  <BasicDrawer v-bind="$attrs" @register="registerDrawer" :title="isUpdate ? '编辑计划' : '新增计划'" width="40%">
+  <HomeaiFormModal v-bind="$attrs" size="medium" @register="registerDrawer" :title="isUpdate ? '编辑计划' : '新增计划'">
     <BasicForm @register="registerForm" @submit="handleSubmit" />
     <template #footer>
-      <a-button type="primary" @click="submit">保存</a-button>
-      <a-button style="margin-left: 8px" @click="closeDrawer()">取消</a-button>
+      <a-button @click="closeDrawer()">取消</a-button>
+      <a-button type="primary" @click="submit">保存并关闭</a-button>
     </template>
-  </BasicDrawer>
+  </HomeaiFormModal>
 </template>
 
 <script lang="ts" name="homeai-plan-drawer" setup>
   import { ref, onMounted } from 'vue';
-  import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
+  import { useModalInner } from '/@/components/Modal';
   import { BasicForm, useForm } from '/@/components/Form';
   import { planApi, recipeApi } from '/@/api/homeai';
   import type { HomeaiCategory, HomeaiPayload, HomeaiRecipe } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { useUserLabel } from '../hooks/useUserLabel';
+  import HomeaiFormModal from '../components/HomeaiFormModal.vue';
+  import { COL_FULL, homeaiGroup, omitHomeaiFormMeta } from '../utils/formLayout';
 
   const emit = defineEmits(['success']);
   const { createMessage } = useMessage();
@@ -61,7 +63,7 @@
     }
   }
 
-  const [registerDrawer, { closeDrawer }] = useDrawerInner(async (data) => {
+  const [registerDrawer, { closeModal: closeDrawer }] = useModalInner(async (data) => {
     await Promise.all([loadCategories(), loadRecipes()]);
     updateSchema([
       {
@@ -95,7 +97,9 @@
 
   const [registerForm, { setFieldsValue, resetFields, submit, updateSchema }] = useForm({
     labelWidth: 100,
+    baseColProps: { span: 12 },
     schemas: [
+      homeaiGroup('基本信息', '_g_basic'),
       {
         field: 'userId',
         label: '所属用户',
@@ -109,7 +113,7 @@
           placeholder: '请选择归属用户',
         },
       },
-      { field: 'title', label: '标题', component: 'Input', required: true },
+      { field: 'title', label: '标题', component: 'Input', required: true, colProps: COL_FULL },
       { field: 'planDate', label: '日期', component: 'DatePicker', required: true, defaultValue: null },
       {
         field: 'category',
@@ -200,7 +204,7 @@
           style: { width: '100%' },
         },
       },
-      { field: 'content', label: '内容', component: 'InputTextArea' },
+      { field: 'content', label: '内容', component: 'InputTextArea', colProps: COL_FULL },
     ],
     showSubmitButton: false,
     showResetButton: false,
@@ -217,12 +221,13 @@
       return false;
     }
     if (values.content != null) values.content = String(values.content).trim();
+    const payload = omitHomeaiFormMeta(values);
     try {
       if (isUpdate.value) {
-        await planApi.edit(recordId.value, values);
+        await planApi.edit(recordId.value, payload);
         createMessage.success('编辑成功');
       } else {
-        await planApi.add(values);
+        await planApi.add(payload);
         createMessage.success('新增成功');
       }
       closeDrawer();

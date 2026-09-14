@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 # 一次性：服务器 nginx conf.d/homeai.conf 的 /app location 加 no-store 缓存头并 reload（幂等）
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\common.ps1"

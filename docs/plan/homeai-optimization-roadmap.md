@@ -1,13 +1,13 @@
 ---
 name: 家庭AI小工具 - 迭代优化路线图
 version: v4
-status: 进行中（第 13～123 轮已落地；ComfyUI 专项见仓库根目录 ComfyUI/）
-updated: 2026-08-31
+status: 进行中（第 13～152 轮已落地；ComfyUI 专项见仓库根目录 ComfyUI/）
+updated: 2026-09-07
 ---
 
 # 家庭AI小工具 - 迭代优化路线图
 
-> 本文档汇总第 **1～12 轮**业务迭代，以及 **第 13～120 轮**工程化/业务/视觉/安全优化落地内容。  
+> 本文档汇总第 **1～12 轮**业务迭代，以及 **第 13～152 轮**工程化/业务/视觉/安全优化落地内容。  
 > ComfyUI 本地路线（第 41～42 轮）已拆分至独立目录 [`ComfyUI/`](../../ComfyUI/README.md)（路线图：[comfyui-roadmap.md](../../ComfyUI/docs/comfyui-roadmap.md)）。  
 > 业务模块后续建议见第三节。
 
@@ -2031,6 +2031,397 @@ alter_homeai_preview_pdf_url.sql
 
 ---
 
+### 第 124 轮：综合统计发布后组件缺失（2026-09-02）
+
+> 管理端发布后打开「综合统计」显示组件缺失。`routeHelper` 对任意包含 `dashboard/` 的菜单路径强制拼接 `/index`，把 `homeai/dashboard/crossStats.vue` 解析成不存在的 `crossStats/index`。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 管理端 | `routeHelper.ts` | 仅系统工作台路径（去掉 `/views` 后仍以 `dashboard/` 开头）才补 `/index`；找不到则回退原路径 |
+
+**迁移 SQL：** 无（菜单 component 仍为 `/views/homeai/dashboard/crossStats`，无需改库）。
+
+---
+
+### 第 125 轮：协议后台页 + 存储超管收口 + 菜谱推荐多样性（2026-09-03）
+
+> 管理端「协议与隐私配置」页面此前未入库/未接编辑器；任意控制台 JWT 可当存储超管预览全部资料；推荐把「做过次数」当加分导致总推同一道。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 管理端 | `docConfig.vue` | JEditor 编辑协议/隐私；加载失败可提示；空内容 APP 回退内置文案 |
+| 后端 | `HomeaiDocConfigController` | 保存走 `XssUtils.richTextXss` + 20 万字上限 |
+| 后端 | `HomeaiAdminPathUtil` | 仅 **PUT** `/homeai/config/doc/**` 需控制台 JWT，GET 仍公开给 APP |
+| 后端 | `StorageController.isStorageAdmin` | 须控制台 JWT **且** `homeai:storage:file:list` |
+| 后端 | `RecipeRecommendUtil` | 做过 ≥3 次降权；「做过」补位最多 2 条且仅 1～2 次 |
+| SQL | `alter_homeai_doc_config.sql` + 菜单 | 表 + 菜单挂 APP版本下并授权；同步配置菜单改为按菜单 id 挂父级 |
+| 新库 | `init_homeai_tables.sql` / `init_homeai_menus.sql` | 补 `homeai_doc_config`、`homeai_sync_config` 与对应菜单 |
+
+**迁移 SQL：** `alter_homeai_doc_config.sql`、`alter_homeai_menus_doc_config.sql`（见第二节；`alter-order.txt` 同时补上第 123 轮 sync 脚本）。已有库执行后刷新菜单缓存。
+
+---
+
+### 第 126 轮：APP 更新下载卡住 + 离线缓存/弹窗（2026-09-03）
+
+> 「立即更新」一直停在下载安装包：代理接口先把整包从 OSS 落到磁盘再写出，客户端长时间收不到字节；插件默认 30s 超时且重定向跟随不可靠。断网后列表空白：连接态仍为 online/unknown 时会先等 30s 网络，且缓存未强制 JSON 序列化。各页重复 toast「离线模式」。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 后端 | `writeToResponse` | APK 代理边下边写；保存版本时不把代理 URL 写回库 |
+| APP 原生 | `HomeaiUpdatePlugin` | 下载超时 10 分钟；手动跟随重定向 |
+| APP | `cache` / `dataAccess` | 缓存 JSON 落盘；非 online 立即读缓存 |
+| APP | 各列表页 | 去掉离线 toast，只留顶栏横幅；首页计划走同一缓存键 |
+
+**无新迁移 SQL。** 须重启后端；离线/H5 热更新即可；原生下载超时修复须重打 APK。
+
+---
+
+### 第 127 轮：安装包代理本机缓存（2026-09-03）
+
+> APP 每次点更新都从 OSS 拉整包，流量浪费。按 SHA-256（无则按存储引用）在服务器 `upload/homeai/app-package-cache/` 留一份；指纹未变直接读磁盘，变了才再拉 OSS。首次未命中时边下边写并落盘。管理端上传成功即写入缓存。
+
+**无迁移 SQL。** 须重启后端。
+
+---
+
+### 第 128 轮：夜晚模式系统栏 + 关于页检查更新（2026-09-03）
+
+> 夜晚模式只覆盖了页面 CSS 变量，Uni 标题栏 / TabBar 仍吃 pages.json 浅色，Capacitor 状态栏也写死浅色。切换主题时同步导航栏、Tab、theme-color 与系统栏；个人中心「关于」改为弹层并提供检查更新。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| APP | `theme.ts` | `setNavigationBarColor` / `setTabBarStyle`；路由后重刷；系统栏走 StatusBar + `HomeaiUpdate.setSystemBars` |
+| APP | `homeai-theme.scss` | `.dark-mode` 强制覆盖 uni-page-head / uni-tabbar |
+| APP | `profile.vue` | 关于弹层展示版本；检查更新；可选立即更新（复用 updater） |
+
+**无迁移 SQL。** 标题栏/Tab 的 H5 样式热更新即可；系统底部导航栏颜色需重打 APK（新 `setSystemBars`）。
+
+---
+
+### 第 129 轮：夜晚模式对比度与白底残留（2026-09-03）
+
+> 模块图标写死深棕、首页双列白渐变、表单 Cell 强制 `#fff`、wot/uni 弹层仍用浅色底。改为主题变量，并全局覆盖单元格、选择器、ActionSheet。
+
+**无迁移 SQL。** H5 热更新即可。
+
+---
+
+### 第 130 轮：常用文件格式转换规则（2026-09-04）
+
+> 库里原先几乎只有 `csv→xlsx`，APP/管理端选目标格式时大量「暂无规则」。按本机 Word/Excel/PPT（及 LibreOffice）能力补齐常用互转，提交转换时校验规则。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| SQL | `alter_homeai_convert_rules_common.sql` | Word/Excel/PPT/txt/csv 共 20 条（含原 csv→xlsx）；`(source,target)` 唯一索引 |
+| 后端 | 转换提交 | 仅允许已启用规则；源/目标扩展名规范化 |
+| 管理端 | 文件列表 | 「转 PDF」覆盖 txt/csv |
+
+**迁移 SQL：** `alter_homeai_convert_rules_common.sql`
+
+---
+
+### 第 131 轮：管理端文件管理资源管理器布局（2026-09-04）
+
+> 方案 A：左侧目录树 + 可点面包屑 + 主区文件夹/文件混排（文件夹在前）；根目录「全部资料」同时列出子文件夹与未归档文件；空间统计收到工具栏可展开。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 管理端 | `fileList.vue` | 左右分栏；单击选中、双击/点名称进入文件夹；新建/上传默认当前目录 |
+| 管理端 | `storageApi.rootFiles` | 调用 `GET /homeai/storage/files/root` |
+
+**无迁移 SQL。** 管理端热更新即可。
+
+---
+
+### 第 132 轮：publish-all 控制台乱码与 Gradle 噪音（2026-09-04）
+
+> 双击发布后出现 `HA 鍝佺墝璧勬簮`（实为「品牌资源」）以及 `flatDir` / SDK XML 提示。Windows PowerShell 5.1 按系统 ANSI 解析**无 BOM** 的 UTF-8 脚本；AGP 对 Capacitor 空 `flatDir` 打 WARNING，且 `org.gradle.warning.mode=none` 压不住。
+
+| 项 | 落地 |
+|----|------|
+| 脚本编码 | 给含中文且缺 BOM 的 `.ps1` 补 UTF-8 BOM（含 `sync-android-branding.ps1`） |
+| 出包 | `patch-android.ps1` 在本地 libs 无 jar/aar 时去掉 `flatDir` |
+
+**无迁移 SQL。**
+
+---
+
+### 第 133 轮：APP 热更新 zip 改走后端代理下载（2026-09-04）
+
+> 「立即更新」停在「正在下载页面更新」：热更新 zip 仍走 OSS 预签名直链，APK 才走 `/package/download`。手机拉 OSS zip 可能无进度、长时间无结束。zip 与 APK 共用代理（`kind=resource`），并给下载进度回调改到主线程。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 后端 | `GET /homeai/app/version/package/download?kind=resource` | SDK 拉流 + 本地 zip 缓存 |
+| 后端 | 公开/管理端 DTO | `resourceUrl` 改为代理地址；保存时不覆盖真实存储引用 |
+| APP | 原生下载 | 进度投递主线程；无 Content-Length 时显示已下 MB |
+
+**无迁移 SQL。** 须重启后端。热更新文案/进度可随下次 zip 生效；原生进度线程修复须重打 APK 才进旧壳。
+
+---
+
+### 第 134 轮：APP 文件页内预览与用其他应用打开（2026-09-04）
+
+> 图片、PDF 已可页内看；Word/Excel/PPT 原先只提示外开。现对有 `fileId`/`materialId` 的 Office 走 `preview-pdf` 转 PDF 后用 pdf.js 页内预览。列表长按、预览页底部/长按均可「用其他应用打开」（下载原文件再调系统选择器，图片不再误存相册）。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| APP | `preview.vue` | Office 轮询转 PDF；PDF/图片长按菜单；底栏「用其他应用打开」 |
+| APP | `officePreviewPdf.ts` | 提交 `preview-pdf` 并轮询 `preview` |
+| APP | 资料列表 / 搜索 / 学习详情 | 长按增加外开；学习文档点击进预览页 |
+
+**无迁移 SQL。** 热更新即可。页内 Office 预览依赖服务端 LibreOffice 转换。
+
+---
+
+### 第 135 轮：APP Office 页内预览改为解析原文件（2026-09-04）
+
+> 不再把 Word/Excel/PPT 转成 PDF。App 内下载原文件后：docx 用 mammoth 转 HTML，xlsx/xls 用 SheetJS 出表格，pptx 抽幻灯片文本与图片。旧版 `.doc` / `.ppt` 仍提示用其他应用打开。复杂排版与 WPS 不完全一致时，可继续外开。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| APP | `officeNativePreview.ts` | CDN 加载 mammoth / xlsx / jszip |
+| APP | `preview.vue` | 去掉 `preview-pdf` 轮询；Excel 工作表切换、PPT 翻页 |
+
+**无迁移 SQL。** 热更新即可。首次预览需能访问 cdnjs。
+
+---
+
+### 第 136 轮：管理端新增/编辑统一居中对话框（2026-09-04）
+
+> 按确认的线框：短/中/长表单均改为居中 Modal（遮罩不可点关、底栏固定「取消 / 保存并关闭」）。账单、计划、学习、菜谱、用户、家庭、密钥、转换规则、成员管理从右侧抽屉迁出；分类与文件弹窗对齐宽度与底栏。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 管理端 | `HomeaiFormModal.vue` | 公共壳：居中、520/720/880/800、body 内滚动 |
+| 管理端 | 原 `*Drawer.vue` | 改为 `useModalInner`，中长表单两列 + Divider 分组 |
+| 管理端 | 分类 / 配额 / 模板 / 文件弹窗 | 同一壳与「保存并关闭」 |
+
+**无迁移 SQL。**
+
+---
+
+### 第 137 轮：管理端文件上传弹框对齐（2026-09-04）
+
+> 文件管理「上传文件」与「新增/编辑文件夹」对齐第 136 轮表单壳：中等宽度、分组与两列、自定义底栏；上传改为拖拽选文件，校验失败不关窗。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 管理端 | `fileList.vue` 上传 | `a-upload-dragger`、文件夹/可见性两列、家庭整行、底栏「上传并关闭」+ loading |
+| 管理端 | `fileList.vue` 文件夹 | 同壳两列 + 「保存并关闭」 |
+
+**无迁移 SQL。**
+
+---
+
+### 第 138 轮：管理端隐藏 Jeecg 内置演示菜单（2026-09-04）
+
+> 侧栏去掉主页、低代码开发、数据可视化、我的租户、系统监控、消息中心、统计报表、组件示例、导航示例及其子项；系统管理 / AI 应用 / 家庭AI 保留。菜单仍在库中，仅 `hidden=1`。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| SQL | `alter_homeai_menus_hide_jeecg_builtin.sql` | 顶级名称匹配 + 递归子节点 `hidden=1`（不影响账单「统计报表」） |
+
+**迁移 SQL：** `alter_homeai_menus_hide_jeecg_builtin.sql`。执行后退出重登。
+
+---
+
+### 第 139 轮：用户「微信昵称」改为「用户姓名」（2026-09-07）
+
+> APP 已替代小程序身份，管理端/APP 展示与校验文案改为用户姓名；库列仍为 `nickname`。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 管理端 | 用户/家庭成员/学习记录 | 列标题、表单、搜索 |
+| APP | 注册/资料/隐私兜底文案 | 姓名 |
+| 后端 | Excel 表头、资料接口错误提示 | 用户姓名 |
+
+**迁移 SQL：** `alter_homeai_wx_user_nickname_comment.sql`（仅改列注释）。
+
+---
+
+### 第 140 轮：格式转换结果落入原目录（2026-09-07）
+
+> 用户主动格式转换完成后，除处理记录外，在源文件同一文件夹登记一条资料记录（同可见性/家庭），文件管理可直接看到。预览用 PDF 任务不入库，避免重复文件。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 后端 | `registerConvertedFile` | 同目录、改扩展名、重名加序号 |
+| 后端 | `StorageOfficeConvertExecutorImpl` | 仅 `format_convert` 调用入库 |
+
+**无迁移 SQL。** 需重启后端。
+
+---
+
+### 第 141 轮：管理端 Jeecg 品牌文案改为家庭AI小工具（2026-09-07）
+
+> 浏览器标题、登录页、侧栏 Logo、页脚版权、关于页、AI 对话入口等用户可见的 JEECG/JeecgBoot 文案改为「家庭AI小工具」。接口路径 `/jeecgboot` 未改。
+
+**无迁移 SQL。** `.env` 变更需重启管理端 Vite。
+
+---
+
+### 第 142 轮：第二节 yml 运行时项进管理端（2026-09-07）
+
+> 上传分类体积、学习提醒开关/cron、微信订阅模板与字段、Office 转换、OSS 预签名、文件外链，以及已有的计划/存储配额，统一在「系统配置」页编辑。保存写入 `homeai_sys_config`（JSON）+ 原 Redis 计划/配额；yml 仍作冷启动默认。学习提醒改为每分钟对齐 cron，改时刻无需重启。JWT/微信 appid/secret 仍不进后台。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 后端 | `GET/PUT /homeai/config/sys` | `homeai:config:sys:list/edit`；管理端路径已登记 |
+| 后端 | 运行时读取 | 上传上限、Office、OSS、外链、订阅模板走 `IHomeaiSysConfigService` |
+| 管理端 | `sysConfig.vue` | 分 Tab；体积按 MB、配额按 GB |
+
+**迁移 SQL：** `alter_homeai_sys_config.sql`、`alter_homeai_menus_sys_config.sql`。执行后退出重登以刷新菜单。需重启后端。
+
+---
+
+### 第 143 轮：管理端登录后首屏加速（2026-09-07）
+
+> 登录页同步拉齐忘记密码/注册/短信/扫码表单；登录后 `getUserInfo` 塞全量字典，权限接口带上已隐藏的 Jeecg 演示树，再跳 Jeecg 仪表盘（同步 4 套图表首页）。改为进家庭 AI 综合统计、权限不下发隐藏顶级树、vue3 不再回传全量字典。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 管理端 | 默认首页 | `PageEnum.BASE_HOME` → `/homeai/dashboard/crossStats` |
+| 后端 | 默认首页 | `DefIndexConst` + `sys_role_index` |
+| 后端 | 权限 | `PermissionDataUtil.removeHiddenRootTrees`：隐藏顶级菜单整棵树不下发 |
+| 后端 | 字典 | vue3 的 `getUserInfo` / 第三方登录不再 `queryAllDictItems` |
+| 管理端 | 登录页 | 非主表单 `defineAsyncComponent` |
+
+**迁移 SQL：** `alter_homeai_def_index.sql`。执行后删 Redis `sys:cache:def_index::DEF_INDEX_ALL`，重启后端并退出重登。
+
+---
+
+### 第 144 轮：发布结束打印 APP 版本号（2026-09-07）
+
+> APP 发布成功后，结束摘要与打包/登记步骤都会打印 `versionName` 与 `versionCode`（读 `dist/apk/last-version.json`）。
+
+**无迁移 SQL。**
+
+---
+
+### 第 145 轮：修复 APP 出包 patch-android 解析失败（2026-09-07）
+
+> `patch-android.ps1` 去掉空 `flatDir` 时，正则里的引号被 PowerShell 5.1 提前截断，脚本无法解析，打包停在 `cap sync` 之后。随后 Gradle 在 UniApp 根目录执行，找不到 `settings.gradle`。已改为可解析写法，插件 `build.gradle` 用绝对路径，并给 `gradlew` 加上 `-p androidDir`。
+
+**无迁移 SQL。**
+
+---
+
+### 第 146 轮：下载页补传 1.0.14 并与打包解耦（2026-09-07）
+
+> 公网 `/app/` 仍是 2026-09-02 的 1.0.12：本机已打出 1.0.14，但打包失败重试时未走 `upload-apk`。下载页改为展示 `version.txt` 并用 `?v=` 防缓存；`publish-all` 在打包成功后单独上传下载页（不再绑在 pack 脚本内部）。
+
+**无迁移 SQL。**
+
+---
+
+### 第 147 轮：个人中心去重与头像 1:1（2026-09-07）
+
+> 编辑资料页头像改为正方形预览（`HomeMediaUpload` 增加 `square`）；个人中心去掉与顶部卡片重复的「编辑资料」菜单，仍可通过点击头像/姓名进入。
+
+**无迁移 SQL。**
+
+---
+
+### 第 148 轮：管理端登录不再跳到已隐藏的 analysis（2026-09-07）
+
+> 隐藏 Jeecg「主页」后 `/dashboard/analysis` 不再下发。浏览器里旧的 `homePath` 或登录 `redirect` 仍指向该地址就会 404。现将过期仪表盘路径映射到 `/homeai/dashboard/crossStats`，并忽略这条 redirect。
+
+**迁移 SQL：** `alter_homeai_def_index.sql` 补 `status=1`（已有库再执行一次即可）。
+
+---
+
+### 第 149 轮：管理端成功提示不再弹两次（2026-09-07）
+
+> `defHttp` 默认 `successMessageMode=success`，会把后端 `Result.message`（如「保存成功」）再 toast 一次；homeai 页面自己也有提示。拦截器对 `/homeai/` 不再自动成功提示。
+
+**无迁移 SQL。**
+
+---
+
+### 第 150 轮：AI 对话标题与聊天页布局（2026-09-07）
+
+> 首条提问把占位名「新对话」改成问题摘要；聊天页固定底栏输入框，用户气泡完整换行显示。
+
+**无迁移 SQL。**
+
+---
+
+### 第 151 轮：资料存储转换与 APP 预览（2026-09-07）
+
+> 修复 docx 转 txt 失败；看图点返回留下蒙层；PDF/Office「正在打开」与「准备打开」loading 不消失。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 后端 | `HomeaiOfficeTextExtractUtil` | docx→txt 直接解 OOXML 抽正文，不依赖本机 Office / POI |
+| 后端 | LibreOffice / Word 脚本 | `--convert-to txt:Text`；Word 另存 Unicode；脚本缓存升至 v3 |
+| APP | 图片预览 | 页内全屏层 + 返回键先关层；拦截 `uni.previewImage` 蒙层 |
+| APP | 外部打开 / 页内文档 | 下载超时、离开页面 `hideLoading`、CDN 失败可换源 |
+
+**无迁移 SQL。** 后端需重启；APP 预览/返回键需热更新或重打包。
+
+---
+
+### 第 152 轮：资料转换/预览引擎（2026-09-07）
+
+> APP 页内预览改为打包引擎；PDF 转换可走 Gotenberg；管理端复杂格式可走 kkFileView。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| APP | `docx-preview` + `xlsx` + `jszip` + `pdfjs-dist` | 不再依赖 CDN 脚本（vue-office 同款 Word 引擎） |
+| 后端 | Gotenberg | 配置 `gotenbergUrl` 后 PDF 转换优先 HTTP；失败回退本机 Office |
+| 管理端 | kkFileView | 配置 `kkFileViewUrl` 后预览弹窗走独立服务 iframe |
+| 部署 | `JeecgBoot/deploy/docs-preview/docker-compose.yml` | 可选启动 Gotenberg:3000、kkFileView:8012 |
+
+**无迁移 SQL。** 不填地址则行为与第 151 轮相同。启用后须重启后端，并保证 kkFileView 能访问文件外链主机。
+
+---
+
+### 第 153 轮：发布/启停脚本接入文档预览（2026-09-07）
+
+> `start-all` / `stop-all` / `publish-all` 在发/启停后端时默认拉起或停止本机 Gotenberg、kkFileView 容器。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 脚本 | `docs/deploy/common.ps1` | `Start/Stop-HomeaiDocsPreview`：`docker compose` 于 `JeecgBoot/deploy/docs-preview` |
+| 脚本 | `start-all` / `publish-all` | `-Backend` 默认 `up -d`；无 Docker 则跳过不阻断；`-SkipDocsPreview` 可关；`-DocsPreview` 可单独启动 |
+| 脚本 | `stop-all` | 停后端时默认 `compose stop`；`-KeepDocsPreview` 只停 Java |
+| 文档 | `docs/deploy/README.md` | 补充端口、系统配置填写说明 |
+
+**无迁移 SQL。** 容器起来后仍须在管理端填写本机地址才会真正走 HTTP 转换/预览。
+
+---
+
+### 第 154 轮：空系统 Windows 主机初始化（2026-09-07）
+
+> 给后续整机迁移准备：新电脑只装系统时，用脚本装运行依赖；MySQL/Redis 走 Docker，与现有开发机原生库互不抢端口。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 脚本 | `docs/deploy/init-windows-host.ps1` | winget：Git、JDK 17、Maven、Node、LibreOffice、Docker；长路径；禁止睡眠；`C:\homeai` |
+| 部署 | `JeecgBoot/deploy/runtime/docker-compose.yml` | MySQL 8 `:3306` 库 `jeecg`、Redis `:6379`；默认密码与 `application-dev.yml` 一致 |
+| 脚本 | `start-all` / `publish-all` | 仅当存在 `C:\homeai\use-docker-datastores` 时拉起 runtime 容器（开发机不创建该文件则不受影响） |
+
+**无迁移 SQL。** 装完 Docker 后通常需重启，再 `-Phase Datastores`。出 APK 仍建议留在开发机。
+
+---
+
+### 第 155 轮：开发机远程发布与巡检（2026-09-07）
+
+> 开发长期留在本机，服务跑在另一台 Windows：SSH 拉代码并远程执行现有 publish-all，同时做局域网/公网检查。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 配置 | `docs/deploy/host.env.example` | 主机局域网 IP、SSH、REMOTE_REPO；复制为 `host.env`（gitignore） |
+| 脚本 | `publish-remote.ps1` / `check-remote.ps1` / `remote-host.ps1` | push → 远程 pull → 远程 `publish-all -Backend -Frontend`；检查端口、探测 URL、SSH 本机健康 |
+| 主机 | `init-windows-host.ps1` | 默认启用 OpenSSH Server，防火墙仅专用网络放行 22 |
+| 主机 | `check-host-local.ps1` | 端口/进程/docker/backend.log，供 SSH 调用 |
+| 文档 | `docs/deploy/service-host-migration.md` | 9 月末迁机对照：架构、初始化、远程发布、导库、验收 |
+
+**无迁移 SQL。** APK 仍在开发机打包。未提交的本地改动不会同步到主机。
+
+---
+
 ### 第 122 轮：发布脚本自动登记 APP 版本（2026-08-31）
 
 > `publish-all.ps1 -App` 此前只打包，登记版本需手动去管理端。新增 `-RegisterVersion` 一键闭环：打包后自动上传 APK + H5 zip 并更新后台版本号（enabled=1 即刻推送）。
@@ -2115,6 +2506,44 @@ alter_homeai_perf_indexes.sql          # 账单 user+date、学习 user+study_da
 ```text
 alter_homeai_sync_config.sql           # 离线同步/缓存配置表 + 默认行
 alter_homeai_menus_sync_config.sql     # 管理端「同步配置」菜单（挂 APP版本 下）
+```
+
+### 第 125 轮（已有库）
+
+```text
+alter_homeai_doc_config.sql            # 协议/隐私富文本表
+alter_homeai_menus_doc_config.sql      # 管理端「协议与隐私配置」菜单
+```
+
+### 第 130 轮（已有库）
+
+```text
+alter_homeai_convert_rules_common.sql   # 常用 Word/Excel/PPT/txt/csv 转换规则
+```
+
+### 第 138 轮（已有库）
+
+```text
+alter_homeai_menus_hide_jeecg_builtin.sql  # 隐藏 Jeecg 演示/低代码等顶级菜单及子菜单
+```
+
+### 第 139 轮（已有库）
+
+```text
+alter_homeai_wx_user_nickname_comment.sql  # nickname 列注释改为用户姓名
+```
+
+### 第 142 轮（已有库）
+
+```text
+alter_homeai_sys_config.sql           # 系统运行时配置表
+alter_homeai_menus_sys_config.sql     # 管理端「系统配置」菜单
+```
+
+### 第 143 轮（已有库）
+
+```text
+alter_homeai_def_index.sql            # 默认首页改为综合统计
 ```
 
 ### 第 26 轮（已有库）
@@ -2274,6 +2703,10 @@ alter_homeai_menus_iteration8.sql
 ---
 
 ## 四、建议下一轮执行顺序
+
+### 第 125 轮（已落地）
+
+协议后台可编辑；存储超管按权限码；常做菜推荐降权。须跑 SQL 并发布后端 + 管理端。
 
 ### 第 117 轮（已落地）
 
@@ -2475,7 +2908,7 @@ H5 + Capacitor 走手机号登录（不再误走小程序微信登录）；管�
 
 1. 真机侧载 Capacitor APK：登录、HTTP、计划通知、相册、返回键、拍照选图、菜谱/学习改删、**资料/学习多格式上传**  
 2. 忘记密码短信验证码（需阿里云模板；当前仍走管理员后台重置）  
-3. （可选）`isStorageAdmin` 按权限码收紧，避免任意控制台 JWT 预览全部资料  
+3. ~~（可选）`isStorageAdmin` 按权限码收紧，避免任意控制台 JWT 预览全部资料~~ **【第 125 轮已落地】**  
 
 ### 第 68 轮（已落地）
 
@@ -2559,7 +2992,7 @@ Android 离线 SDK 脚本（第 54 轮）已归档；发版已改为 `pnpm pack:
 ### 第 43 轮（可选）
 
 1. ~~（可选）微信正式上架：`VITE_*_RELEASE` 填真实域名；隐私协议弹窗（`__usePrivacyCheck__`）与微信后台合法域名~~ **【已暂缓，按产品决定不上架】**；生产构建守卫（第 38 轮）已就位，后续如需上架按此清单执行即可  
-2. 菜谱推荐多样性（近期做过降权，避免总推同一道）  
+2. ~~菜谱推荐多样性（近期做过降权，避免总推同一道）~~ **【第 125 轮已落地】**  
 3. （评估）`/homeai/**` 在 Shiro 链为 `anon`，纵深依赖 MVC 拦截器 + `@RequiresPermissions`，如需更强隔离可在 Nginx 层做路径级 ACL  
 4. 小程序双重 toast 收敛（request 层与页面 catch 去重，微信 toast 替换式显示、影响小）
 

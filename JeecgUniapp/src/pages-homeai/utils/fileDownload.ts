@@ -4,6 +4,7 @@
  */
 import { downloadFailTitle, resolveContentUrl } from './contentUrl'
 import { getFileExt, isImageExt, isVideoExt } from './filePreview'
+import { withTimeout } from './withTimeout'
 import {
   downloadToTemp,
   openLocalDocument,
@@ -91,7 +92,7 @@ export async function downloadStorageFile(input: DownloadFileInput): Promise<str
   const fileName = input.originalName || (ext ? `file.${ext}` : undefined)
   uni.showLoading({ title: '下载中...', mask: true })
   try {
-    const tempPath = await downloadToTemp(url, fileName)
+    const tempPath = await withTimeout(downloadToTemp(url, fileName), 90000, '下载超时，请稍后重试')
     uni.hideLoading()
 
     if (isImageExt(ext) || isVideoExt(ext)) {
@@ -101,20 +102,47 @@ export async function downloadStorageFile(input: DownloadFileInput): Promise<str
         return tempPath
       }
       uni.showLoading({ title: '保存中...', mask: true })
-      if (isImageExt(ext)) await saveImageToAlbum(tempPath)
-      else await saveVideoToAlbum(tempPath)
-      uni.hideLoading()
+      try {
+        if (isImageExt(ext)) await saveImageToAlbum(tempPath)
+        else await saveVideoToAlbum(tempPath)
+      } finally {
+        uni.hideLoading()
+      }
       uni.showToast({ title: '已保存到相册', icon: 'success' })
       return tempPath
     }
 
-    openLocalDocument(tempPath, fileName)
+    await openLocalDocument(tempPath, fileName)
     return tempPath
   } catch (e: any) {
-    uni.hideLoading()
     console.error('资料下载失败', e)
     uni.showToast({ title: downloadFailTitle(e), icon: 'none' })
     return undefined
+  } finally {
+    uni.hideLoading()
+  }
+}
+
+/** 下载原文件并用系统应用打开（不保存到相册） */
+export async function openStorageFileExternally(input: DownloadFileInput): Promise<string | undefined> {
+  const ext = (input.extension || getFileExt(input.originalName || input.fileUrl || '')).toLowerCase()
+  const url = resolveDownloadUrl(input)
+  if (!url) {
+    uni.showToast({ title: '无法获取文件地址', icon: 'none' })
+    return undefined
+  }
+  const fileName = input.originalName || (ext ? `file.${ext}` : undefined)
+  uni.showLoading({ title: '准备打开…', mask: true })
+  try {
+    const tempPath = await withTimeout(downloadToTemp(url, fileName), 90000, '下载超时，请稍后重试')
+    await openLocalDocument(tempPath, fileName)
+    return tempPath
+  } catch (e: any) {
+    console.error('用其他应用打开失败', e)
+    uni.showToast({ title: downloadFailTitle(e), icon: 'none' })
+    return undefined
+  } finally {
+    uni.hideLoading()
   }
 }
 

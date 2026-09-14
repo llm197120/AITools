@@ -1,5 +1,5 @@
 <template>
-  <BasicDrawer v-bind="$attrs" @register="registerDrawer" :title="isUpdate ? '编辑学习资料' : '新增学习资料'" width="40%">
+  <HomeaiFormModal v-bind="$attrs" size="medium" @register="registerDrawer" :title="isUpdate ? '编辑学习资料' : '新增学习资料'">
     <BasicForm @register="registerForm" @submit="handleSubmit">
       <template #fileUrlSlot="{ model, field }">
         <template v-if="model.type === 'link'">
@@ -26,22 +26,24 @@
       </template>
     </BasicForm>
     <template #footer>
-      <a-button type="primary" :loading="saving" @click="submit">保存</a-button>
-      <a-button style="margin-left: 8px" @click="closeDrawer()">取消</a-button>
+      <a-button @click="closeDrawer()">取消</a-button>
+      <a-button type="primary" :loading="saving" @click="submit">保存并关闭</a-button>
     </template>
-  </BasicDrawer>
+  </HomeaiFormModal>
   <HomeaiFilePreviewModal ref="previewModalRef" />
 </template>
 
 <script lang="ts" name="homeai-learn-drawer" setup>
   import { ref, onMounted } from 'vue';
-  import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
+  import { useModalInner } from '/@/components/Modal';
   import { BasicForm, useForm } from '/@/components/Form';
   import { learnApi } from '/@/api/homeai';
   import type { HomeaiCategory, HomeaiPayload } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';
   import HomeaiMediaUpload from '/@/views/homeai/components/HomeaiMediaUpload.vue';
   import HomeaiFilePreviewModal from '/@/views/homeai/components/HomeaiFilePreviewModal.vue';
+  import HomeaiFormModal from '../components/HomeaiFormModal.vue';
+  import { COL_FULL, homeaiGroup, omitHomeaiFormMeta } from '../utils/formLayout';
   import { useUserLabel } from '../hooks/useUserLabel';
 
   const emit = defineEmits(['success']);
@@ -103,7 +105,7 @@
     await Promise.all([loadCategoryOptions(), loadUserOptions()]);
   });
 
-  const [registerDrawer, { closeDrawer }] = useDrawerInner((data) => {
+  const [registerDrawer, { closeModal: closeDrawer }] = useModalInner((data) => {
     isUpdate.value = data.isUpdate || false;
     recordId.value = data.record?.id || '';
     originalUserId.value = data.record?.userId || '';
@@ -123,8 +125,10 @@
 
   const [registerForm, { setFieldsValue, resetFields, submit }] = useForm({
     labelWidth: 100,
+    baseColProps: { span: 12 },
     schemas: [
-      { field: 'title', label: '标题', component: 'Input', required: true },
+      homeaiGroup('基本信息', '_g_basic'),
+      { field: 'title', label: '标题', component: 'Input', required: true, colProps: COL_FULL },
       {
         field: 'type',
         label: '类型',
@@ -165,7 +169,7 @@
         componentProps: { options: categoryOptions, allowClear: true, placeholder: '请选择分类' },
       },
       { field: 'tags', label: '标签', component: 'Input', help: '多个标签用逗号分隔' },
-      { field: 'fileUrl', label: '资料文件', component: 'Input', slot: 'fileUrlSlot' },
+      { field: 'fileUrl', label: '资料文件', component: 'Input', slot: 'fileUrlSlot', colProps: COL_FULL },
     ],
     showSubmitButton: false,
     showResetButton: false,
@@ -201,11 +205,12 @@
     }
     saving.value = true;
     try {
+      const payload = omitHomeaiFormMeta(values);
       if (isUpdate.value) {
-        await learnApi.edit(recordId.value, values);
+        await learnApi.edit(recordId.value, payload);
         createMessage.success('编辑成功');
       } else {
-        await learnApi.add(values);
+        await learnApi.add(payload);
         createMessage.success('新增成功');
       }
       closeDrawer();

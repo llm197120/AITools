@@ -11,6 +11,7 @@ import org.jeecg.common.system.query.QueryGenerator;
 import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.modules.homeai.storage.entity.ConvertRule;
 import org.jeecg.modules.homeai.storage.service.IConvertRuleService;
+import org.jeecg.modules.homeai.storage.util.ConvertRuleFormatUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -46,6 +47,10 @@ public class ConvertRuleController {
     @Operation(summary="转换规则-新增")
     @RequiresPermissions("homeai:storage:rule:add")
     public Result<?> add(@RequestBody ConvertRule rule) {
+        //update-begin---author:cursor---date:2026-09-04---for:【转换规则】入库前规范化扩展名---
+        rule.setSourceFormat(ConvertRuleFormatUtil.normalize(rule.getSourceFormat()));
+        rule.setTargetFormat(ConvertRuleFormatUtil.normalize(rule.getTargetFormat()));
+        //update-end---author:cursor---date:2026-09-04---for:【转换规则】入库前规范化扩展名---
         ruleService.save(rule);
         return Result.OK("新增成功");
     }
@@ -56,6 +61,14 @@ public class ConvertRuleController {
     @Operation(summary="转换规则-编辑")
     @RequiresPermissions("homeai:storage:rule:edit")
     public Result<?> edit(@RequestBody ConvertRule rule) {
+        //update-begin---author:cursor---date:2026-09-04---for:【转换规则】入库前规范化扩展名---
+        if (rule.getSourceFormat() != null) {
+            rule.setSourceFormat(ConvertRuleFormatUtil.normalize(rule.getSourceFormat()));
+        }
+        if (rule.getTargetFormat() != null) {
+            rule.setTargetFormat(ConvertRuleFormatUtil.normalize(rule.getTargetFormat()));
+        }
+        //update-end---author:cursor---date:2026-09-04---for:【转换规则】入库前规范化扩展名---
         ruleService.updateById(rule);
         return Result.OK("编辑成功");
     }

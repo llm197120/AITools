@@ -90,13 +90,19 @@ function asyncImportRoute(routes: AppRouteRecordRaw[] | undefined) {
       if (layoutFound) {
         item.component = layoutFound;
       } else {
-        if (component.indexOf('dashboard/') > -1) {
-          //当数据标sys_permission中component没有拼接index时前端需要拼接
-          if (component.indexOf('/index') < 0) {
-            component = component + '/index';
-          }
+        //update-begin---author:copilot---date:2026-09-02---for:【bug】homeai 综合统计含 dashboard/ 被误拼 /index 导致组件缺失---
+        // 官方工作台为 views/dashboard/Analysis/index.vue 等目录页，菜单常不写 /index。
+        // 仅去掉 /views 后仍以 dashboard/ 开头时才补 /index；homeai/dashboard/crossStats 是独立 vue 文件。
+        const viewPath = String(component)
+          .replace(/^\/?views\//, '')
+          .replace(/^\//, '');
+        if (viewPath.startsWith('dashboard/') && component.indexOf('/index') < 0) {
+          const indexed = dynamicImport(dynamicViewsModules, `${component}/index`);
+          item.component = indexed || dynamicImport(dynamicViewsModules, component as string);
+        } else {
+          item.component = dynamicImport(dynamicViewsModules, component as string);
         }
-        item.component = dynamicImport(dynamicViewsModules, component as string);
+        //update-end---author:copilot---date:2026-09-02---for:【bug】homeai 综合统计含 dashboard/ 被误拼 /index 导致组件缺失---
       }
     } else if (name) {
       item.component = getParentLayout();

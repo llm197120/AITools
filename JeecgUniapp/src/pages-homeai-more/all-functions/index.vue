@@ -13,46 +13,46 @@
       <text class="group-title">功能模块</text>
       <view class="item" v-for="m in modules" :key="m.path" @click="go(m.path)">
         <view class="item-icon">
-          <wd-icon :name="m.icon" size="18px" :color="haiPrimary" />
+          <wd-icon :name="m.icon" size="18px" color="var(--hai-primary)" />
         </view>
         <view class="item-texts">
           <text class="label">{{ m.label }}</text>
           <text class="sub">{{ m.sub }}</text>
         </view>
-        <wd-icon name="arrow-right" size="14px" :color="haiTertiary" />
+        <wd-icon name="arrow-right" size="14px" color="var(--hai-text-tertiary)" />
       </view>
     </view>
     <view class="group">
       <text class="group-title">快捷操作</text>
       <view class="item" @click="go('/pages-homeai-more/bill/add?type=expense')">
         <view class="item-icon">
-          <wd-icon name="money-circle" size="18px" :color="haiPrimary" />
+          <wd-icon name="money-circle" size="18px" color="var(--hai-primary)" />
         </view>
         <view class="item-texts">
           <text class="label">记一笔支出</text>
           <text class="sub">快速记账</text>
         </view>
-        <wd-icon name="arrow-right" size="14px" :color="haiTertiary" />
+        <wd-icon name="arrow-right" size="14px" color="var(--hai-text-tertiary)" />
       </view>
       <view class="item" @click="go('/pages-homeai-more/bill/import')">
         <view class="item-icon">
-          <wd-icon name="file-add" size="18px" :color="haiPrimary" />
+          <wd-icon name="file-add" size="18px" color="var(--hai-primary)" />
         </view>
         <view class="item-texts">
           <text class="label">导入账单</text>
           <text class="sub">识别账单明细</text>
         </view>
-        <wd-icon name="arrow-right" size="14px" :color="haiTertiary" />
+        <wd-icon name="arrow-right" size="14px" color="var(--hai-text-tertiary)" />
       </view>
       <view class="item" @click="go('/pages-homeai-more/learn/record')">
         <view class="item-icon">
-          <wd-icon name="history" size="18px" :color="haiPrimary" />
+          <wd-icon name="history" size="18px" color="var(--hai-primary)" />
         </view>
         <view class="item-texts">
           <text class="label">学习记录</text>
           <text class="sub">查看打卡历史</text>
         </view>
-        <wd-icon name="arrow-right" size="14px" :color="haiTertiary" />
+        <wd-icon name="arrow-right" size="14px" color="var(--hai-text-tertiary)" />
       </view>
     </view>
   </view>
@@ -62,10 +62,6 @@
 import { useHomeaiPageGuard } from '../../pages-homeai/utils/useHomeaiPageGuard'
 
 useHomeaiPageGuard()
-
-/** 与 --hai-primary / --hai-text-tertiary 对齐（组件 color 属性需实色） */
-const haiPrimary = '#1B4F8A'
-const haiTertiary = '#C4BFB6'
 
 const modules = [
   { icon: 'chat', label: 'AI对话', sub: '智能问答助手', path: '/pages-homeai-ai/ai/conversations' },

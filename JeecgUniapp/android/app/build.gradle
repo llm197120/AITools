@@ -7,8 +7,8 @@ android {
         applicationId "com.homeai.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 108
-        versionName "1.0.8+20260902-101956"
+        versionCode 114
+        versionName "1.0.14+20260907-172109"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -24,11 +24,6 @@ android {
     }
 }
 
-repositories {
-    flatDir{
-        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
-    }
-}
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')

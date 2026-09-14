@@ -2,7 +2,9 @@ package org.jeecg.modules.homeai.config;
 
 import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
+import org.jeecg.modules.homeai.config.service.IHomeaiSysConfigService;
 import org.jeecg.modules.homeai.preview.HomeaiPreviewKind;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -30,6 +32,11 @@ public class HomeaiUploadLimitService {
     @Value("${homeai.upload.limits.text:10485760}")
     private long textLimit;
 
+    //update-begin---author:cursor---date:2026-09-07---for:【系统配置】上传上限走后台覆盖-----------
+    @Autowired
+    private IHomeaiSysConfigService sysConfigService;
+    //update-end---author:cursor---date:2026-09-07---for:【系统配置】上传上限走后台覆盖-----------
+
     //update-begin---author:cursor---date:2026-08-21---for:【HomeAI-R63】按扩展名拦截单文件大小-----------
     public void assertAllowed(String extension, long fileSize) {
         if (fileSize <= 0) {
@@ -45,6 +52,9 @@ public class HomeaiUploadLimitService {
     }
 
     public long limitOf(String category) {
+        if (sysConfigService != null) {
+            return sysConfigService.uploadLimitOf(category);
+        }
         if (oConvertUtils.isEmpty(category)) {
             return documentLimit;
         }

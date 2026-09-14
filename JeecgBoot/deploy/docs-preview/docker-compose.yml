@@ -1,0 +1,31 @@
+# 文档转换 / 预览附属服务（可选）
+#
+# 启动：日常用仓库 docs/deploy/start-all.ps1（发后端时默认拉起）；或在本目录
+#   docker compose up -d
+#
+# 后台「系统配置 → Office 转换」填写：
+#   Gotenberg  http://127.0.0.1:3000
+#   kkFileView http://127.0.0.1:8012
+#
+# kkFileView 会去拉取文件 URL，须能访问后台「文件外链」主机
+# （Docker Desktop 访问宿主机用 host.docker.internal）。
+# 生产务必配置 kkFileView trust.host 白名单，防止 SSRF。
+# 后台只允许把服务地址配成本机/局域网，文档不会发到公网 SaaS。
+
+version: '3.8'
+services:
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: homeai-gotenberg
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+
+  kkfileview:
+    image: keking/kkfileview:latest
+    container_name: homeai-kkfileview
+    restart: unless-stopped
+    ports:
+      - '8012:8012'
+    environment:
+      KK_OFFICE_PREVIEW_TYPE: pdf

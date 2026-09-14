@@ -35,7 +35,7 @@ withDefaults(
     icon: '',
     iconName: 'inbox',
     iconSize: '48px',
-    iconColor: '#C4BFB6',
+    iconColor: 'var(--hai-text-tertiary)',
     title: '暂无数据',
     hint: '',
     actionText: '',

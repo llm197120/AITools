@@ -286,6 +286,55 @@ export interface HomeaiPlanConfig {
   [key: string]: unknown;
 }
 
+/** 系统运行时配置（yml 第二节进后台；计划/配额一并读写） */
+export interface HomeaiSysConfig {
+  upload?: {
+    video?: number;
+    audio?: number;
+    image?: number;
+    document?: number;
+    archive?: number;
+    text?: number;
+  };
+  learn?: {
+    remindEnabled?: boolean;
+    remindCron?: string;
+  };
+  wechat?: {
+    planRemindTemplateId?: string;
+    learnRemindTemplateId?: string;
+    learnRemindTitleField?: string;
+    learnRemindProgressField?: string;
+    learnRemindGoalField?: string;
+    learnRemindDateField?: string;
+    learnRemindTitleText?: string;
+  };
+  office?: {
+    preferMsOffice?: boolean;
+    sofficePath?: string;
+    powershellPath?: string;
+    convertTimeoutSeconds?: number;
+    gotenbergUrl?: string;
+    kkFileViewUrl?: string;
+  };
+  oss?: {
+    privateBucket?: boolean;
+    presignExpireSeconds?: number;
+  };
+  file?: {
+    baseUrl?: string;
+    scheme?: string;
+    host?: string;
+  };
+  plan?: HomeaiPlanConfig;
+  storage?: {
+    defaultUserLimitBytes?: number;
+    defaultFamilyLimitBytes?: number;
+    warnPercent?: number;
+  };
+  [key: string]: unknown;
+}
+
 /** APP 当前发布版本（homeai_app_version） */
 export interface HomeaiAppVersion {
   id?: string;

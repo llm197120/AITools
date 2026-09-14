@@ -10,6 +10,8 @@ import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.util.oConvertUtils;
 import org.jeecg.modules.homeai.appversion.entity.HomeaiAppVersion;
 import org.jeecg.modules.homeai.appversion.service.IHomeaiAppVersionService;
+import org.jeecg.modules.homeai.appversion.service.HomeaiAppPackageCache;
+import org.jeecg.modules.homeai.appversion.util.HomeaiAppPackageDownloadPaths;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.preview.HomeaiFileMime;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,9 @@ public class HomeaiAppVersionController {
     private IHomeaiAppVersionService appVersionService;
 
     @Autowired
+    private HomeaiAppPackageCache appPackageCache;
+
+    @Autowired
     private IHomeaiFileStorageService fileStorageService;
 
     @GetMapping
@@ -36,33 +41,55 @@ public class HomeaiAppVersionController {
         return Result.OK(appVersionService.toPublic(appVersionService.requireCurrent()));
     }
 
-    //update-begin---author:cursor---date:2026-08-31---for:【APP更新】APK 代理下载（SDK 拉流），绕开 OSS ApkDownloadForbidden 预签名直链限制---
+    //update-begin---author:cursor---date:2026-09-04---for:【APP热更新】zip 与 APK 共用代理下载（kind=resource）---
     /**
-     * APK 下载（匿名公开）：OSS 默认域名禁止预签名 URL 直链分发 .apk（ApkDownloadForbidden），
-     * 由后端用 SDK 拉流（Header 签名，实测放行）后转发给客户端。
+     * APK / H5 zip 下载（匿名公开）：OSS 预签名直链对部分类型不可用，由后端 SDK 拉流后转发。
+     * kind=resource 为热更新 zip，缺省或 apk 为安装包。
      */
     @GetMapping("/package/download")
-    public void downloadPackage(HttpServletResponse response) {
+    public void downloadPackage(@RequestParam(value = "kind", required = false) String kind,
+                                HttpServletResponse response) {
         HomeaiAppVersion row = appVersionService.requireCurrent();
-        if (oConvertUtils.isEmpty(row.getApkUrl())) {
+        boolean resource = HomeaiAppPackageDownloadPaths.isResourceKind(kind);
+        String stored = resource ? row.getResourceUrl() : row.getApkUrl();
+        if (oConvertUtils.isEmpty(stored)) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
             return;
         }
+        String ext = resource ? "zip" : "apk";
+        String downloadName = resource
+                ? "homeai-h5-" + row.getVersionCode() + ".zip"
+                : "homeai-" + row.getVersionCode() + ".apk";
         try {
-            Path path = fileStorageService.resolveLocalPath(row.getApkUrl());
-            HomeaiFileMime.writeLocalFile(response, path, "homeai-" + row.getVersionCode() + ".apk", "apk");
+            Path cached = resource ? appPackageCache.lookupResource(row) : appPackageCache.lookupApk(row);
+            if (HomeaiAppPackageCache.isUsable(cached)) {
+                HomeaiFileMime.writeLocalFile(response, cached, downloadName, ext);
+                return;
+            }
+            Path dest = resource ? appPackageCache.targetResource(row) : appPackageCache.targetApk(row);
+            synchronized (appPackageCache.lockFor(dest)) {
+                cached = resource ? appPackageCache.lookupResource(row) : appPackageCache.lookupApk(row);
+                if (HomeaiAppPackageCache.isUsable(cached)) {
+                    HomeaiFileMime.writeLocalFile(response, cached, downloadName, ext);
+                    return;
+                }
+                fileStorageService.writeToResponse(stored, response, downloadName, ext, dest);
+                if (HomeaiAppPackageCache.isUsable(dest)) {
+                    appPackageCache.pruneOthers(dest);
+                }
+            }
         } catch (Exception e) {
-            log.error("APK 下载失败", e);
+            log.error(resource ? "热更新包下载失败" : "APK 下载失败", e);
             if (!response.isCommitted()) {
                 try {
-                    response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "APK 读取失败");
+                    response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "更新包读取失败");
                 } catch (Exception ignored) {
                     // ignore
                 }
             }
         }
     }
-    //update-end---author:cursor---date:2026-08-31---for:【APP更新】APK 代理下载（SDK 拉流）---
+    //update-end---author:cursor---date:2026-09-04---for:【APP热更新】zip 与 APK 共用代理下载---
 
     @GetMapping("/admin")
     @Operation(summary = "APP版本-管理端查询")

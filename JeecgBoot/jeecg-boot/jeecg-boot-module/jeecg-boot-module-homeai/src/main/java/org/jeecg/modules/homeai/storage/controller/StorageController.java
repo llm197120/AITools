@@ -14,7 +14,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import org.jeecg.common.exception.JeecgBootException;
 import org.jeecg.common.system.query.QueryGenerator;
 import org.jeecg.modules.homeai.audit.service.IHomeaiAuditLogService;
-import com.fasterxml.jackson.databind.JsonNode;
 import org.jeecg.modules.homeai.config.HomeaiSecurityUtil;
 import org.jeecg.modules.homeai.config.service.IHomeaiFileStorageService;
 import org.jeecg.modules.homeai.config.service.IHomeaiStorageConfigService;
@@ -23,6 +22,7 @@ import org.jeecg.modules.homeai.family.service.IFamilyService;
 import org.jeecg.modules.homeai.preview.HomeaiFilePreviewDto;
 import org.jeecg.modules.homeai.preview.IHomeaiFilePreviewService;
 import org.jeecg.modules.homeai.storage.constant.StorageVisibility;
+import org.jeecg.modules.homeai.storage.dto.StorageRecycleBatchRequest;
 import org.jeecg.modules.homeai.storage.util.StorageFileNameUtil;
 import org.jeecg.modules.homeai.storage.entity.StorageFile;
 import org.jeecg.modules.homeai.storage.entity.StorageFolder;
@@ -115,18 +115,19 @@ public class StorageController {
         //update-end---author:cursor---date:2026-08-22---for:【审查B】APP 业务归属优先 HomeAI 用户-----------
     }
 
-    /** 管理端/具备资料存储权限的角色可查看全部资源 */
+    /** 仅控制台 JWT 且具备资料列表权限可查看全部资源，避免任意控制台账号预览全部资料 */
     private boolean isStorageAdmin(HttpServletRequest request) {
-        if (securityUtil.isConsoleAuthenticated(request)) {
-            return true;
+        //update-begin---author:cursor---date:2026-09-03---for:【HomeAI-R125】存储超管按权限码收紧-----------
+        if (!securityUtil.isConsoleAuthenticated(request)) {
+            return false;
         }
         try {
-            if (SecurityUtils.getSubject() != null && SecurityUtils.getSubject().isAuthenticated()) {
-                return SecurityUtils.getSubject().isPermitted("homeai:storage:file:list");
-            }
+            return SecurityUtils.getSubject() != null
+                    && SecurityUtils.getSubject().isPermitted("homeai:storage:file:list");
         } catch (Exception ignored) {
+            return false;
         }
-        return false;
+        //update-end---author:cursor---date:2026-09-03---for:【HomeAI-R125】存储超管按权限码收紧-----------
     }
 
     private void validateVisibility(String visibility) {
@@ -204,6 +205,20 @@ public class StorageController {
             file.setFamilyId(null);
             resourceFamilyService.deleteByFileId(file.getId());
         }
+    }
+
+    private String sanitizeFileOriginalName(StorageFile sf, String name) {
+        String trimmed = StorageFileNameUtil.sanitizeOriginalName(name);
+        int dot = trimmed.lastIndexOf('.');
+        if (dot > 0 && oConvertUtils.isNotEmpty(sf.getExtension())) {
+            String ext = trimmed.substring(dot + 1).toLowerCase();
+            if (!sf.getExtension().equalsIgnoreCase(ext)) {
+                trimmed = trimmed.substring(0, dot) + "." + sf.getExtension();
+            }
+        } else if (oConvertUtils.isNotEmpty(sf.getExtension()) && !trimmed.toLowerCase().endsWith("." + sf.getExtension().toLowerCase())) {
+            trimmed = trimmed + "." + sf.getExtension();
+        }
+        return trimmed;
     }
 
     /** 以 homeai_family_member 为准，wx_user.family_id 仅作兜底 */
@@ -483,21 +498,60 @@ public class StorageController {
         if (!StorageAccessUtil.canWriteFile(userId, sf) && !isStorageAdmin(request)) {
             return Result.error("无权修改该文件");
         }
-        String trimmed = StorageFileNameUtil.sanitizeOriginalName(name);
-        int dot = trimmed.lastIndexOf('.');
-        if (dot > 0 && oConvertUtils.isNotEmpty(sf.getExtension())) {
-            String ext = trimmed.substring(dot + 1).toLowerCase();
-            if (!sf.getExtension().equalsIgnoreCase(ext)) {
-                trimmed = trimmed.substring(0, dot) + "." + sf.getExtension();
-            }
-        } else if (oConvertUtils.isNotEmpty(sf.getExtension()) && !trimmed.toLowerCase().endsWith("." + sf.getExtension().toLowerCase())) {
-            trimmed = trimmed + "." + sf.getExtension();
-        }
-        sf.setOriginalName(trimmed);
+        sf.setOriginalName(sanitizeFileOriginalName(sf, name));
         sf.setUpdateTime(new Date());
         fileService.updateById(sf);
         return Result.OK("重命名成功");
     }
+
+    //update-begin---author:cursor---date:2026-09-04---for:【管理端文件】编辑名称/目录/可见性---
+    /**
+     * 编辑文件：展示名、所属文件夹、可见性（管理端与 APP 共用）。
+     * folderId 空字符串表示移到根目录「全部资料」。
+     */
+    @PutMapping("/files/{id}")
+    @Transactional(rollbackFor = Exception.class)
+    public Result<?> updateFile(@PathVariable String id,
+                                @RequestParam String name,
+                                @RequestParam(required = false) String folderId,
+                                @RequestParam String visibility,
+                                @RequestParam(required = false) String familyIds,
+                                HttpServletRequest request) {
+        StorageFile sf = fileService.getById(id);
+        if (sf == null) return Result.error("文件不存在");
+        String userId = getUserId(request);
+        if (userId == null) return Result.error("未登录");
+        boolean admin = isStorageAdmin(request);
+        if (!StorageAccessUtil.canWriteFile(userId, sf) && !admin) {
+            return Result.error("无权修改该文件");
+        }
+        if (oConvertUtils.isEmpty(name) || name.trim().isEmpty()) {
+            return Result.error("文件名称不能为空");
+        }
+        try {
+            validateVisibility(visibility);
+            List<String> assignedFamilies = resolveFamilyIds(visibility, familyIds, resolveUserFamilyId(userId), admin);
+            if (oConvertUtils.isNotEmpty(folderId)) {
+                StorageFolder folder = folderService.getById(folderId);
+                if (folder == null) return Result.error("文件夹不存在");
+                if (!StorageAccessUtil.canWriteFolder(userId, folder) && !admin) {
+                    return Result.error("无权移入该文件夹");
+                }
+                sf.setFolderId(folderId);
+            } else {
+                sf.setFolderId(null);
+            }
+            sf.setOriginalName(sanitizeFileOriginalName(sf, name));
+            applyFileVisibility(sf, visibility, assignedFamilies);
+            sf.setUpdateTime(new Date());
+            fileService.updateById(sf);
+            resourceFamilyService.enrichFile(sf);
+            return Result.OK("修改成功");
+        } catch (JeecgBootException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+    //update-end---author:cursor---date:2026-09-04---for:【管理端文件】编辑名称/目录/可见性---
     //update-end---author:admin ---date:2026-08-05  for：根目录文件列表与重命名-----------
 
     /**
@@ -662,12 +716,11 @@ public class StorageController {
     @PutMapping("/restore")
     @Operation(summary = "资料存储-从回收站恢复(管理端)")
     @RequiresPermissions("homeai:storage:restore")
-    public Result<?> restore(@RequestBody JsonNode body, HttpServletRequest request) {
-        List<String> fileIds = extractIdList(body, "fileIds");
-        List<String> folderIds = extractIdList(body, "folderIds");
-        if (body != null && body.isArray()) {
-            fileIds = extractIdList(body, null);
-        }
+    //update-begin---author:cursor---date:2026-09-07---for:【资料回收站】JsonNode 在 SB4 反序列化报 Type definition error---
+    public Result<?> restore(@RequestBody(required = false) StorageRecycleBatchRequest body, HttpServletRequest request) {
+        List<String> fileIds = extractIdList(body == null ? null : body.getFileIds());
+        List<String> folderIds = extractIdList(body == null ? null : body.getFolderIds());
+    //update-end---author:cursor---date:2026-09-07---for:【资料回收站】JsonNode 在 SB4 反序列化报 Type definition error---
         if (fileIds.isEmpty() && folderIds.isEmpty()) {
             return Result.error("请选择要恢复的文件或文件夹");
         }
@@ -701,12 +754,9 @@ public class StorageController {
     @DeleteMapping("/deletePermanently")
     @Operation(summary = "资料存储-彻底删除(管理端)")
     @RequiresPermissions("homeai:storage:deletePermanently")
-    public Result<?> deletePermanently(@RequestBody JsonNode body, HttpServletRequest request) {
-        List<String> fileIds = extractIdList(body, "fileIds");
-        List<String> folderIds = extractIdList(body, "folderIds");
-        if (body != null && body.isArray()) {
-            fileIds = extractIdList(body, null);
-        }
+    public Result<?> deletePermanently(@RequestBody(required = false) StorageRecycleBatchRequest body, HttpServletRequest request) {
+        List<String> fileIds = extractIdList(body == null ? null : body.getFileIds());
+        List<String> folderIds = extractIdList(body == null ? null : body.getFolderIds());
         if (fileIds.isEmpty() && folderIds.isEmpty()) {
             return Result.error("请选择要彻底删除的文件或文件夹");
         }
@@ -762,16 +812,13 @@ public class StorageController {
 
     @PutMapping("/my/restore")
     @Operation(summary = "资料存储-恢复我的回收站项")
-    public Result<?> myRestore(@RequestBody JsonNode body, HttpServletRequest request) {
+    public Result<?> myRestore(@RequestBody(required = false) StorageRecycleBatchRequest body, HttpServletRequest request) {
         String userId = getUserId(request);
         if (userId == null) {
             return Result.error("未登录");
         }
-        List<String> fileIds = filterOwnedFileIds(extractIdList(body, "fileIds"), userId);
-        List<String> folderIds = filterOwnedFolderIds(extractIdList(body, "folderIds"), userId);
-        if (body != null && body.isArray()) {
-            fileIds = filterOwnedFileIds(extractIdList(body, null), userId);
-        }
+        List<String> fileIds = filterOwnedFileIds(extractIdList(body == null ? null : body.getFileIds()), userId);
+        List<String> folderIds = filterOwnedFolderIds(extractIdList(body == null ? null : body.getFolderIds()), userId);
         if (fileIds.isEmpty() && folderIds.isEmpty()) {
             return Result.error("无可恢复的项目（仅能恢复自己删除的）");
         }
@@ -786,16 +833,13 @@ public class StorageController {
 
     @DeleteMapping("/my/deletePermanently")
     @Operation(summary = "资料存储-彻底删除我的回收站项")
-    public Result<?> myDeletePermanently(@RequestBody JsonNode body, HttpServletRequest request) {
+    public Result<?> myDeletePermanently(@RequestBody(required = false) StorageRecycleBatchRequest body, HttpServletRequest request) {
         String userId = getUserId(request);
         if (userId == null) {
             return Result.error("未登录");
         }
-        List<String> fileIds = filterOwnedFileIds(extractIdList(body, "fileIds"), userId);
-        List<String> folderIds = filterOwnedFolderIds(extractIdList(body, "folderIds"), userId);
-        if (body != null && body.isArray()) {
-            fileIds = filterOwnedFileIds(extractIdList(body, null), userId);
-        }
+        List<String> fileIds = filterOwnedFileIds(extractIdList(body == null ? null : body.getFileIds()), userId);
+        List<String> folderIds = filterOwnedFolderIds(extractIdList(body == null ? null : body.getFolderIds()), userId);
         if (fileIds.isEmpty() && folderIds.isEmpty()) {
             return Result.error("无可删除的项目（仅能删除自己的）");
         }
@@ -871,18 +915,14 @@ public class StorageController {
     }
     //update-end---author:admin ---date:2026-08-12 for：【HomeAI-R24】小程序用户侧回收站-----------
 
-    private List<String> extractIdList(JsonNode body, String field) {
+    private List<String> extractIdList(List<String> raw) {
         List<String> ids = new ArrayList<>();
-        if (body == null || body.isNull()) {
+        if (raw == null) {
             return ids;
         }
-        JsonNode arr = field == null ? body : body.get(field);
-        if (arr == null || !arr.isArray()) {
-            return ids;
-        }
-        for (JsonNode n : arr) {
-            if (n != null && !n.isNull() && oConvertUtils.isNotEmpty(n.asText())) {
-                ids.add(n.asText());
+        for (String id : raw) {
+            if (oConvertUtils.isNotEmpty(id)) {
+                ids.add(id.trim());
             }
         }
         return ids;

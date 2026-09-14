@@ -335,9 +335,9 @@
       initChartData();
       appData.value.metadata = { izDraw: '1', defaultSelect: '0' }  
       quickCommandData.value = [
-          { name: '请介绍一下JeecgBoot', descr: "请介绍一下JeecgBoot" },
-          { name: 'JEECG有哪些优势？', descr: "JEECG有哪些优势？" },
-          { name: 'JEECG可以做哪些事情？', descr: "JEECG可以做哪些事情？" },];
+          { name: '请介绍一下家庭AI小工具', descr: "请介绍一下家庭AI小工具" },
+          { name: '家庭AI小工具有哪些功能？', descr: "家庭AI小工具有哪些功能？" },
+          { name: '如何管理家庭资料？', descr: "如何管理家庭资料？" },];
     }
     let query: any = router.currentRoute.value.query;
     source.value = query.source;

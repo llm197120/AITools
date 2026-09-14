@@ -25,6 +25,7 @@ import org.jeecg.modules.homeai.recipe.mapper.RecipeStepMapper;
 import org.jeecg.modules.homeai.recipe.service.IRecipeService;
 import org.jeecg.modules.homeai.recipe.util.InMemoryMultipartFile;
 import org.jeecg.modules.homeai.recipe.util.RecipeCoverMatch;
+import org.jeecg.modules.homeai.recipe.util.RecipeRecommendUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -179,14 +180,25 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
             }
         }
 
-        //update-begin---author:admin ---date:2026-08-13 for：【HomeAI-R32】做过次数优先补位-----------
+        //update-begin---author:cursor---date:2026-09-03---for:【HomeAI-R125】常做菜不再优先霸占推荐位-----------
+        final int[] cookedFilled = {0};
         cookCounts.entrySet().stream()
-                .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
-                .forEach(e -> appendRecommend(ordered, e.getKey(), userId, familyId, "cooked", size, cookCounts));
+                .filter(e -> e.getValue() != null && RecipeRecommendUtil.eligibleCookedFill(e.getValue()))
+                .sorted((a, b) -> Integer.compare(a.getValue(), b.getValue()))
+                .forEach(e -> {
+                    if (cookedFilled[0] >= RecipeRecommendUtil.MAX_COOKED_FILL || ordered.size() >= size) {
+                        return;
+                    }
+                    int before = ordered.size();
+                    appendRecommend(ordered, e.getKey(), userId, familyId, "cooked", size, cookCounts);
+                    if (ordered.size() > before) {
+                        cookedFilled[0]++;
+                    }
+                });
         if (ordered.size() >= size) {
             return new ArrayList<>(ordered.values());
         }
-        //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R32】做过次数优先补位-----------
+        //update-end---author:cursor---date:2026-09-03---for:【HomeAI-R125】常做菜不再优先霸占推荐位-----------
 
         // 4) 加权热门兜底（含季节分类 / 做过次数加权）
         Set<String> seasonCats = resolveSeasonCategories(season);
@@ -353,25 +365,9 @@ public class RecipeServiceImpl extends ServiceImpl<RecipeMapper, Recipe> impleme
     }
 
     private static double recommendScore(Recipe r, Set<String> seasonCats, Map<String, Integer> cookCounts) {
-        if (r == null) return 0;
-        int views = r.getViewCount() != null ? r.getViewCount() : 0;
-        int favs = r.getFavoriteCount() != null ? r.getFavoriteCount() : 0;
-        double score = views * 0.6 + favs * 0.3;
-        if (r.getCreateTime() != null) {
-            long days = Math.max(0, (System.currentTimeMillis() - r.getCreateTime().getTime()) / (24L * 3600_000));
-            score += Math.max(0, 1.0 - days / 90.0) * 0.1;
-        }
-        if (r.getCategoryId() != null && seasonCats.contains(r.getCategoryId())) {
-            score += 0.15 * Math.max(views + favs, 1);
-        }
-        int cooked = 0;
-        if (cookCounts != null && r.getId() != null) {
-            cooked = cookCounts.getOrDefault(r.getId(), 0);
-        }
-        if (cooked > 0) {
-            score += cooked * 1.5;
-        }
-        return score;
+        //update-begin---author:cursor---date:2026-09-03---for:【HomeAI-R125】推荐打分改为常做降权-----------
+        return RecipeRecommendUtil.recommendScore(r, seasonCats, cookCounts);
+        //update-end---author:cursor---date:2026-09-03---for:【HomeAI-R125】推荐打分改为常做降权-----------
     }
     //update-end---author:admin ---date:2026-08-13 for：【HomeAI-R32】做过次数加权-----------
 

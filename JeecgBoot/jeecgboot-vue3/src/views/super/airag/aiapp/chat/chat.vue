@@ -18,7 +18,7 @@
           <div v-if="showAdvertising" class="header-advertisint">
             AI客服由
             <a style="color: #4183c4;margin-left: 2px;margin-right: 2px" href="https://jeecg.com/aigcIndex" target="_blank">
-              JEECG AI
+              家庭AI
             </a>
             提供
           </div>

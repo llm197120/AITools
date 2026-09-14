@@ -22,6 +22,7 @@ import type {
   HomeaiRecipeDetail,
   HomeaiStorageFile,
   HomeaiStorageFolder,
+  HomeaiSysConfig,
   HomeaiUser,
 } from './types';
 
@@ -266,6 +267,8 @@ export const configApi = {
   getPlanConfig: (): Promise<HomeaiPlanConfig> => defHttp.get({ url: `${BASE}/config/plan` }),
   updatePlanConfig: (data: Partial<HomeaiPlanConfig> | HomeaiPayload) =>
     defHttp.put({ url: `${BASE}/config/plan`, data }),
+  getSysConfig: (): Promise<HomeaiSysConfig> => defHttp.get({ url: `${BASE}/config/sys` }),
+  updateSysConfig: (data: HomeaiSysConfig | HomeaiPayload) => defHttp.put({ url: `${BASE}/config/sys`, data }),
   getAppVersion: (): Promise<HomeaiAppVersion> => defHttp.get({ url: `${BASE}/app/version/admin` }),
   updateAppVersion: (data: Partial<HomeaiAppVersion> | HomeaiPayload) =>
     defHttp.put({ url: `${BASE}/app/version/admin`, data }),
@@ -281,6 +284,9 @@ export const storageApi = {
   /** 文件夹内文件列表 */
   folderFiles: (folderId: string, params?: HomeaiPageParams) =>
     defHttp.get({ url: `${BASE}/storage/folders/${folderId}/files`, params }),
+  /** 根目录未归档文件（管理端看全部） */
+  rootFiles: (params?: HomeaiPageParams) =>
+    defHttp.get({ url: `${BASE}/storage/files/root`, params }),
   /** 新建文件夹 */
   createFolder: (params: Recordable) =>
     defHttp.post({ url: `${BASE}/storage/folders`, params }, { joinParamsToUrl: true }),
@@ -298,6 +304,9 @@ export const storageApi = {
       { joinParamsToUrl: true },
     ),
   deleteFile: (id: string) => defHttp.delete({ url: `${BASE}/storage/files/${id}` }),
+  /** 编辑文件：名称、所属文件夹、可见性 */
+  updateFile: (id: string, params: { name: string; folderId?: string; visibility: string; familyIds?: string }) =>
+    defHttp.put({ url: `${BASE}/storage/files/${id}`, params }, { joinParamsToUrl: true }),
   recycleBin: (params?: HomeaiPageParams & { keyword?: string; type?: 'file' | 'folder' }) =>
     defHttp.get({ url: `${BASE}/storage/recycleBin`, params }),
   /** 恢复：传 fileIds / folderIds（兼容旧版纯数组） */

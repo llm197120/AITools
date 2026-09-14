@@ -29,13 +29,13 @@
 <script lang="ts" name="homeai-ai-key" setup>
   import { PageWrapper } from '/@/components/Page';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
-  import { useDrawer } from '/@/components/Drawer';
+  import { useModal } from '/@/components/Modal';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { keyConfigApi } from '/@/api/homeai';
   import KeyConfigDrawer from './KeyConfigDrawer.vue';
 
   const { createConfirm, createMessage } = useMessage();
-  const [registerDrawer, { openDrawer }] = useDrawer();
+  const [registerDrawer, { openModal: openDrawer }] = useModal();
 
   const [registerTable, { reload }] = useTable({
     title: 'AI密钥配置',

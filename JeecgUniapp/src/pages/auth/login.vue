@@ -22,7 +22,7 @@
     <view class="form-card">
       <view class="form-group">
         <view class="field-icon">
-          <wd-icon name="phone" size="20px" color="#1B4F8A"></wd-icon>
+          <wd-icon name="phone" size="20px" color="var(--hai-primary)"></wd-icon>
         </view>
         <input
           class="field-input"
@@ -36,7 +36,7 @@
 
       <view class="form-group">
         <view class="field-icon">
-          <wd-icon name="lock-on" size="20px" color="#1B4F8A"></wd-icon>
+          <wd-icon name="lock-on" size="20px" color="var(--hai-primary)"></wd-icon>
         </view>
         <input
           class="field-input"
@@ -51,7 +51,7 @@
 
       <view class="form-group" v-if="isRegisterMode">
         <view class="field-icon">
-          <wd-icon name="lock-on" size="20px" color="#1B4F8A"></wd-icon>
+          <wd-icon name="lock-on" size="20px" color="var(--hai-primary)"></wd-icon>
         </view>
         <input
           class="field-input"
@@ -65,13 +65,13 @@
 
       <view class="form-group" v-if="isRegisterMode">
         <view class="field-icon">
-          <wd-icon name="user" size="20px" color="#1B4F8A"></wd-icon>
+          <wd-icon name="user" size="20px" color="var(--hai-primary)"></wd-icon>
         </view>
         <input
           class="field-input"
           v-model="nickname"
           maxlength="20"
-          placeholder="请输入昵称（可选）"
+          placeholder="请输入姓名（可选）"
           placeholder-class="field-placeholder"
         />
       </view>

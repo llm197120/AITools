@@ -23,8 +23,8 @@ export async function readList<T = any>(
   recordsOf?: (data: any) => any[],
 ): Promise<OfflineReadResult<T>> {
   const cached = readCache<T>(module, scope)
-  const offline = getConnState() === 'offline'
-  if (offline) {
+  const disconnected = getConnState() !== 'online'
+  if (disconnected) {
     if (cached) return { data: cached.data, fromCache: true, offline: true }
     return { data: [] as unknown as T, fromCache: true, offline: true }
   }
@@ -51,7 +51,7 @@ export async function readDetail<T = any>(
 ): Promise<OfflineReadResult<T>> {
   const scope = 'detail:' + id
   const cached = readCache<T>(module, scope)
-  if (getConnState() === 'offline') {
+  if (getConnState() !== 'online') {
     if (cached) return { data: cached.data, fromCache: true, offline: true }
     throw new Error('离线且无本地缓存')
   }

@@ -154,7 +154,7 @@ async function loadCalendar() {
     expiredDates.value = (res?.expiredDates || []).map((d: any) => toDateStr(d)).filter(Boolean)
     pendingDates.value = (res?.pendingDates || []).map((d: any) => toDateStr(d)).filter(Boolean)
   } catch {
-    uni.showToast({ title: '日历加载失败', icon: 'none' })
+    /* 离线无缓存时日历为空，不弹窗 */
   }
 }
 
@@ -169,9 +169,6 @@ async function loadPlans() {
       () => planApi.byDate(selectedDate.value),
     )
     plans.value = res.data || []
-    if (res.offline) {
-      uni.showToast({ title: '离线模式，展示本地数据', icon: 'none' })
-    }
   } catch {
     if (!silent) plans.value = []
     loadFailed.value = plans.value.length === 0

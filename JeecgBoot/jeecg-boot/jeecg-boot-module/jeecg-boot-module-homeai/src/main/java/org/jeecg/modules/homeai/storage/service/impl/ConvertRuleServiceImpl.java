@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jeecg.modules.homeai.storage.entity.ConvertRule;
 import org.jeecg.modules.homeai.storage.mapper.ConvertRuleMapper;
 import org.jeecg.modules.homeai.storage.service.IConvertRuleService;
+import org.jeecg.modules.homeai.storage.util.ConvertRuleFormatUtil;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -17,10 +18,13 @@ public class ConvertRuleServiceImpl extends ServiceImpl<ConvertRuleMapper, Conve
 
     @Override
     public List<ConvertRule> getTargetFormats(String sourceFormat) {
+        //update-begin---author:cursor---date:2026-09-04---for:【转换规则】源格式忽略大小写与前导点---
+        String normalized = ConvertRuleFormatUtil.normalize(sourceFormat);
         LambdaQueryWrapper<ConvertRule> query = new LambdaQueryWrapper<>();
-        query.eq(ConvertRule::getSourceFormat, sourceFormat)
+        query.eq(ConvertRule::getSourceFormat, normalized)
                 .eq(ConvertRule::getIsEnabled, "1");
         return list(query);
+        //update-end---author:cursor---date:2026-09-04---for:【转换规则】源格式忽略大小写与前导点---
     }
 
     @Override

@@ -15,7 +15,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = Path(__file__).resolve().parent / f"test-report-homeai-{dt.datetime.now().strftime('%Y%m%d')}-r15.xlsx"
+OUT = Path(__file__).resolve().parent / f"test-report-homeai-{dt.datetime.now().strftime('%Y%m%d')}-r16.xlsx"
 
 PASS, FAIL, SKIP, WARN = "通过", "失败", "跳过", "警告"
 IS_WIN = os.name == "nt"
@@ -152,14 +152,54 @@ def collect_rows() -> list[dict]:
         "HomeaiRecipeIngredient quantity/unit",
         "自动化",
         PASS if jest_ok else FAIL,
-        "包含在 api-types.spec.ts",
-        "tests/homeai/api-types.spec.ts",
+        "包含在 recipeIngredient.spec.ts",
+        "tests/homeai/recipeIngredient.spec.ts",
+    )
+
+    # ---------- 自动化：UniApp Vitest ----------
+    uniapp = ROOT / "JeecgUniapp"
+    ucode, uout = run_cmd(["pnpm", "test:utils"], uniapp, timeout=180)
+    um = re.search(r"Tests\s+(\d+) passed", uout)
+    ufiles = re.search(r"Test Files\s+(\d+) passed", uout)
+    vitest_ok = ucode == 0 and "passed" in uout and "FAIL" not in uout
+    if um:
+        vitest_detail = f"Vitest: {um.group(1)} passed; files={ufiles.group(1) if ufiles else '?'}; exit={ucode}"
+    else:
+        vitest_detail = f"Vitest exit={ucode}; 输出摘要: {uout[-300:].replace(chr(10), ' ')}"
+    add(
+        "移动端-自动化",
+        "MP-AUTO-001",
+        "Vitest：日期/可见性/离线缓存/文件选择",
+        "自动化",
+        PASS if vitest_ok else FAIL,
+        vitest_detail,
+        "JeecgUniapp/src/pages-homeai/**/*.test.ts",
     )
 
     # ---------- 自动化：后端 Maven compile/test（JDK17） ----------
     java_home = os.environ.get("JAVA_HOME", "")
     boot = ROOT / "JeecgBoot" / "jeecg-boot"
-    if java_home and Path(java_home).exists():
+    skip_mvn = os.environ.get("HOMEAI_SKIP_MVN", "").strip() in {"1", "true", "yes"}
+    if skip_mvn:
+        add(
+            "后端-自动化",
+            "BE-AUTO-001",
+            "homeai 模块 Maven 编译门禁",
+            "自动化",
+            SKIP,
+            "HOMEAI_SKIP_MVN=1，本轮跳过 Maven（由会话内单测先行）",
+            "jeecg-boot-module-homeai",
+        )
+        add(
+            "后端-自动化",
+            "BE-AUTO-002",
+            "homeai 纯逻辑单元测试",
+            "自动化",
+            SKIP,
+            "HOMEAI_SKIP_MVN=1，本轮跳过 Maven",
+            "jeecg-boot-module-homeai/src/test",
+        )
+    elif java_home and Path(java_home).exists():
         env = os.environ.copy()
         env["JAVA_HOME"] = java_home
         env["Path"] = str(Path(java_home) / "bin") + os.pathsep + env.get("Path", "")
@@ -185,7 +225,7 @@ def collect_rows() -> list[dict]:
                 "homeai 模块 Maven 编译门禁",
                 "自动化",
                 PASS,
-                f"BUILD SUCCESS; exit={code}；无单元测试类，compile 作为门禁",
+                f"BUILD SUCCESS; exit={code}",
                 "jeecg-boot-module-homeai",
             )
         else:
@@ -198,11 +238,75 @@ def collect_rows() -> list[dict]:
                 f"exit={code}; " + mout[-400:].replace("\n", " "),
                 "jeecg-boot-module-homeai",
             )
+
+        pom = boot / "pom.xml"
+        orig_pom = pom.read_text(encoding="utf-8")
+        if "<skipTests>true</skipTests>" not in orig_pom:
+            add(
+                "后端-自动化",
+                "BE-AUTO-002",
+                "homeai 纯逻辑单元测试",
+                "自动化",
+                WARN,
+                "父 pom 未找到 skipTests=true 标记，未翻转 surefire",
+                "jeecg-boot/pom.xml",
+            )
+        else:
+            pom.write_text(orig_pom.replace("<skipTests>true</skipTests>", "<skipTests>false</skipTests>", 1), encoding="utf-8")
+            try:
+                tcode, tout = run_cmd(
+                    [
+                        "mvn",
+                        "-B",
+                        "surefire:test",
+                        "-pl",
+                        "jeecg-boot-module/jeecg-boot-module-homeai",
+                    ],
+                    boot,
+                    timeout=900,
+                    env=env,
+                )
+            finally:
+                pom.write_text(orig_pom, encoding="utf-8")
+            tm = None
+            for m in re.finditer(
+                r"Tests run:\s*(\d+),\s*Failures:\s*(\d+),\s*Errors:\s*(\d+),\s*Skipped:\s*(\d+)",
+                tout,
+            ):
+                tm = m
+            test_ok = tcode == 0 and "BUILD SUCCESS" in tout
+            if tm:
+                detail = (
+                    f"Tests run={tm.group(1)} Failures={tm.group(2)} Errors={tm.group(3)} "
+                    f"Skipped={tm.group(4)}; exit={tcode}"
+                )
+                if int(tm.group(2)) or int(tm.group(3)):
+                    test_ok = False
+            else:
+                detail = f"exit={tcode}; " + tout[-400:].replace("\n", " ")
+            add(
+                "后端-自动化",
+                "BE-AUTO-002",
+                "homeai 纯逻辑单元测试",
+                "自动化",
+                PASS if test_ok else FAIL,
+                detail,
+                "jeecg-boot-module-homeai/src/test",
+            )
     else:
         add(
             "后端-自动化",
             "BE-AUTO-001",
-            "homeai 模块 Maven test",
+            "homeai 模块 Maven compile",
+            "自动化",
+            SKIP,
+            "JAVA_HOME 未指向可用 JDK17，未执行",
+            "",
+        )
+        add(
+            "后端-自动化",
+            "BE-AUTO-002",
+            "homeai 纯逻辑单元测试",
             "自动化",
             SKIP,
             "JAVA_HOME 未指向可用 JDK17，未执行",
@@ -279,19 +383,12 @@ def collect_rows() -> list[dict]:
         (
             "配置",
             "CFG-006",
-            "生产 API 临时本机约定（127.0.0.1:8080）",
+            "docker.prod API 为同域相对路径 /jeecg-boot",
             "静态",
-            contains("JeecgUniapp/env/.env.production", r"127\.0\.0\.1:8080/jeecg-boot")
-            and contains(
-                "JeecgBoot/jeecgboot-vue3/.env.production",
-                r"127\.0\.0\.1:8080/jeecg-boot",
-            )
-            and contains(
-                "JeecgBoot/jeecgboot-vue3/.env.docker.prod",
-                r"127\.0\.0\.1:8080/jeecg-boot",
-            ),
-            "第三轮：管理端+小程序+docker.prod 均指本机",
-            ".env.production / .env.docker.prod",
+            contains("JeecgBoot/jeecgboot-vue3/.env.docker.prod", r"VITE_GLOB_API_URL=/jeecg-boot")
+            and contains("JeecgBoot/jeecgboot-vue3/.env.docker.prod", r"VITE_GLOB_DOMAIN_URL=/jeecg-boot"),
+            "公网 Nginx 同域反代；勿写 127.0.0.1",
+            ".env.docker.prod",
         ),
         (
             "管理端-功能落地",
@@ -438,14 +535,18 @@ def collect_rows() -> list[dict]:
         (
             "小程序-功能落地",
             "MP-ST-003",
-            "学习列表跳转带 autoStart",
+            "学习详情支持 autoStart 自动开始",
             "静态",
             contains(
-                "JeecgUniapp/src/pages-homeai-more/learn/index.vue",
-                r"autoStart=1",
+                "JeecgUniapp/src/pages-homeai-more/learn/detail.vue",
+                r"autoStart",
+            )
+            and contains(
+                "JeecgUniapp/src/pages-homeai-more/learn/detail.vue",
+                r"startLearn",
             ),
-            "打开即学",
-            "learn/index.vue",
+            "列表进详情后可手动开始；query autoStart=1 仍可自动开计时",
+            "learn/detail.vue",
         ),
         (
             "小程序-功能落地",
@@ -506,14 +607,22 @@ def collect_rows() -> list[dict]:
         (
             "小程序-功能落地",
             "MP-ST-005",
-            "401 跳转个人中心",
+            "401 清会话并回登录",
             "静态",
             contains(
                 "JeecgUniapp/src/pages-homeai/api/request.ts",
-                r"/pages/homeai/profile",
+                r"consumeHomeaiUnauthorized",
+            )
+            and contains(
+                "JeecgUniapp/src/pages-homeai/utils/homeaiAuth.ts",
+                r"HOMEAI_LOGIN_PAGE",
+            )
+            and contains(
+                "JeecgUniapp/src/pages-homeai/utils/homeaiAuth.ts",
+                r"statusCode === 401",
             ),
-            "与鉴权白名单一致",
-            "request.ts",
+            "APP 进 /pages/auth/login；小程序进个人中心",
+            "request.ts / homeaiAuth.ts",
         ),
         (
             "小程序-功能落地",
@@ -886,24 +995,24 @@ def collect_rows() -> list[dict]:
         (
             "小程序-功能落地",
             "MP-ST-014",
-            "useHomeaiFilePick + chat/recipe/learn 接入",
+            "useHomeaiFilePick + chat / HomeMediaUpload 接入",
             "静态",
             exists("JeecgUniapp/src/pages-homeai/utils/useHomeaiFilePick.ts")
             and contains("JeecgUniapp/src/pages-homeai-ai/ai/chat.vue", r"useHomeaiFilePick")
-            and contains("JeecgUniapp/src/pages-homeai-more/recipe/add.vue", r"useHomeaiFilePick")
-            and contains("JeecgUniapp/src/pages-homeai-more/learn/add.vue", r"useHomeaiFilePick"),
-            "第25轮",
-            "useHomeaiFilePick.ts",
+            and contains("JeecgUniapp/src/pages-homeai/components/HomeMediaUpload.vue", r"useHomeaiFilePick")
+            and contains("JeecgUniapp/src/pages-homeai-more/recipe/add.vue", r"HomeMediaUpload")
+            and contains("JeecgUniapp/src/pages-homeai-more/learn/add.vue", r"HomeMediaUpload"),
+            "菜谱/学习新增走 HomeMediaUpload，底层仍是 useHomeaiFilePick",
+            "useHomeaiFilePick.ts / HomeMediaUpload.vue",
         ),
         (
             "小程序-功能落地",
             "MP-ST-015",
-            "AI quotaPrecheck API",
+            "AI quota precheck 接口",
             "静态",
-            contains("JeecgUniapp/src/pages-homeai/api/ai.ts", r"quotaPrecheck")
-            and contains("JeecgUniapp/src/pages-homeai-ai/ai/chat.vue", r"/ai/quota/precheck"),
-            "第25轮",
-            "ai.ts / chat.vue",
+            contains("JeecgUniapp/src/pages-homeai-ai/ai/chat.vue", r"/ai/quota/precheck"),
+            "对话页提交前校验额度",
+            "chat.vue",
         ),
         (
             "后端-功能落地",
@@ -948,6 +1057,22 @@ def collect_rows() -> list[dict]:
             ),
             "第26轮",
             "crossStats.vue",
+        ),
+        (
+            "管理端-功能落地",
+            "FE-ST-013",
+            "综合统计路由不再误拼 /index",
+            "静态",
+            contains(
+                "JeecgBoot/jeecgboot-vue3/src/router/helper/routeHelper.ts",
+                r"viewPath\.startsWith\('dashboard/'\)",
+            )
+            and not contains(
+                "JeecgBoot/jeecgboot-vue3/src/router/helper/routeHelper.ts",
+                r"component\.indexOf\('dashboard/'\)\s*>\s*-1",
+            ),
+            "第124轮：仅系统工作台 dashboard/* 才补 /index",
+            "routeHelper.ts",
         ),
         (
             "小程序-功能落地",
@@ -1215,13 +1340,16 @@ def collect_rows() -> list[dict]:
             "静态",
             contains("JeecgUniapp/manifest.config.ts", r"(?m)^\s*urlCheck:\s*true\s*,?\s*$")
             or contains("JeecgUniapp/src/manifest.json", r'(?m)^\s*"urlCheck"\s*:\s*true\s*,?\s*$'),
-            "本地可保持 false；正式上架前改为 true",
+            "产品暂不上架微信；本地 false 记警告，上架前改为 true",
             "manifest",
+            WARN,
         ),
     ]
 
-    for module, cid, name, kind, ok, detail, evidence in checks:
-        result = PASS if ok else FAIL
+    for item in checks:
+        module, cid, name, kind, ok, detail, evidence = item[:7]
+        fail_result = item[7] if len(item) > 7 else FAIL
+        result = PASS if ok else fail_result
         add(module, cid, name, kind, result, detail, evidence)
 
     # 本机后端可达性（第二轮联调）

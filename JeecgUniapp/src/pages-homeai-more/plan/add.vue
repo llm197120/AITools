@@ -38,7 +38,7 @@
         />
         <text v-if="catFailed" class="cat-fail" @click="loadCategories">分类加载失败，点此重试</text>
         <wd-cell title="全天" title-width="180rpx" center>
-          <wd-switch v-model="allDay" active-color="#1B4F8A" size="22px" />
+          <wd-switch v-model="allDay" active-color="var(--hai-primary)" size="22px" />
         </wd-cell>
         <HomeTimeCell v-if="!allDay" v-model="form.startTime" label="开始时间" title="选择开始时间" />
         <HomePickerCell

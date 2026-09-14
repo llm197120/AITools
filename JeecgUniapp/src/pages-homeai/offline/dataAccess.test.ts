@@ -38,6 +38,20 @@ describe('offline/dataAccess.readList', () => {
     expect(res.data).toEqual([{ id: 'a' }])
   })
 
+  it('探测中 unknown 且有缓存：立刻返回缓存，不打网络', async () => {
+    const { writeCache } = await import('./cache')
+    writeCache('plan', 'byDate:2026-09-01', [{ id: 'a' }], 'v1')
+    getConnState.mockReturnValue('unknown')
+    let fetchCount = 0
+    const res = await readList('plan', 'byDate:2026-09-01', async () => {
+      fetchCount++
+      return [{ id: 'net' }]
+    })
+    expect(fetchCount).toBe(0)
+    expect(res.offline).toBe(true)
+    expect(res.data).toEqual([{ id: 'a' }])
+  })
+
   it('离线且无缓存：返回空数组', async () => {
     getConnState.mockReturnValue('offline')
     const res = await readList('plan', 'nope', async () => [])

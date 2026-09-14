@@ -37,10 +37,12 @@ public class WxUser implements Serializable {
     @Schema(description = "微信openid")
     private String openid;
 
-    /** 微信昵称 */
-    @Excel(name = "微信昵称", width = 15)
-    @Schema(description = "微信昵称")
+    //update-begin---author:cursor---date:2026-09-07---for:【APP】微信昵称改为用户姓名---
+    /** 用户姓名 */
+    @Excel(name = "用户姓名", width = 15)
+    @Schema(description = "用户姓名")
     private String nickname;
+    //update-end---author:cursor---date:2026-09-07---for:【APP】微信昵称改为用户姓名---
 
     /** 头像URL */
     @Schema(description = "头像URL")

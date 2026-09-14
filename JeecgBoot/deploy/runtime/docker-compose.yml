@@ -1,0 +1,51 @@
+# HomeAI 数据面（给「空系统新电脑」用）
+#
+# MySQL / Redis 用容器，端口仍是本机 3306 / 6379，Java 配置不用改。
+# 仅当存在 C:\homeai\use-docker-datastores 时，start-all / publish-all 才会拉起本文件。
+# 现有已装原生 MySQL 的开发机不要创建该标记。
+#
+# 启动：docs/deploy/init-windows-host.ps1 -Phase Datastores
+#   或：docker compose up -d
+
+version: '3.8'
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: homeai-mysql
+    restart: unless-stopped
+    ports:
+      - '3306:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_DATABASE: jeecg
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    volumes:
+      - homeai-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    container_name: homeai-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - homeai-redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  homeai-mysql-data:
+  homeai-redis-data:

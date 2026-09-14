@@ -10,17 +10,19 @@
 <template>
   <view class="page">
     <view class="form-card">
-      <HomeMediaUpload
-        v-model="avatarUrl"
-        mode="image"
-        url="/homeai/user/info/avatar"
-        placeholder="点击上传头像"
-        tip="支持 jpg/png/webp，不超过 2MB"
-        :max-size="2"
-        :height="200"
-      />
+      <view class="avatar-upload">
+        <HomeMediaUpload
+          v-model="avatarUrl"
+          mode="image"
+          url="/homeai/user/info/avatar"
+          placeholder="点击上传头像"
+          tip="支持 jpg/png/webp，不超过 2MB"
+          :max-size="2"
+          square
+        />
+      </view>
       <view class="form-group">
-        <input class="field-input" v-model="nickname" maxlength="20" placeholder="请输入昵称" />
+        <input class="field-input" v-model="nickname" maxlength="20" placeholder="请输入姓名" />
       </view>
       <wd-button size="large" type="primary" block round :loading="loading" @click="submit">保存</wd-button>
     </view>
@@ -45,7 +47,7 @@ async function submit() {
   if (loading.value) return
   const name = nickname.value.trim()
   if (!name) {
-    uni.showToast({ title: '请输入昵称', icon: 'none' })
+    uni.showToast({ title: '请输入姓名', icon: 'none' })
     return
   }
   loading.value = true
@@ -73,6 +75,10 @@ async function submit() {
   border-radius: 28rpx;
   padding: 40rpx 32rpx;
   box-shadow: var(--hai-shadow);
+}
+.avatar-upload {
+  width: 280rpx;
+  margin: 0 auto;
 }
 .form-group {
   margin-top: 32rpx;

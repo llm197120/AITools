@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 # Long-term local APK: uni-app H5 + Capacitor (no DCloud native SDK)
 # Usage (JeecgUniapp):
 #   pnpm pack:apk:local
@@ -99,13 +99,12 @@ if (-not (Test-Path -LiteralPath $gradlew)) { throw "Missing $gradlew — run wi
 
 $initAliyun = Join-Path $PSScriptRoot 'init-aliyun.gradle'
 Write-Host 'Gradle assembleRelease'
-Push-Location $androidDir
-try {
-    & $gradlew ':app:assembleRelease' --no-daemon --warning-mode none --init-script $initAliyun
-    if ($LASTEXITCODE -ne 0) { throw "Gradle failed, exit=$LASTEXITCODE" }
-} finally {
-    Pop-Location
-}
+# --no-daemon 会提示 fork 一次性 Daemon，不是失败。
+# 若仍有 “SDK processing ... XML versions up to 3 ... version 4”：本机 emulator/platform-tools
+# 比 AGP 8.2.1 新，assemble 不受影响，无需处理。
+# -p 指定工程目录，避免当前工作目录不是 android/ 时 Gradle 找不到 settings.gradle
+& $gradlew -p $androidDir ':app:assembleRelease' --no-daemon --warning-mode none --init-script $initAliyun
+if ($LASTEXITCODE -ne 0) { throw "Gradle failed, exit=$LASTEXITCODE" }
 
 $apkDir = Join-Path $androidDir 'app\build\outputs\apk\release'
 $apk = Get-ChildItem -LiteralPath $apkDir -Filter '*.apk' -ErrorAction SilentlyContinue |
@@ -118,25 +117,29 @@ $outDir = Join-Path $uniRoot 'dist\apk'
 $outApk = Copy-StampedApk -SourceApk $apk.FullName -OutDir $outDir -VersionName $ver.Name -Stamp $stamp
 
 $h5Dir = Join-Path $uniRoot 'dist\build\h5'
+$zipPath = Join-Path $outDir ("homeai-h5-" + $ver.Name + ".zip")
 if (Test-Path -LiteralPath (Join-Path $h5Dir 'index.html')) {
-    $zipPath = Join-Path $outDir ("homeai-h5-" + $ver.Name + ".zip")
     if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [System.IO.Compression.ZipFile]::CreateFromDirectory($h5Dir, $zipPath)
     Write-Host "H5 zip: $zipPath"
 }
+if (-not (Test-Path -LiteralPath $zipPath)) { $zipPath = '' }
 
 # 产物元数据：发布脚本据此自动登记版本（publish-all.ps1 -RegisterVersion）
-$zipForMeta = if (Test-Path -LiteralPath (Join-Path $h5Dir 'index.html')) { $zipPath } else { '' }
-$meta = @{
-    apk         = $outApk
-    zip         = $zipForMeta
-    versionName = $ver.Name
-    versionCode = [int]$ver.Code
-} | ConvertTo-Json
+# PS 5.1 不能把 hashtable 右花括号直接管道给 ConvertTo-Json（会当成语句结束）
+$versionCode = [int]$ver.Code
+$metaMap = @{
+    apk         = [string]$outApk
+    zip         = [string]$zipPath
+    versionName = [string]$ver.Name
+    versionCode = $versionCode
+}
+$meta = ConvertTo-Json -InputObject $metaMap
 $lastVersion = Join-Path $outDir 'last-version.json'
 Write-Utf8NoBom -Path $lastVersion -Content $meta
 Write-Host "last-version: $lastVersion"
+Write-Host ("APP 版本号: {0}  (versionCode={1})" -f $ver.Name, $ver.Code)
 
 if ($Upload) {
     $uploadScript = (Resolve-Path (Join-Path $uniRoot '..\JeecgBoot\deploy\frp\upload-apk.ps1')).Path

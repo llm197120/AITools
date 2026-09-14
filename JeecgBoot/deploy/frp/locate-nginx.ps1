@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 # 一次性：定位服务器 nginx 中 homeai-apk 配置所在文件
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\common.ps1"

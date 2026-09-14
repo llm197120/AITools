@@ -125,9 +125,6 @@ async function loadData(silent = false) {
       balance: sum.balance ?? '0',
     }
     cats.value = (await readList<any[]>('bill', 'cats', () => billApi.categories())).data || []
-    if (entriesRes.offline || sumRes.offline) {
-      uni.showToast({ title: '离线模式，展示本地数据', icon: 'none' })
-    }
   } catch {
     loadFailed.value = allEntries.value.length === 0
     if (silent && allEntries.value.length > 0) {

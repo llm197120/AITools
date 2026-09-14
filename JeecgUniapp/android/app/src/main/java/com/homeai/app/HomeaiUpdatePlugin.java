@@ -1,13 +1,18 @@
 package com.homeai.app;
 
 import android.app.Activity;
+import android.graphics.Color;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.View;
+import android.view.Window;
 import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Build;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.util.Base64;
@@ -41,6 +46,7 @@ public class HomeaiUpdatePlugin extends Plugin {
     private static final int MAX_ZIP_ENTRIES = 8000;
     private static final long MAX_UNCOMPRESSED = 200L * 1024 * 1024;
     private static final long MAX_PICK_BYTES = 500L * 1024 * 1024;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     @PluginMethod
     public void download(PluginCall call) {
@@ -50,6 +56,8 @@ public class HomeaiUpdatePlugin extends Plugin {
             call.reject("缺少下载地址");
             return;
         }
+        // Capacitor 6 的 @PluginMethod 无 timeout 参数；后台线程拉包时保持 call 不被默认超时回收
+        call.setKeepAlive(true);
         JSObject headers = call.getObject("headers");
         new Thread(() -> {
             try {
@@ -66,6 +74,49 @@ public class HomeaiUpdatePlugin extends Plugin {
                 call.reject("下载失败: " + e.getMessage());
             }
         }).start();
+    }
+
+    /** 同步系统状态栏与底部导航栏颜色（夜晚模式避免仍为浅色） */
+    @PluginMethod
+    public void setSystemBars(PluginCall call) {
+        String bg = call.getString("backgroundColor", "#F3F2EE");
+        boolean lightContent = Boolean.TRUE.equals(call.getBoolean("lightContent", false));
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("无 Activity");
+            return;
+        }
+        final int color;
+        try {
+            color = Color.parseColor(bg);
+        } catch (Exception e) {
+            call.reject("颜色无效");
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            Window window = activity.getWindow();
+            if (window == null) {
+                call.reject("无 Window");
+                return;
+            }
+            window.setStatusBarColor(color);
+            window.setNavigationBarColor(color);
+            View decor = window.getDecorView();
+            int flags = decor.getSystemUiVisibility();
+            if (lightContent) {
+                flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                }
+            } else {
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                }
+            }
+            decor.setSystemUiVisibility(flags);
+            call.resolve();
+        });
     }
 
     @PluginMethod
@@ -167,6 +218,7 @@ public class HomeaiUpdatePlugin extends Plugin {
             call.reject("缺少压缩包路径");
             return;
         }
+        call.setKeepAlive(true);
         new Thread(() -> {
             try {
                 File dest = unzipSafe(new File(zipPath), sanitizeName(destDirName));
@@ -383,35 +435,63 @@ public class HomeaiUpdatePlugin extends Plugin {
             throw new Exception("无法创建下载目录");
         }
         File dest = new File(dir, fileName);
-        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-        conn.setConnectTimeout(20000);
-        conn.setReadTimeout(120000);
-        conn.setInstanceFollowRedirects(true);
-        applyHeaders(conn, headers);
-        conn.connect();
-        int code = conn.getResponseCode();
-        if (code >= 400) {
-            throw new Exception("HTTP " + code);
-        }
-        try (InputStream in = conn.getInputStream(); FileOutputStream out = new FileOutputStream(dest)) {
-            byte[] buf = new byte[8192];
-            int n;
-            long total = 0;
-            long contentLength = conn.getContentLengthLong();
-            long nextNotify = 0;
-            while ((n = in.read(buf)) > 0) {
-                out.write(buf, 0, n);
-                total += n;
-                // 每 ~256KB 上报一次进度（JS 端 addListener('downloadProgress') 接收）
-                if (progress != null && total >= nextNotify) {
-                    progress.onProgress(total, contentLength);
-                    nextNotify = total + 8192L * 32;
+        String current = url;
+        HttpURLConnection conn = null;
+        for (int hop = 0; hop < 8; hop++) {
+            conn = (HttpURLConnection) new URL(current).openConnection();
+            conn.setInstanceFollowRedirects(false);
+            conn.setConnectTimeout(20000);
+            conn.setReadTimeout(180000);
+            conn.setRequestProperty("Accept-Encoding", "identity");
+            conn.setRequestProperty("Accept", "*/*");
+            conn.setRequestProperty("User-Agent", "HomeAI-App");
+            applyHeaders(conn, headers);
+            conn.connect();
+            int code = conn.getResponseCode();
+            if (code >= 300 && code < 400) {
+                String loc = conn.getHeaderField("Location");
+                conn.disconnect();
+                if (loc == null || loc.isEmpty()) {
+                    throw new Exception("HTTP " + code);
                 }
+                current = new URL(new URL(current), loc).toString();
+                continue;
             }
-        } finally {
-            conn.disconnect();
+            if (code >= 400) {
+                conn.disconnect();
+                throw new Exception("HTTP " + code);
+            }
+            try (InputStream in = conn.getInputStream(); FileOutputStream out = new FileOutputStream(dest)) {
+                byte[] buf = new byte[8192];
+                int n;
+                long total = 0;
+                long contentLength = conn.getContentLengthLong();
+                long nextNotify = 0;
+                while ((n = in.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                    total += n;
+                    if (progress != null && total >= nextNotify) {
+                        final long loadedSnap = total;
+                        final long lenSnap = contentLength;
+                        mainHandler.post(() -> {
+                            try {
+                                progress.onProgress(loadedSnap, lenSnap);
+                            } catch (Exception ignored) {
+                                // 进度回调失败不影响下载
+                            }
+                        });
+                        nextNotify = total + 8192L * 32;
+                    }
+                }
+                if (total <= 0) {
+                    throw new Exception("安装包为空");
+                }
+            } finally {
+                conn.disconnect();
+            }
+            return dest;
         }
-        return dest;
+        throw new Exception("下载重定向过多");
     }
 
     private File unzipSafe(File zipFile, String destDirName) throws Exception {

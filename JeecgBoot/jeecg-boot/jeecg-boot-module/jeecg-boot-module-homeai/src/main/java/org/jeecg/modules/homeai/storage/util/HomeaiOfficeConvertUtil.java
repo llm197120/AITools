@@ -1,6 +1,9 @@
 package org.jeecg.modules.homeai.storage.util;
 
 import lombok.extern.slf4j.Slf4j;
+import org.jeecg.modules.homeai.config.dto.HomeaiSysConfigDto;
+import org.jeecg.modules.homeai.config.service.IHomeaiSysConfigService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -16,7 +19,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * Office 格式转换：Windows 下优先调用本机 Microsoft Office，失败或未安装时回退 LibreOffice。
+ * Office 格式转换：Gotenberg（PDF）→ 本机 Microsoft Office → LibreOffice。
  */
 @Slf4j
 @Component
@@ -24,7 +27,7 @@ public class HomeaiOfficeConvertUtil {
 
     private static final String SCRIPT_CLASSPATH = "/homeai/scripts/office-convert.ps1";
     /** 脚本版本变更时强制重写临时文件，避免旧缓存导致编码错误 */
-    private static final String SCRIPT_VERSION = "v2";
+    private static final String SCRIPT_VERSION = "v3";
 
     private static final byte[] UTF8_BOM = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
 
@@ -40,6 +43,17 @@ public class HomeaiOfficeConvertUtil {
     @Value("${homeai.office.convert-timeout-seconds:120}")
     private int convertTimeoutSeconds;
 
+    @Value("${homeai.office.gotenberg-url:}")
+    private String gotenbergUrl;
+
+    //update-begin---author:cursor---date:2026-09-07---for:【系统配置】Office 转换走后台覆盖-----------
+    @Autowired
+    private IHomeaiSysConfigService sysConfigService;
+    //update-end---author:cursor---date:2026-09-07---for:【系统配置】Office 转换走后台覆盖-----------
+
+    @Autowired
+    private HomeaiGotenbergClient gotenbergClient;
+
     private volatile Path cachedScriptPath;
 
     /**
@@ -47,6 +61,32 @@ public class HomeaiOfficeConvertUtil {
      */
     public Path convert(Path sourcePath, Path outDir, String targetFormat) throws Exception {
         String format = targetFormat != null ? targetFormat.toLowerCase() : "pdf";
+        //update-begin---author:cursor---date:2026-09-07---for:【资料转换】docx→txt 优先解 OOXML 抽文本---
+        String sourceExt = StorageFileNameUtil.extensionOf(sourcePath.getFileName().toString());
+        if (HomeaiOfficeTextExtractUtil.supports(sourceExt, format)) {
+            try {
+                Path extracted = HomeaiOfficeTextExtractUtil.extract(sourcePath, outDir, format);
+                if (extracted != null && Files.exists(extracted)) {
+                    log.info("已从文档抽出文本: {} -> {}", sourcePath.getFileName(), format);
+                    return extracted;
+                }
+            } catch (Exception e) {
+                log.warn("文档抽文本失败，回退 Office: {}", e.getMessage());
+            }
+        }
+        //update-end---author:cursor---date:2026-09-07---for:【资料转换】docx→txt 优先解 OOXML 抽文本---
+        //update-begin---author:cursor---date:2026-09-07---for:【资料转换】PDF 优先走 Gotenberg---
+        if (HomeaiGotenbergConvert.handlesTarget(format) && HomeaiGotenbergConvert.enabled(gotenbergUrlNow())) {
+            try {
+                Path converted = gotenbergClient.convertToPdf(sourcePath, outDir, gotenbergUrlNow(), convertTimeoutNow());
+                if (converted != null && Files.exists(converted)) {
+                    return converted;
+                }
+            } catch (Exception e) {
+                log.warn("Gotenberg 转换失败，回退本机 Office: {}", e.getMessage());
+            }
+        }
+        //update-end---author:cursor---date:2026-09-07---for:【资料转换】PDF 优先走 Gotenberg---
         Exception msOfficeError = null;
         if (shouldTryMsOffice()) {
             try {
@@ -65,7 +105,7 @@ public class HomeaiOfficeConvertUtil {
             if (msOfficeError != null) {
                 throw new RuntimeException("Microsoft Office 转换失败且未找到 LibreOffice: " + msOfficeError.getMessage(), msOfficeError);
             }
-            throw new RuntimeException("未找到 LibreOffice，请安装 LibreOffice 或配置 homeai.office.soffice-path");
+            throw new RuntimeException("未找到转换引擎，请启动 Gotenberg 或安装 Microsoft Office / LibreOffice");
         }
         Path converted = convertWithLibreOffice(sourcePath, outDir, format, libreOfficePath);
         if (converted != null && Files.exists(converted)) {
@@ -75,17 +115,61 @@ public class HomeaiOfficeConvertUtil {
     }
 
     private boolean shouldTryMsOffice() {
-        if (!preferMsOffice) {
+        if (!preferMsOfficeNow()) {
             return false;
         }
         String os = System.getProperty("os.name", "").toLowerCase();
         return os.contains("win");
     }
 
+    private boolean preferMsOfficeNow() {
+        HomeaiSysConfigDto.Office office = officeCfg();
+        if (office != null && office.getPreferMsOffice() != null) {
+            return office.getPreferMsOffice();
+        }
+        return preferMsOffice;
+    }
+
+    private String sofficePathNow() {
+        HomeaiSysConfigDto.Office office = officeCfg();
+        if (office != null && office.getSofficePath() != null && !office.getSofficePath().isBlank()) {
+            return office.getSofficePath();
+        }
+        return sofficePath;
+    }
+
+    private String gotenbergUrlNow() {
+        HomeaiSysConfigDto.Office office = officeCfg();
+        if (office != null && office.getGotenbergUrl() != null && !office.getGotenbergUrl().isBlank()) {
+            return office.getGotenbergUrl();
+        }
+        return gotenbergUrl;
+    }
+
+    private String powershellPathNow() {
+        HomeaiSysConfigDto.Office office = officeCfg();
+        if (office != null && office.getPowershellPath() != null && !office.getPowershellPath().isBlank()) {
+            return office.getPowershellPath();
+        }
+        return powershellPath;
+    }
+
+    private int convertTimeoutNow() {
+        HomeaiSysConfigDto.Office office = officeCfg();
+        if (office != null && office.getConvertTimeoutSeconds() != null) {
+            return office.getConvertTimeoutSeconds();
+        }
+        return convertTimeoutSeconds;
+    }
+
+    private HomeaiSysConfigDto.Office officeCfg() {
+        return sysConfigService == null ? null : sysConfigService.getOffice();
+    }
+
     private Path convertWithMsOffice(Path sourcePath, Path outDir, String targetFormat) throws Exception {
         Path scriptPath = resolveScriptPath();
         ProcessBuilder pb = new ProcessBuilder(
-                powershellPath,
+                powershellPathNow(),
                 "-NoProfile",
                 "-NonInteractive",
                 "-ExecutionPolicy",
@@ -102,7 +186,7 @@ public class HomeaiOfficeConvertUtil {
         pb.redirectErrorStream(true);
         Process process = pb.start();
         String output = readProcessOutput(process);
-        boolean finished = process.waitFor(convertTimeoutSeconds, TimeUnit.SECONDS);
+        boolean finished = process.waitFor(convertTimeoutNow(), TimeUnit.SECONDS);
         if (!finished) {
             process.destroyForcibly();
             throw new RuntimeException("Microsoft Office 转换超时");
@@ -127,7 +211,7 @@ public class HomeaiOfficeConvertUtil {
                 libreOfficePath,
                 "--headless",
                 "--convert-to",
-                targetFormat,
+                HomeaiLibreOfficeConvertArg.of(targetFormat),
                 "--outdir",
                 outDir.toAbsolutePath().toString(),
                 sourcePath.toAbsolutePath().toString()
@@ -135,7 +219,7 @@ public class HomeaiOfficeConvertUtil {
         pb.redirectErrorStream(true);
         Process process = pb.start();
         String output = readProcessOutput(process);
-        boolean finished = process.waitFor(convertTimeoutSeconds, TimeUnit.SECONDS);
+        boolean finished = process.waitFor(convertTimeoutNow(), TimeUnit.SECONDS);
         if (!finished) {
             process.destroyForcibly();
             throw new RuntimeException("LibreOffice 转换超时");
@@ -148,8 +232,8 @@ public class HomeaiOfficeConvertUtil {
     }
 
     private String resolveLibreOfficePath() {
-        if (isExecutable(sofficePath)) {
-            return sofficePath;
+        if (isExecutable(sofficePathNow())) {
+            return sofficePathNow();
         }
         if (!shouldTryMsOffice()) {
             return null;

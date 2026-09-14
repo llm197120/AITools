@@ -41,7 +41,8 @@ public final class HomeaiFileMime {
             Map.entry("mp3", "audio/mpeg"),
             Map.entry("wav", "audio/wav"),
             Map.entry("m4a", "audio/mp4"),
-            Map.entry("zip", "application/zip")
+            Map.entry("zip", "application/zip"),
+            Map.entry("apk", "application/vnd.android.package-archive")
     );
 
     private HomeaiFileMime() {

@@ -15,7 +15,7 @@
 CREATE TABLE IF NOT EXISTS `homeai_wx_user` (
     `id`              VARCHAR(32)  NOT NULL COMMENT '主键',
     `openid`          VARCHAR(64)  NULL COMMENT '微信openid（唯一，微信登录后填入）',
-    `nickname`        VARCHAR(64)           COMMENT '微信昵称',
+    `nickname`        VARCHAR(64)           COMMENT '用户姓名',
     `avatar_url`      VARCHAR(512)          COMMENT '头像URL',
     `phone`           VARCHAR(20)           COMMENT '手机号',
     `password`        VARCHAR(128)          COMMENT '密码(PBE加密)',
@@ -300,7 +300,8 @@ CREATE TABLE IF NOT EXISTS `homeai_convert_rule` (
     `update_by`         VARCHAR(50)           COMMENT '更新人',
     `update_time`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    KEY `idx_hw_convert_rule_source` (`source_format`)
+    KEY `idx_hw_convert_rule_source` (`source_format`),
+    UNIQUE KEY `uk_hw_convert_rule_pair` (`source_format`, `target_format`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='格式转换规则' ROW_FORMAT=DYNAMIC;
 
 -- =============================================================
@@ -759,9 +760,78 @@ VALUES
 ('fw_aac',  'aac',  'audio',   53, 1);
 
 -- =============================================================
+-- 初始化数据：常用格式转换规则
+-- =============================================================
+INSERT IGNORE INTO `homeai_convert_rule` (`id`, `source_format`, `target_format`, `is_enabled`, `create_by`)
+VALUES
+('cvrule_docx_pdf', 'docx', 'pdf', '1', 'system'),
+('cvrule_docx_doc', 'docx', 'doc', '1', 'system'),
+('cvrule_docx_txt', 'docx', 'txt', '1', 'system'),
+('cvrule_doc_pdf', 'doc', 'pdf', '1', 'system'),
+('cvrule_doc_docx', 'doc', 'docx', '1', 'system'),
+('cvrule_doc_txt', 'doc', 'txt', '1', 'system'),
+('cvrule_txt_pdf', 'txt', 'pdf', '1', 'system'),
+('cvrule_txt_docx', 'txt', 'docx', '1', 'system'),
+('cvrule_xlsx_pdf', 'xlsx', 'pdf', '1', 'system'),
+('cvrule_xlsx_xls', 'xlsx', 'xls', '1', 'system'),
+('cvrule_xlsx_csv', 'xlsx', 'csv', '1', 'system'),
+('cvrule_xls_pdf', 'xls', 'pdf', '1', 'system'),
+('cvrule_xls_xlsx', 'xls', 'xlsx', '1', 'system'),
+('cvrule_xls_csv', 'xls', 'csv', '1', 'system'),
+('cvrule_csv_xlsx', 'csv', 'xlsx', '1', 'system'),
+('cvrule_csv_pdf', 'csv', 'pdf', '1', 'system'),
+('cvrule_pptx_pdf', 'pptx', 'pdf', '1', 'system'),
+('cvrule_pptx_ppt', 'pptx', 'ppt', '1', 'system'),
+('cvrule_ppt_pdf', 'ppt', 'pdf', '1', 'system'),
+('cvrule_ppt_pptx', 'ppt', 'pptx', '1', 'system');
+
+-- =============================================================
 -- 初始化数据：APP 版本（默认关闭，避免内测包误触发更新）
 -- =============================================================
 INSERT IGNORE INTO `homeai_app_version`
 (`id`, `version_name`, `version_code`, `update_mode`, `force_update`, `min_shell_code`, `enabled`, `changelog`)
 VALUES
 ('current', '1.0.0', 100, 'apk', 0, 100, 0, '当前内测版本，未开放自动更新');
+
+-- =============================================================
+-- APP 离线同步配置（单行 current）
+-- =============================================================
+CREATE TABLE IF NOT EXISTS `homeai_sync_config` (
+    `id`                   VARCHAR(32) NOT NULL COMMENT '主键（固定 current）',
+    `batch_size`           INT DEFAULT 1 COMMENT '每批同步条数',
+    `interval_ms`          INT DEFAULT 5000 COMMENT '批间隔毫秒',
+    `max_retries_per_day`  INT DEFAULT 20 COMMENT '单条 24h 最大尝试次数',
+    `image_cache_limit_mb` INT DEFAULT 4096 COMMENT '图片缓存上限 MB',
+    `create_time`          DATETIME DEFAULT NULL,
+    `update_time`          DATETIME DEFAULT NULL,
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='HomeAI 离线同步与缓存配置';
+
+INSERT IGNORE INTO `homeai_sync_config` (`id`, `batch_size`, `interval_ms`, `max_retries_per_day`, `image_cache_limit_mb`)
+VALUES ('current', 1, 5000, 20, 4096);
+
+-- =============================================================
+-- 协议/隐私富文本（id: agreement / privacy）
+-- =============================================================
+CREATE TABLE IF NOT EXISTS `homeai_doc_config` (
+    `id`          VARCHAR(32) NOT NULL COMMENT '主键（agreement/privacy）',
+    `content`     LONGTEXT COMMENT '富文本 HTML 内容',
+    `create_time` DATETIME DEFAULT NULL,
+    `update_time` DATETIME DEFAULT NULL,
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='HomeAI 协议与隐私政策配置';
+
+INSERT IGNORE INTO `homeai_doc_config` (`id`, `content`) VALUES ('agreement', ''), ('privacy', '');
+
+-- =============================================================
+-- 系统运行时配置（单行 current）
+-- =============================================================
+CREATE TABLE IF NOT EXISTS `homeai_sys_config` (
+    `id`          VARCHAR(32) NOT NULL COMMENT '主键（固定 current）',
+    `content`     LONGTEXT COMMENT 'JSON：上传上限/学习提醒/微信模板/Office/OSS/文件外链',
+    `create_time` DATETIME DEFAULT NULL,
+    `update_time` DATETIME DEFAULT NULL,
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='HomeAI 系统运行时配置';
+
+INSERT IGNORE INTO `homeai_sys_config` (`id`, `content`) VALUES ('current', '{}');

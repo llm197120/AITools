@@ -27,7 +27,7 @@
       />
       <view class="format-item" v-for="rule in targets" :key="rule.id" @click="startConvert(rule)">
         <text>{{ rule.sourceFormat }} → {{ rule.targetFormat }}</text>
-        <wd-icon name="arrow-right" size="14px" color="#A39E94"></wd-icon>
+        <wd-icon name="arrow-right" size="14px" color="var(--hai-text-muted)"></wd-icon>
       </view>
     </view>
   </view>

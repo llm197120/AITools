@@ -1,10 +1,8 @@
 <template>
-  <BasicDrawer v-bind="$attrs" @register="registerDrawer" :title="drawerTitle" width="40%">
-    <!-- 查看模式 -->
+  <HomeaiFormModal v-bind="$attrs" size="medium" @register="registerDrawer" :title="drawerTitle">
     <template v-if="!isUpdate">
-      <Description :column="1" :data="record" :schema="viewSchema" />
+      <Description :column="2" :data="record" :schema="viewSchema" />
     </template>
-    <!-- 编辑/新增模式 -->
     <template v-else>
       <a-alert
         v-if="!record.id"
@@ -15,25 +13,26 @@
       />
       <BasicForm @register="registerForm" @submit="handleSubmit" />
     </template>
-    <!-- 底部按钮 -->
     <template #footer>
       <template v-if="isUpdate">
-        <a-button type="primary" @click="submit">保存</a-button>
-        <a-button style="margin-left: 8px" @click="closeDrawer()">取消</a-button>
+        <a-button @click="closeDrawer()">取消</a-button>
+        <a-button type="primary" @click="submit">保存并关闭</a-button>
       </template>
       <a-button v-else @click="closeDrawer()">关闭</a-button>
     </template>
-  </BasicDrawer>
+  </HomeaiFormModal>
 </template>
 
 <script lang="ts" name="homeai-user-drawer" setup>
 import { computed, ref } from 'vue';
-import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
+import { useModalInner } from '/@/components/Modal';
 import { Description } from '/@/components/Description';
 import { BasicForm, useForm } from '/@/components/Form';
 import { userApi, familyApi } from '/@/api/homeai';
 import { useMessage } from '/@/hooks/web/useMessage';
 import { toFamilySelectOptions } from '../utils/activeFamily';
+import HomeaiFormModal from '../components/HomeaiFormModal.vue';
+import { COL_FULL } from '../utils/formLayout';
 
 const emit = defineEmits(['success']);
 const { createMessage } = useMessage();
@@ -56,7 +55,7 @@ async function loadFamilyOptions() {
   }
 }
 
-const [registerDrawer, { closeDrawer }] = useDrawerInner((data) => {
+const [registerDrawer, { closeModal: closeDrawer }] = useModalInner((data) => {
     isUpdate.value = data.isUpdate || false;
     record.value = data.record || {};
     loadFamilyOptions();
@@ -68,7 +67,7 @@ const [registerDrawer, { closeDrawer }] = useDrawerInner((data) => {
   });
 
   const viewSchema: any[] = [
-    { label: '微信昵称', field: 'nickname' },
+    { label: '用户姓名', field: 'nickname' },
     { label: 'openid', field: 'openid' },
     { label: '手机号', field: 'phone' },
     { label: '所属家庭', field: 'familyName', render: (val: string) => val || '无' },
@@ -81,8 +80,9 @@ const [registerDrawer, { closeDrawer }] = useDrawerInner((data) => {
 
   const [registerForm, { setFieldsValue, resetFields, submit }] = useForm({
     labelWidth: 100,
+    baseColProps: { span: 12 },
     schemas: [
-      { field: 'nickname', label: '微信昵称', component: 'Input', required: true },
+      { field: 'nickname', label: '用户姓名', component: 'Input', required: true },
       { field: 'phone', label: '手机号', component: 'Input', required: true },
       {
         field: 'familyId',
@@ -130,6 +130,7 @@ const [registerDrawer, { closeDrawer }] = useDrawerInner((data) => {
           ],
         },
         defaultValue: '1',
+        colProps: COL_FULL,
       },
     ],
     showSubmitButton: false,

@@ -172,11 +172,18 @@ async function capacitorHotUpdate(
   try {
     if (onProgress) {
       listener = await plugin.addListener('downloadProgress', (e) => {
-        if (e.total > 0) onProgress(Number(e.loaded) || 0, Number(e.total) || 0)
+        const loaded = Number(e.loaded) || 0
+        const total = Number(e.total) || 0
+        if (total > 0) onProgress(loaded, total)
+        else if (loaded > 0) onStatus(`正在下载页面更新… ${(loaded / 1048576).toFixed(1)} MB`)
       })
     }
     const ret = await plugin.download({ url, fileName: `homeai-h5-${versionCode}.zip` })
     zipPath = ret.path
+  } catch (e: any) {
+    console.error('[updater] 热更新包下载失败', url, e)
+    const msg = String(e?.message || (e as any)?.errMsg || e || '')
+    throw new Error(msg.startsWith('下载失败') ? msg : `下载失败: ${msg}`)
   } finally {
     listener?.remove()
   }
@@ -191,6 +198,112 @@ async function capacitorHotUpdate(
   setTimeout(() => {
     if (typeof window !== 'undefined') window.location.reload()
   }, 300)
+}
+
+export async function getLocalAppVersion(): Promise<{ versionName: string; build: string }> {
+  if (isCapacitorNative()) {
+    try {
+      const { App } = await import('@capacitor/app')
+      const info = await App.getInfo()
+      return {
+        versionName: info.version || '1.0.0',
+        build: info.build ? String(info.build) : '',
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  const sys = uni.getSystemInfoSync()
+  const name = sys.appVersion || sys.appWgtVersion || '1.0.0'
+  const build = String((sys as any).appVersionCode || '')
+  return { versionName: name, build }
+}
+
+export type UpdateInspectResult =
+  | { kind: 'skip' }
+  | { kind: 'offline' }
+  | { kind: 'latest'; versionName: string }
+  | {
+      kind: 'available'
+      action: Exclude<UpdateAction, 'none'>
+      remote: AppVersionInfo
+    }
+
+export async function inspectAppUpdate(): Promise<UpdateInspectResult> {
+  if (!isStandaloneApp()) return { kind: 'skip' }
+  const remote = await fetchPublicVersion()
+  if (!remote) return { kind: 'offline' }
+
+  const shellCode = await readShellCode()
+  if (shellCode <= 0) return { kind: 'skip' }
+  let webCode = readWebCode(shellCode)
+  if (shellCode > webCode) {
+    uni.setStorageSync(WEB_VERSION_KEY, String(shellCode))
+    webCode = shellCode
+  }
+
+  let action = resolveUpdateAction({
+    enabled: remote.enabled === true,
+    serverCode: Number(remote.versionCode || 0),
+    localWebCode: webCode,
+    shellCode,
+    updateMode: remote.updateMode,
+    minShellCode: Number(remote.minShellCode || 0),
+  })
+  if (action === 'resource' && !remote.resourceUrl) {
+    action = remote.apkUrl ? 'apk' : 'none'
+  }
+  if (action === 'apk' && !remote.apkUrl) {
+    action = 'none'
+  }
+  if (action === 'none') {
+    return { kind: 'latest', versionName: remote.versionName || String(remote.versionCode || '') }
+  }
+  return { kind: 'available', action, remote }
+}
+
+export async function applyInspectedUpdate(
+  inspected: Extract<UpdateInspectResult, { kind: 'available' }>,
+  hooks: {
+    onStatus: (text: string) => void
+    onProgress?: (loaded: number, total: number) => void
+  },
+): Promise<'updating' | 'failed'> {
+  const { action, remote } = inspected
+  try {
+    if (action === 'resource') {
+      if (!isCapacitorNative()) {
+        if (remote.apkUrl) {
+          await plusInstallApk(remote.apkUrl, hooks.onStatus)
+          return 'updating'
+        }
+        uni.showToast({ title: '请安装新版 APK', icon: 'none' })
+        return 'failed'
+      }
+      await capacitorHotUpdate(
+        remote.resourceUrl as string,
+        remote.resourceSha256,
+        Number(remote.versionCode),
+        hooks.onStatus,
+        hooks.onProgress,
+      )
+      return 'updating'
+    }
+    if (isCapacitorNative()) {
+      await capacitorInstallApk(
+        remote.apkUrl as string,
+        remote.apkSha256,
+        hooks.onStatus,
+        hooks.onProgress,
+      )
+    } else {
+      await plusInstallApk(remote.apkUrl as string, hooks.onStatus)
+    }
+    return 'updating'
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '更新失败', icon: 'none', duration: 3000 })
+    return 'failed'
+  }
 }
 
 function plusInstallApk(url: string, onStatus: (t: string) => void): Promise<void> {
@@ -226,77 +339,21 @@ export async function checkAndApplyUpdate(hooks: {
   onProgress?: (loaded: number, total: number) => void
   confirm: (info: { versionName: string; changelog: string; force: boolean; action: UpdateAction }) => Promise<boolean>
 }): Promise<'continue' | 'updating'> {
-  if (!isStandaloneApp()) return 'continue'
-  const remote = await fetchPublicVersion()
-  if (!remote) return 'continue'
+  const inspected = await inspectAppUpdate()
+  if (inspected.kind !== 'available') return 'continue'
 
-  const shellCode = await readShellCode()
-  // 无法读取壳版本（App.getInfo 异常等）：不弹更新，避免 serverCode>0 导致死循环误弹
-  if (shellCode <= 0) return 'continue'
-  let webCode = readWebCode(shellCode)
-  if (shellCode > webCode) {
-    uni.setStorageSync(WEB_VERSION_KEY, String(shellCode))
-    webCode = shellCode
-  }
-
-  let action = resolveUpdateAction({
-    enabled: remote.enabled === true,
-    serverCode: Number(remote.versionCode || 0),
-    localWebCode: webCode,
-    shellCode,
-    updateMode: remote.updateMode,
-    minShellCode: Number(remote.minShellCode || 0),
-  })
-  if (action === 'resource' && !remote.resourceUrl) {
-    action = remote.apkUrl ? 'apk' : 'none'
-  }
-  if (action === 'apk' && !remote.apkUrl) {
-    action = 'none'
-  }
-  if (action === 'none') return 'continue'
-
+  const remote = inspected.remote
   const ok = await hooks.confirm({
     versionName: remote.versionName || String(remote.versionCode || ''),
     changelog: remote.changelog || '有新版本可用',
     force: remote.forceUpdate === true,
-    action,
+    action: inspected.action,
   })
   if (!ok) {
     return remote.forceUpdate ? 'updating' : 'continue'
   }
 
-  try {
-    if (action === 'resource') {
-      if (!isCapacitorNative()) {
-        if (remote.apkUrl) {
-          await plusInstallApk(remote.apkUrl, hooks.onStatus)
-          return 'updating'
-        }
-        uni.showToast({ title: '请安装新版 APK', icon: 'none' })
-        return 'continue'
-      }
-      await capacitorHotUpdate(
-        remote.resourceUrl as string,
-        remote.resourceSha256,
-        Number(remote.versionCode),
-        hooks.onStatus,
-        hooks.onProgress,
-      )
-      return 'updating'
-    }
-    if (isCapacitorNative()) {
-      await capacitorInstallApk(
-        remote.apkUrl as string,
-        remote.apkSha256,
-        hooks.onStatus,
-        hooks.onProgress,
-      )
-    } else {
-      await plusInstallApk(remote.apkUrl as string, hooks.onStatus)
-    }
-    return 'updating'
-  } catch (e: any) {
-    uni.showToast({ title: e?.message || '更新失败', icon: 'none', duration: 3000 })
-    return remote.forceUpdate ? 'updating' : 'continue'
-  }
+  const result = await applyInspectedUpdate(inspected, hooks)
+  if (result === 'updating') return 'updating'
+  return remote.forceUpdate ? 'updating' : 'continue'
 }

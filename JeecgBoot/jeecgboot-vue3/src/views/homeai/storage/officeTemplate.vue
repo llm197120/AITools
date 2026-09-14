@@ -14,7 +14,7 @@
         </template>
       </template>
     </BasicTable>
-    <BasicModal @register="registerModal" :title="isUpdate ? '编辑模板' : '新增模板'" width="480px">
+    <HomeaiFormModal @register="registerModal" size="short" :title="isUpdate ? '编辑模板' : '新增模板'">
       <BasicForm @register="registerForm" @submit="handleSubmit">
         <template #fileUrlSlot>
           <div style="display: flex; gap: 8px; align-items: center">
@@ -28,9 +28,9 @@
       </BasicForm>
       <template #footer>
         <a-button @click="closeModal()">取消</a-button>
-        <a-button type="primary" :loading="saving" @click="submit">保存</a-button>
+        <a-button type="primary" :loading="saving" @click="submit">保存并关闭</a-button>
       </template>
-    </BasicModal>
+    </HomeaiFormModal>
   </PageWrapper>
 </template>
 
@@ -38,8 +38,9 @@
   import { PageWrapper } from '/@/components/Page';
   import { ref } from 'vue';
   import { BasicTable, TableAction, useTable } from '/@/components/Table';
-  import { BasicModal, useModal } from '/@/components/Modal';
+  import { useModal } from '/@/components/Modal';
   import { BasicForm, useForm } from '/@/components/Form';
+  import HomeaiFormModal from '../components/HomeaiFormModal.vue';
   import { useMessage } from '/@/hooks/web/useMessage';
   import { storageTemplateApi } from '/@/api/homeai';
   import type { HomeaiOfficeTemplate, HomeaiPageParams, HomeaiPayload } from '/@/api/homeai';

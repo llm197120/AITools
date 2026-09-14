@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 # 打印 release 证书 SHA1/SHA256（密码从 android-pack.local.json 读取，不写进命令行）
 # 用法：powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\android-offline\show-cert.ps1
 $ErrorActionPreference = 'Stop'

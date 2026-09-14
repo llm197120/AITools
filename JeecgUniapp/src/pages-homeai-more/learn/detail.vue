@@ -15,7 +15,7 @@
 
     <!-- 视频预览 -->
     <video v-if="isVideo" class="media" :src="mediaUrl" controls></video>
-    <image v-else-if="isImage" class="media image" :src="mediaUrl" mode="widthFix" @click="previewImage" />
+    <image v-else-if="isImage" class="media image" :src="mediaUrl" mode="widthFix" @click="previewImage" @longpress="openInOtherApp" />
     <NativeHtmlAudio v-else-if="isAudio" class="media-audio" :src="mediaUrl" />
     <!-- 链接 -->
     <view v-else-if="isLink && linkUrl" class="link-box">
@@ -23,9 +23,9 @@
       <wd-button size="small" @click="openLink">{{ linkActionLabel }}</wd-button>
     </view>
     <!-- 其他文档提示 -->
-    <view v-else-if="mediaUrl" class="doc-tip" @click="openDocument">
+    <view v-else-if="mediaUrl" class="doc-tip" @click="openDocument" @longpress="openInOtherApp">
       <text class="doc-icon">📄</text>
-      <text>用手机应用打开文件</text>
+      <text>点击预览文档，长按可用其他应用打开</text>
     </view>
 
     <view v-if="material.description" class="desc">{{ material.description }}</view>
@@ -58,6 +58,7 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import NativeHtmlAudio from '../../pages-homeai/components/NativeHtmlAudio'
 import { learnApi } from '../../pages-homeai/api/learn'
 import { getFileExt, isAudioExt, isImageExt, isVideoExt, previewFile } from '../../pages-homeai/utils/filePreview'
+import { openStorageFileExternally } from '../../pages-homeai/utils/fileDownload'
 import { confirmStopLearn } from '../../pages-homeai/utils/learnSession'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
@@ -175,6 +176,15 @@ function openDocument() {
     fileUrl: mediaUrl.value,
     originalName: material.value.title,
     title: material.value.title,
+  })
+}
+
+function openInOtherApp() {
+  openStorageFileExternally({
+    materialId: materialId.value,
+    fileUrl: mediaUrl.value,
+    originalName: material.value.title,
+    extension: getFileExt(mediaUrl.value || material.value.title || ''),
   })
 }
 

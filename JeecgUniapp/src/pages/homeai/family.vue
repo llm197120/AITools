@@ -52,7 +52,7 @@
     <view class="no-family" v-else-if="familyStore.familyLoadFailed">
       <HomeEmpty
         icon-name="warning"
-        icon-color="#1B4F8A"
+        icon-color="var(--hai-primary)"
         icon-size="40px"
         title="家庭信息加载失败"
         hint="请检查网络后重试"
@@ -69,7 +69,7 @@
     <view class="no-family" v-else-if="familyStore.familyInfoLoaded">
       <HomeEmpty
         icon-name="home"
-        icon-color="#1B4F8A"
+        icon-color="var(--hai-primary)"
         icon-size="40px"
         title="还没有家庭"
         hint="创建或加入家庭后，资料与计划可共享使用"
@@ -161,6 +161,7 @@ import { useMessage } from 'wot-design-uni'
 import HomeEmpty from '../../components/HomeEmpty.vue'
 import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
 import { useFamilyPoll } from '../../pages-homeai/utils/useFamilyPoll'
+import { applyTheme } from '../../pages-homeai/utils/theme'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
@@ -207,6 +208,7 @@ useHomeaiPullRefresh(async () => {
 })
 
 onShow(async () => {
+  applyTheme()
   stopFamilyPoll()
   if (!ensureProfileWhenGuest()) {
     return

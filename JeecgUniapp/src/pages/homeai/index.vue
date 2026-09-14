@@ -19,18 +19,19 @@
       </view>
     </template>
     <template v-else>
+    <OfflineBanner />
     <!-- 问候区 -->
     <view class="header" :style="{ paddingRight: headerRightPx + 'px' }">
       <view class="header-main">
         <text class="greeting">今天想做什么？</text>
         <view class="family-row" @click="onFamilyClick">
-          <wd-icon name="location" size="14px" color="#8A857C"></wd-icon>
+          <wd-icon name="location" size="14px" color="var(--hai-text-secondary)"></wd-icon>
           <text class="family-label">{{ familyLabel }}</text>
-          <wd-icon name="arrow-down" size="12px" color="#8A857C"></wd-icon>
+          <wd-icon name="arrow-down" size="12px" color="var(--hai-text-secondary)"></wd-icon>
         </view>
       </view>
       <view class="plan-btn hai-press" @click="goModule('plan')">
-        <wd-icon name="calendar" size="20px" color="#3A342C"></wd-icon>
+        <wd-icon name="calendar" size="20px" color="var(--hai-icon)"></wd-icon>
         <view v-if="todayTodo > 0" class="notify-dot"></view>
       </view>
     </view>
@@ -57,7 +58,7 @@
         @click="goModule(item.key)"
       >
         <view class="quick-icon">
-          <wd-icon :name="item.icon" size="22px" color="#3A342C"></wd-icon>
+          <wd-icon :name="item.icon" size="22px" color="var(--hai-primary)"></wd-icon>
         </view>
         <text class="quick-title">{{ item.label }}</text>
         <text class="quick-sub">{{ item.sub }}</text>
@@ -70,12 +71,12 @@
         <text class="section-title">今日计划</text>
         <view class="section-link" @click="goModule('plan')">
           <text>查看日历</text>
-          <wd-icon name="arrow-right" size="12px" color="#8A857C"></wd-icon>
+          <wd-icon name="arrow-right" size="12px" color="var(--hai-text-secondary)"></wd-icon>
         </view>
       </view>
       <view class="plan-card" @click="onPlanCardClick">
         <view class="plan-icon-wrap">
-          <wd-icon name="clock" size="28px" color="#1B4F8A"></wd-icon>
+          <wd-icon name="clock" size="28px" color="var(--hai-primary)"></wd-icon>
         </view>
         <view class="plan-info">
           <text class="plan-title">今日待办安排</text>
@@ -83,7 +84,7 @@
           <text class="plan-desc" v-else-if="todayTodo > 0">今日有 {{ todayTodo }} 项待办，点击查看</text>
           <text class="plan-desc" v-else>暂无待办，安排一条计划开始今天</text>
         </view>
-        <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
+        <wd-icon name="arrow-right" size="14px" color="var(--hai-text-tertiary)"></wd-icon>
       </view>
     </view>
 
@@ -113,14 +114,14 @@
     <view class="more-entry" @click="goModule('more')">
       <view class="more-left">
         <view class="more-icon">
-          <wd-icon name="app" size="18px" color="#1B4F8A"></wd-icon>
+          <wd-icon name="app" size="18px" color="var(--hai-primary)"></wd-icon>
         </view>
         <view>
           <text class="more-title">全部功能</text>
           <text class="more-sub">资料存储 · 家庭管理 · 更多工具</text>
         </view>
       </view>
-      <wd-icon name="arrow-right" size="14px" color="#C4BFB6"></wd-icon>
+      <wd-icon name="arrow-right" size="14px" color="var(--hai-text-tertiary)"></wd-icon>
     </view>
 
     <view class="footer-tip">
@@ -141,7 +142,10 @@ import { ensureLoginForAction, ensureProfileWhenGuest, openAuthPage } from '../.
 import { localDateStr } from '../../pages-homeai/utils/date'
 import { useHomeaiPullRefresh } from '../../pages-homeai/utils/useHomeaiPullRefresh'
 import { useFamilyPoll } from '../../pages-homeai/utils/useFamilyPoll'
+import { applyTheme } from '../../pages-homeai/utils/theme'
 import HomeSkeleton from '../../components/HomeSkeleton.vue'
+import { readList } from '../../pages-homeai/offline/dataAccess'
+import OfflineBanner from '../../pages-homeai/offline/OfflineBanner.vue'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
@@ -225,6 +229,7 @@ useHomeaiPullRefresh(async () => {
 const { start: startFamilyPoll, stop: stopFamilyPoll } = useFamilyPoll()
 
 onShow(async () => {
+  applyTheme()
   if (!ensureProfileWhenGuest()) {
     booting.value = false
     stopFamilyPoll()
@@ -240,7 +245,8 @@ onShow(async () => {
 
 async function reloadLearnGoal() {
   try {
-    learnGoal.value = (await learnApi.goal()) || learnGoal.value
+    const res = await readList<any>('learn', 'goal', () => learnApi.goal())
+    if (res.data) learnGoal.value = res.data
   } catch {
     // 目标失败不挡首页
   }
@@ -249,12 +255,13 @@ async function reloadLearnGoal() {
 async function reloadPlans() {
   planLoadFailed.value = false
   try {
-    const list = await getApi(`/plan/date/${localDateStr()}`)
-    const arr = Array.isArray(list) ? list : []
+    const day = localDateStr()
+    const res = await readList<any[]>('plan', 'byDate:' + day, () => getApi(`/plan/date/${day}`))
+    const arr = Array.isArray(res.data) ? res.data : []
     todayTodo.value = arr.filter((p: any) => p.status === 'pending').length
     todayCookPlans.value = arr.filter((p: any) => p.recipeId)
   } catch {
-    planLoadFailed.value = true
+    planLoadFailed.value = todayTodo.value === 0 && todayCookPlans.value.length === 0
   }
 }
 
@@ -497,7 +504,7 @@ function goModule(key: string) {
   width: 80rpx;
   height: 80rpx;
   border-radius: 22rpx;
-  background: var(--hai-bg);
+  background: var(--hai-primary-soft);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -605,11 +612,11 @@ function goModule(key: string) {
 }
 
 .dual-recipe {
-  background: linear-gradient(165deg, #fff8f3 0%, #ffffff 55%);
+  background: var(--hai-dual-recipe);
 }
 
 .dual-learn {
-  background: linear-gradient(165deg, #f2f6f4 0%, #ffffff 55%);
+  background: var(--hai-dual-learn);
 }
 
 .dual-tag {

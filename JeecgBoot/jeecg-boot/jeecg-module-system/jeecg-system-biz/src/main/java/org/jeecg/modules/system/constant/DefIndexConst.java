@@ -28,8 +28,10 @@ public interface DefIndexConst {
     /**
      * 默认首页的初始值
      */
-    String DEF_INDEX_NAME = "首页";
-    String DEF_INDEX_URL = "/dashboard/analysis";
-    String DEF_INDEX_COMPONENT = "dashboard/Analysis";
+    //update-begin---author:homeai---date:2026-09-07---for:【管理端】默认首页改为家庭AI综合统计---
+    String DEF_INDEX_NAME = "综合统计";
+    String DEF_INDEX_URL = "/homeai/dashboard/crossStats";
+    String DEF_INDEX_COMPONENT = "homeai/dashboard/crossStats";
+    //update-end
 
 }

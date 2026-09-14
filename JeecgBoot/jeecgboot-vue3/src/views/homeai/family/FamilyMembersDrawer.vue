@@ -1,5 +1,5 @@
 <template>
-  <BasicDrawer v-bind="$attrs" @register="registerDrawer" :title="drawerTitle" width="55%">
+  <HomeaiFormModal v-bind="$attrs" size="wide" @register="registerDrawer" :title="drawerTitle">
     <template #default>
       <a-space style="margin-bottom: 12px">
         <a-button preIcon="ant-design:user-add-outlined" type="primary" @click="openAddModal">
@@ -28,14 +28,18 @@
     <template #footer>
       <a-button type="primary" @click="closeDrawer()">关闭</a-button>
     </template>
-  </BasicDrawer>
+  </HomeaiFormModal>
 
-  <!-- 添加成员弹窗 -->
   <a-modal
     v-model:open="addVisible"
     title="添加成员"
-    :width="420"
+    :centered="true"
+    :maskClosable="false"
+    :width="520"
     :confirm-loading="adding"
+    wrapClassName="homeai-form-modal"
+    ok-text="保存并关闭"
+    cancel-text="取消"
     @ok="handleAddMember"
     @cancel="addVisible = false"
   >
@@ -62,10 +66,11 @@
 
 <script lang="ts" name="homeai-family-members" setup>
   import { computed, reactive, ref } from 'vue';
-  import { BasicDrawer, useDrawerInner } from '/@/components/Drawer';
+  import { useModalInner } from '/@/components/Modal';
   import { BasicTable, useTable } from '/@/components/Table';
   import { familyApi, userApi } from '/@/api/homeai';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import HomeaiFormModal from '../components/HomeaiFormModal.vue';
 
   const emit = defineEmits(['success']);
   const { createMessage, createConfirm } = useMessage();
@@ -84,7 +89,7 @@
     },
   }));
 
-  const [registerDrawer, { closeDrawer }] = useDrawerInner((data) => {
+  const [registerDrawer, { closeModal: closeDrawer }] = useModalInner((data) => {
     familyId.value = data?.familyId || '';
     familyName.value = data?.familyName || '';
     selectedRowKeys.value = [];
@@ -92,7 +97,7 @@
   });
 
   const columns = [
-    { title: '微信昵称', dataIndex: 'nickname', width: 150 },
+    { title: '用户姓名', dataIndex: 'nickname', width: 150 },
     { title: '手机号', dataIndex: 'phone', width: 130 },
     { title: '角色', dataIndex: 'role', key: 'role', width: 140 },
     { title: '加入时间', dataIndex: 'joinedAt', width: 180 },

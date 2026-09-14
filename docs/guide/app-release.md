@@ -117,7 +117,7 @@ pnpm pack:apk:local
 
 | 入口                    | 位置                                                 | 用处                                                                                                                                                          |
 | --------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `publish-all.ps1`     | `docs/deploy/publish-all.ps1`                      | **按目标发布**：`-Backend` / `-Frontend` / `-App`（可组合）。只出 APP：`.\publish-all.ps1 -App`。可选 `-UploadApk`。启停见同目录 `start-all.ps1` / `stop-all.ps1` |
+| `publish-all.ps1`     | `docs/deploy/publish-all.ps1`                      | **按目标发布**：`-Backend` / `-Frontend` / `-App`（可组合）。发后端时默认拉起本机 Gotenberg/kkFileView（`-SkipDocsPreview` 可关）。菜单「全部 / 仅 APP」会在打包成功后单独上传下载页并登记版本。命令行：`.\publish-all.ps1 -App -UploadApk -RegisterVersion`。启停见同目录 `start-all.ps1` / `stop-all.ps1` |
 | `pnpm pack:apk:local` | `JeecgUniapp/scripts/capacitor/pack-apk-local.ps1` | **唯一出包命令**。品牌资源 → `pnpm build:h5` → `cap sync` → 签名 `assembleRelease`。产物在 `JeecgUniapp/dist/apk/`：带时间戳 APK、`homeai-release.apk`、热更新 `homeai-h5-{版本}.zip`    |
 | 可选 `-SkipBuild`       | 同上                                                 | H5 已构建、只重打原生壳时用                                                                                                                                             |
 | 可选 `-InitAndroid`     | 同上                                                 | 本机还没有 `android/` 时：`pnpm pack:apk:local -- -InitAndroid`                                                                                                    |

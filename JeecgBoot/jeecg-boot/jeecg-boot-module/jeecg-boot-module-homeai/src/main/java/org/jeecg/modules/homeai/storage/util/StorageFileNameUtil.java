@@ -62,4 +62,19 @@ public final class StorageFileNameUtil {
         }
         return fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
     }
+
+    /** 把展示文件名换成新扩展名（如 report.docx → report.pdf） */
+    public static String withExtension(String originalName, String newExt) {
+        String sanitized = sanitizeOriginalName(originalName);
+        String ext = oConvertUtils.isEmpty(newExt) ? "" : newExt.trim().toLowerCase().replace(".", "");
+        if (ext.isEmpty()) {
+            return sanitized;
+        }
+        int dot = sanitized.lastIndexOf('.');
+        String base = dot > 0 ? sanitized.substring(0, dot) : sanitized;
+        if (base.isEmpty()) {
+            base = "file";
+        }
+        return base + "." + ext;
+    }
 }

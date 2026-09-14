@@ -3,6 +3,7 @@
   style: {
     navigationBarTitleText: 'AI对话',
     navigationBarBackgroundColor: '#F3F2EE',
+    disableScroll: true,
   },
 }
 </route>
@@ -10,7 +11,13 @@
 <template>
   <view class="chat-page">
     <!-- 消息列表 -->
-    <scroll-view class="message-list" scroll-y :scroll-into-view="scrollToId" scroll-with-animation>
+    <scroll-view
+      class="message-list"
+      scroll-y
+      :scroll-into-view="scrollToId"
+      scroll-with-animation
+      scroll-into-view-align="nearest"
+    >
       <view v-if="msgFailed && messages.length === 0 && !isStreaming" class="empty-chat">
         <HomeEmpty
           icon-name="chat"
@@ -48,13 +55,14 @@
           <image v-if="msg.contentType === 'image' && msg.fileUrl" class="msg-image" :src="msg.fileUrl" mode="widthFix" />
           <!-- 文本内容（Markdown） -->
           <mp-html v-if="msg.content && msg.role === 'assistant'" class="msg-text" :content="msg.content" selectable />
-          <text v-else-if="msg.content" class="msg-text" selectable>{{ msg.content }}</text>
+          <view v-else-if="msg.content" class="msg-text user-text">{{ msg.content }}</view>
           <!-- 流式加载动画 -->
           <view class="streaming-dots" v-if="msg.role === 'assistant' && msg.isStreaming">
             <text class="dot">.</text><text class="dot">.</text><text class="dot">.</text>
           </view>
         </view>
       </view>
+      <view id="msg-end" class="list-end"></view>
     </scroll-view>
 
     <!-- 停止生成按钮 -->
@@ -85,7 +93,7 @@
         </view>
       </view>
       <view class="input-row">
-        <wd-icon name="attachment" size="22px" color="#8A857C" class="attach-btn" @click="showAttachmentPicker"></wd-icon>
+        <wd-icon name="attachment" size="22px" color="var(--hai-text-secondary)" class="attach-btn" @click="showAttachmentPicker"></wd-icon>
         <input class="text-input" v-model="inputText" type="text" placeholder="输入消息..."
           :disabled="quotaExhausted" confirm-type="send" @confirm="sendMessage" @blur="refreshQuota" />
         <wd-button v-if="!quotaExhausted" size="medium" type="primary" :disabled="!canSend || isStreaming"
@@ -139,11 +147,15 @@ function applyNavTitle(raw?: string) {
 onLoad(async (options: any) => {
   conversationId.value = options?.id || ''
   if (options?.title) {
-    hasQueryTitle.value = true
+    let decoded = options.title
     try {
-      applyNavTitle(decodeURIComponent(options.title))
+      decoded = decodeURIComponent(options.title)
     } catch {
-      applyNavTitle(options.title)
+      decoded = options.title
+    }
+    if (decoded && decoded !== '新对话') {
+      hasQueryTitle.value = true
+      applyNavTitle(decoded)
     }
   }
   if (conversationId.value) {
@@ -201,7 +213,6 @@ async function loadMessages() {
       () => getApi(`/ai/conversations/${conversationId.value}/messages`),
     )
     messages.value = r.data || []
-    if (r.offline) uni.showToast({ title: '离线模式，展示本地历史', icon: 'none' })
     msgFailed.value = false
     if (!hasQueryTitle.value) {
       const firstUser = messages.value.find((m: any) => m.role === 'user' && m.content)
@@ -216,7 +227,7 @@ async function loadMessages() {
 
 function scrollToBottom() {
   nextTick(() => {
-    scrollToId.value = 'msg-' + (messages.value.length - 1)
+    scrollToId.value = 'msg-end'
   })
 }
 
@@ -822,16 +833,32 @@ function getAppBaseUrl(): string {
 }
 </script>
 
+<style>
+page {
+  height: 100%;
+  overflow: hidden;
+}
+</style>
 <style scoped>
 .chat-page {
   display: flex;
   flex-direction: column;
+  height: 100%;
   height: 100vh;
+  height: calc(100vh - var(--window-top, 0px));
+  overflow: hidden;
   background: var(--hai-bg);
+  box-sizing: border-box;
 }
 .message-list {
   flex: 1;
+  height: 0;
+  min-height: 0;
   padding: 20rpx;
+  box-sizing: border-box;
+}
+.list-end {
+  height: 8rpx;
 }
 .message-item {
   display: flex;
@@ -861,12 +888,14 @@ function getAppBaseUrl(): string {
   line-height: 1;
 }
 .bubble {
-  max-width: 70%;
+  max-width: 80%;
+  min-width: 0;
   padding: 20rpx 24rpx;
   border-radius: var(--hai-radius-sm);
   font-size: 28rpx;
   line-height: 1.6;
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .bubble.user {
   background: var(--hai-primary);
@@ -887,6 +916,14 @@ function getAppBaseUrl(): string {
 }
 .msg-text {
   white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.user-text {
+  display: block;
+  width: 100%;
+  user-select: text;
+  -webkit-user-select: text;
 }
 .streaming-dots {
   display: inline-flex;
@@ -905,6 +942,7 @@ function getAppBaseUrl(): string {
   100% { opacity: 0; }
 }
 .stop-bar, .reconnect-bar {
+  flex-shrink: 0;
   text-align: center;
   padding: 12rpx;
 }
@@ -913,6 +951,7 @@ function getAppBaseUrl(): string {
   text-decoration: underline;
 }
 .input-area {
+  flex-shrink: 0;
   padding: 16rpx 20rpx;
   background: var(--hai-card);
   border-top: 1rpx solid var(--hai-border);
@@ -1010,6 +1049,7 @@ function getAppBaseUrl(): string {
   text-align: left;
 }
 .quota-bar {
+  flex-shrink: 0;
   font-size: 22rpx;
   color: var(--hai-text-muted);
   text-align: center;

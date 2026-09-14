@@ -47,7 +47,7 @@
       <div class="sync-padding">
         <div style="font-size: 16px; width: 100%"> 3.数据同步</div>
         <div style="margin-top: 20px" class="base-desc">
-          从企业微信同步到敲敲云
+          从企业微信同步到家庭AI小工具
           <a style="margin-left: 10px" @click="seeBindWeChat">查看已绑定的企业微信用户</a>
           <div style="float: right">
             <a-button @loading="btnLoading" @click="thirdUserByWechat">同步</a-button>

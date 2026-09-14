@@ -24,7 +24,7 @@ function Convert-Word([string]$Src, [string]$Out, [string]$Fmt) {
             'pdf' { $doc.ExportAsFixedFormat($Out, 17) }
             'docx' { $doc.SaveAs2([ref]$Out, [ref]16) }
             'doc' { $doc.SaveAs2([ref]$Out, [ref]0) }
-            'txt' { $doc.SaveAs2([ref]$Out, [ref]2) }
+            'txt' { $doc.SaveAs2($Out, 7) }
             'rtf' { $doc.SaveAs2([ref]$Out, [ref]6) }
             default { throw "Unsupported Word target format: $Fmt" }
         }
