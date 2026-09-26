@@ -65,8 +65,8 @@ const setting: ProjectConfig = {
   // 是否显示logo
   showLogo: true,
 
-  // 是否显示底部信息 copyright
-  showFooter: false,
+  // 是否显示底部信息（备案号）
+  showFooter: true,
 
   // ai图标显示
   aiIconShow: false,

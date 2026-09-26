@@ -33,6 +33,9 @@ function Get-HomeaiFrpConfigSafe {
         HOME_NGINX_PORT = '8088'
         BACKEND_PORT    = '8080'
         HOME_ROOT       = 'C:\homeai'
+        PUBLIC_BASE     = 'https://liulm.top'
+        API_BASE        = 'https://liulm.top/jeecg-boot'
+        DOWNLOAD_URL    = 'https://liulm.top/app/'
     }
     return $script:CachedFrpConfig
 }

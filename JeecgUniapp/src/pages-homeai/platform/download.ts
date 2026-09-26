@@ -265,7 +265,6 @@ export function openLocalDocument(filePath: string, fileName?: string): Promise<
       },
     )
     resolve()
-    return
     // #endif
 
     // #ifdef MP-WEIXIN
@@ -278,7 +277,6 @@ export function openLocalDocument(filePath: string, fileName?: string): Promise<
         reject(new Error('无法打开该文件'))
       },
     })
-    return
     // #endif
 
     // #ifdef H5
@@ -288,8 +286,6 @@ export function openLocalDocument(filePath: string, fileName?: string): Promise<
         uni.showToast({ title: (e && e.message) || '无法打开该文件', icon: 'none' })
         reject(e)
       })
-    return
     // #endif
-    resolve()
   })
 }

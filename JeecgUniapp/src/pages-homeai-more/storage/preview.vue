@@ -112,7 +112,7 @@ import { FILE_OPEN_EXTERNALLY_NAME, resolveContentUrl } from '../../pages-homeai
 import { downloadStorageFile, openStorageFileExternally, saveStorageImage } from '../../pages-homeai/utils/fileDownload'
 import { getStorageDisplayName, normalizeStorageFile } from '../../pages-homeai/utils/storageFileDisplay'
 import { downloadToTemp, openLocalDocument } from '../../pages-homeai/platform/download'
-import { isCapacitorNative, registerHardwareBackHandler } from '../../pages-homeai/platform/runtime'
+import { isCapacitorNative, registerHardwareBackHandler, shouldSuppressUniBackPress } from '../../pages-homeai/platform/runtime'
 import { fetchPdfBuffer, fetchPreviewBuffer, renderPdfPage } from '../../pages-homeai/utils/pdfPreview'
 import {
   officeNeedsExternalApp,
@@ -484,9 +484,9 @@ onUnload(() => {
 })
 
 onBackPress(() => {
-  // Capacitor 壳由 App.backButton 统一处理，这里只挡住 uni 再 pop 一次
-  if (isCapacitorNative()) return true
-  return consumePreviewBack()
+  if (consumePreviewBack()) return true
+  // 硬件返回已由 App.backButton 触发过 navigateBack，只挡这一次重复 pop
+  return isCapacitorNative() && shouldSuppressUniBackPress()
 })
 
 const unregisterBack = registerHardwareBackHandler(consumePreviewBack)

@@ -314,6 +314,9 @@ server {
         application/vnd.android.package-archive apk;
     }
 
+    location = /app {
+        return 301 /app/;
+    }
     location /app/ {
         alias ${APK_DIR}/;
         index index.html;

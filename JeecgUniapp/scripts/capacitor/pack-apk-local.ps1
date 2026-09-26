@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 # Long-term local APK: uni-app H5 + Capacitor (no DCloud native SDK)
 # Usage (JeecgUniapp):
 #   pnpm pack:apk:local
@@ -127,15 +127,16 @@ if (Test-Path -LiteralPath (Join-Path $h5Dir 'index.html')) {
 if (-not (Test-Path -LiteralPath $zipPath)) { $zipPath = '' }
 
 # 产物元数据：发布脚本据此自动登记版本（publish-all.ps1 -RegisterVersion）
-# PS 5.1 不能把 hashtable 右花括号直接管道给 ConvertTo-Json（会当成语句结束）
-$versionCode = [int]$ver.Code
-$metaMap = @{
+# PS 5.1：hashtable 管道给 ConvertTo-Json 会把语句截断；整数有时会序列化成 null，改用 PSCustomObject
+$codeNum = 0
+[void][int]::TryParse([string]$ver.Code, [ref]$codeNum)
+$metaObj = [pscustomobject]@{
     apk         = [string]$outApk
     zip         = [string]$zipPath
     versionName = [string]$ver.Name
-    versionCode = $versionCode
+    versionCode = $codeNum
 }
-$meta = ConvertTo-Json -InputObject $metaMap
+$meta = $metaObj | ConvertTo-Json
 $lastVersion = Join-Path $outDir 'last-version.json'
 Write-Utf8NoBom -Path $lastVersion -Content $meta
 Write-Host "last-version: $lastVersion"

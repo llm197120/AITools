@@ -230,7 +230,7 @@ function Patch-UniAppEnv {
     $repo = Get-HomeaiRepoRoot
     $envFile = Join-Path $repo 'JeecgUniapp\env\.env.production'
     if (-not (Test-Path -LiteralPath $envFile)) { throw "找不到 $envFile" }
-    $api = "http://$serverIp/jeecg-boot"
+    $api = [string]$cfg['API_BASE'].TrimEnd('/')
     $raw = [System.IO.File]::ReadAllText($envFile)
     $raw = $raw -replace "VITE_SERVER_BASEURL\s*=\s*'[^']*'", "VITE_SERVER_BASEURL = '$api'"
     $raw = $raw -replace "VITE_UPLOAD_BASEURL\s*=\s*'[^']*'", "VITE_UPLOAD_BASEURL = '$api'"
@@ -272,8 +272,8 @@ Write-Host ''
 Write-Host '========== 本机已就绪 =========='
 Write-Host "本地入口:  http://127.0.0.1:$nginxPort/"
 Write-Host "本地 API:  http://127.0.0.1:$nginxPort/jeecg-boot/"
-Write-Host "公网入口:  http://$serverIp/   （需 frpc 已连上且后端 :$backendPort 在跑）"
-Write-Host "下载页:    http://$serverIp/app/"
+Write-Host ("公网入口:  {0}/   （需 frpc 已连上且后端 :{1} 在跑）" -f $cfg['PUBLIC_BASE'], $backendPort)
+Write-Host ("下载页:    {0}" -f $cfg['DOWNLOAD_URL'])
 if (-not (Test-TcpPortOpen -Port $backendPort)) {
     Write-Host "[注意] 127.0.0.1:$backendPort 未监听。请先启动 JeecgBoot 后端，否则 App/管理端会失败。"
 } else {

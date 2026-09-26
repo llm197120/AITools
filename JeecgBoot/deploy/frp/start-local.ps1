@@ -42,5 +42,5 @@ if (Test-TcpPortOpen -Port $nginxPort) {
     Write-Host '[FAIL] nginx not listening, see C:\homeai\nginx\logs\error.log'
 }
 
-Write-Host ("public: http://" + $cfg['SERVER_IP'] + "/")
+Write-Host ("public: " + $cfg['PUBLIC_BASE'] + "/")
 Write-Host ("frpc log: " + (Join-Path $frpHome 'frpc.log'))

@@ -34,6 +34,7 @@
         </div>
       </div>
     </div>
+    <HomeaiIcpBeian class="login-icp" />
   </div>
 </template>
 <script lang="ts" setup>
@@ -41,6 +42,7 @@
   import { AppLogo } from '/@/components/Application';
   import { AppLocalePicker, AppDarkModeToggle } from '/@/components/Application';
   import LoginForm from './LoginForm.vue';
+  import HomeaiIcpBeian from '/@/views/homeai/components/HomeaiIcpBeian.vue';
   import { useGlobSetting } from '/@/hooks/setting';
   import { useI18n } from '/@/hooks/web/useI18n';
   import { useDesign } from '/@/hooks/web/useDesign';
@@ -204,6 +206,21 @@
     .ant-divider-inner-text {
       font-size: 12px;
       color: @text-color-secondary;
+    }
+
+    .login-icp {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 16px;
+      z-index: 2;
+
+      a {
+        color: rgba(0, 0, 0, 0.65);
+        background: rgba(255, 255, 255, 0.9);
+        padding: 4px 12px;
+        border-radius: 4px;
+      }
     }
   }
 </style>

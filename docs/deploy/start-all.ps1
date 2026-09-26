@@ -88,7 +88,7 @@ $cfg = Get-HomeaiFrpConfigSafe
 Write-Host ''
 if ($want.Frontend) {
     Write-Host ("本地管理端: http://127.0.0.1:{0}/" -f $cfg['HOME_NGINX_PORT'])
-    Write-Host ("公网入口:   http://{0}/" -f $cfg['SERVER_IP'])
+    Write-Host ("公网入口:   {0}/" -f $cfg['PUBLIC_BASE'])
 }
 if ($want.Backend) {
     Write-Host ("本地 API:   http://127.0.0.1:{0}/jeecg-boot/" -f $cfg['BACKEND_PORT'])

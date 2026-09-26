@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
-# 把签名 APK 上传到服务器下载页（一次 SSH，密码只问一次或读 secrets.env）
+﻿# -*- coding: utf-8 -*-
+# 把签名 APK 上传到服务器下载页。一次 SSH，密码只问一次或读 secrets.env
 param(
     [Parameter(Mandatory = $true)][string]$ApkPath,
     [string]$SshHost = '',
@@ -53,4 +53,4 @@ try {
     Clear-HomeaiSshAuth
 }
 
-Write-Host ("Done: http://" + $cfg['SERVER_IP'] + "/app/")
+Write-Host ("Done: " + $cfg['DOWNLOAD_URL'])

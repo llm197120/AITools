@@ -32,6 +32,16 @@ function Get-HomeaiFrpConfig {
     if (-not $cfg.ContainsKey('BACKEND_PORT')) { $cfg['BACKEND_PORT'] = '8080' }
     if (-not $cfg.ContainsKey('HOME_ROOT')) { $cfg['HOME_ROOT'] = 'C:\homeai' }
     if (-not $cfg.ContainsKey('NGINX_WINDOWS_VERSION')) { $cfg['NGINX_WINDOWS_VERSION'] = '1.26.3' }
+    if (-not $cfg.ContainsKey('PUBLIC_BASE') -or [string]::IsNullOrWhiteSpace($cfg['PUBLIC_BASE'])) {
+        $cfg['PUBLIC_BASE'] = 'https://liulm.top'
+    }
+    $cfg['PUBLIC_BASE'] = [string]$cfg['PUBLIC_BASE'].TrimEnd('/')
+    if (-not $cfg.ContainsKey('API_BASE') -or [string]::IsNullOrWhiteSpace($cfg['API_BASE'])) {
+        $cfg['API_BASE'] = ($cfg['PUBLIC_BASE'] + '/jeecg-boot')
+    }
+    if (-not $cfg.ContainsKey('DOWNLOAD_URL') -or [string]::IsNullOrWhiteSpace($cfg['DOWNLOAD_URL'])) {
+        $cfg['DOWNLOAD_URL'] = ($cfg['PUBLIC_BASE'] + '/app/')
+    }
     return $cfg
 }
 

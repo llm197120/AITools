@@ -3,24 +3,16 @@
     <AppLocalePicker class="absolute top-4 right-4 enter-x xl:text-gray-600" :showText="false"/>
     <AppDarkModeToggle class="absolute top-3 right-7 enter-x" />
     <div class="aui-logo" v-if="!getIsMobile">
-      <div>
-        <h3>
-          <img :src="logoImg" alt="jeecg" />
-        </h3>
-      </div>
+      <span class="homeai-login-wordmark">{{ appTitle }}</span>
     </div>
     <div v-else class="aui-phone-logo">
-      <img :src="logoImg" alt="jeecg" />
+      <span class="homeai-login-wordmark homeai-login-wordmark--sm">{{ appTitle }}</span>
     </div>
     <div v-show="type === 'login'">
       <div class="aui-content">
         <div class="aui-container">
           <div class="aui-form">
-            <div class="aui-image">
-              <div class="aui-image-text">
-                <img :src="adTextImg" />
-              </div>
-            </div>
+            <HomeaiLoginHero />
             <div class="aui-formBox">
               <div class="aui-formWell">
                 <div class="aui-flex aui-form-nav investment_title">
@@ -171,6 +163,7 @@
 
     <!-- 图片验证码弹窗 -->
     <CaptchaModal @register="captchaRegisterModal" @ok="getLoginCode" />
+    <HomeaiIcpBeian class="login-icp" />
   </div>
 </template>
 <script lang="ts" setup name="login-mini">
@@ -185,8 +178,6 @@
   const MiniForgotpad = defineAsyncComponent(() => import('./MiniForgotpad.vue'));
   const MiniRegister = defineAsyncComponent(() => import('./MiniRegister.vue'));
   const MiniCodelogin = defineAsyncComponent(() => import('./MiniCodelogin.vue'));
-  import logoImg from '/@/assets/loginmini/icon/jeecg_logo.png';
-  import adTextImg from '/@/assets/loginmini/icon/jeecg_ad_text.png';
   import { AppLocalePicker, AppDarkModeToggle } from '/@/components/Application';
   import { useLocaleStore } from '/@/store/modules/locale';
   import { createLocalStorage } from '/@/utils/cache';
@@ -195,6 +186,9 @@
   import { GithubFilled, WechatFilled, DingtalkCircleFilled } from '@ant-design/icons-vue';
   import '/@/utils/iconfont2';
   import CaptchaModal from '@/components/jeecg/captcha/CaptchaModal.vue';
+  import HomeaiIcpBeian from '/@/views/homeai/components/HomeaiIcpBeian.vue';
+  import HomeaiLoginHero from '/@/views/homeai/components/HomeaiLoginHero.vue';
+  import { useGlobSetting } from '/@/hooks/setting';
   import { useModal } from "@/components/Modal";
   import { ExceptionEnum } from "@/enums/exceptionEnum";
   import { encryptAESCBC } from '/@/utils/cipher';
@@ -202,6 +196,7 @@
   import { IconFont } from '/@/utils/iconfont2';
 
   const { prefixCls } = useDesign('mini-login');
+  const { title: appTitle } = useGlobSetting();
   const { notification, createMessage } = useMessage();
   const userStore = useUserStore();
   const { t } = useI18n();
@@ -578,6 +573,11 @@
   @import '/@/assets/loginmini/style/home.less';
   @import '/@/assets/loginmini/style/base.less';
 
+  .login-background-img {
+    position: relative;
+    min-height: 100vh;
+  }
+
   :deep(.ant-input:focus) {
     box-shadow: none;
   }
@@ -607,6 +607,22 @@
     position:absolute;
     margin-right: 10px;
   }
+
+  .login-icp {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 16px;
+    z-index: 20;
+    text-align: center;
+
+    :deep(a) {
+      color: rgba(0, 0, 0, 0.65);
+      background: rgba(255, 255, 255, 0.9);
+      padding: 4px 12px;
+      border-radius: 4px;
+    }
+  }
   .aui-link-login{
     height: 42px;
     padding: 10px 15px;
@@ -617,12 +633,31 @@
     flex: 1;
     color: #fff;
   }
+  .aui-logo {
+    width: auto;
+    height: auto;
+    display: flex;
+    align-items: center;
+  }
+
+  .homeai-login-wordmark {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: #1d4ed8;
+    white-space: nowrap;
+  }
+
   .aui-phone-logo{
     position: absolute;
     margin-left: 10px;
-    width: 60px;
+    width: auto;
     top:2px;
     z-index: 4;
+  }
+
+  .homeai-login-wordmark--sm {
+    font-size: 16px;
   }
   .top-3{
     top: 0.45rem;
@@ -648,6 +683,10 @@ html[data-theme='dark'] {
     &::before {
       background-image: url(/@/assets/svg/login-bg-dark.svg);
     }
+    .homeai-login-wordmark {
+      color: #e2e8f0 !important;
+    }
+
     .aui-inputClear{
       background-color: #232a3b !important;
     }

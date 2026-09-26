@@ -27,7 +27,7 @@ function Get-HomeaiHostConfig {
     if (-not $map['SSH_USER']) { $map['SSH_USER'] = $env:USERNAME }
     if (-not $map['PUBLIC_BASE']) {
         $frp = Get-HomeaiFrpConfigSafe
-        $map['PUBLIC_BASE'] = ('http://{0}' -f $frp['SERVER_IP'])
+        $map['PUBLIC_BASE'] = [string]$frp['PUBLIC_BASE']
     }
     if (-not $map['SSH_IDENTITY']) {
         $guess = Join-Path $env:USERPROFILE '.ssh\id_ed25519'

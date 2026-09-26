@@ -88,5 +88,5 @@ try {
 Write-Host ""
 Write-Host "Server install done. Next on this PC:"
 Write-Host "  .\setup-local.ps1"
-Write-Host ("Download page: http://" + $cfg['SERVER_IP'] + "/app/")
+Write-Host ("Download page: " + $cfg['DOWNLOAD_URL'])
 Write-Host "Open Aliyun security group TCP 22 / 80 / 443 / 7000"

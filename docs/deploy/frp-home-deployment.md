@@ -4,6 +4,7 @@
 > 公网 IP：**116.62.115.226**  
 > **先看操作清单：** [JeecgBoot/deploy/frp/README.md](../../JeecgBoot/deploy/frp/README.md)  
 > 适用：家庭/小范围内测。公网服务器只跑 **frps + Nginx**；**管理端 + 后端 + 数据库** 跑在家里那台开机的 Windows（当前是开发机；**2026-09 月末计划改挂服务主机**，见 [service-host-migration.md](./service-host-migration.md)）。用户用手机下载侧载 APK。  
+> 服务主机开关机与人在外远控：[service-host-remote-control.md](./service-host-remote-control.md)（不要把 RDP/SSH 打到安全组）。  
 > 与现有 `JeecgBoot/deploy/`（ECS 上跑 Docker 全套）是**另一条路径**，互不替代。
 
 | 谁执行 | 脚本 |
@@ -138,14 +139,7 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-无域名时 `nginx-server.conf` 监听 80 即可。有域名后用 certbot：
-
-```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d homeai.example.com
-```
-
-证书只装在服务器；本机不用申请证书。
+现网已装宝塔时：在阿里云用 **DNS 验证** 申请证书（不要用宝塔 Let's Encrypt），签发后到宝塔站点 SSL → **其他证书** 粘贴 pem/key。无宝塔时才用 `nginx-server-ssl.conf` 覆盖系统 Nginx。本机不用证书。
 
 ### 4.3 防火墙
 

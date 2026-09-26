@@ -2,7 +2,7 @@
 
 本目录存放环境搭建与部署运维相关文档，以及日常一键发布 / 启停脚本。底层实现仍以 `JeecgBoot/deploy/` 为准，这里只做总入口。
 
-**9 月末把服务迁到另一台电脑：** 先看 [service-host-migration.md](./service-host-migration.md)（架构、空系统初始化、远程发布/巡检、导库、验收）。日常脚本说明见下文。
+**9 月末把服务迁到另一台电脑：** 先看 [service-host-migration.md](./service-host-migration.md)（架构、空系统初始化、远程发布/巡检、导库、验收）。人在外开关机、SSH/RDP、智能插座/WoL 见 [service-host-remote-control.md](./service-host-remote-control.md)。日常脚本说明见下文。
 
 ## 一键脚本（日常要用）
 
@@ -66,6 +66,7 @@ cd "C:\Users\57089\Desktop\AI project\AITools\docs\deploy"
 | 文件名 | 内容 | 状态 |
 |--------|------|------|
 | [service-host-migration.md](./service-host-migration.md) | **9 月末迁机**：本机开发 + 另一台 Windows 跑服务；初始化、远程发布、导库、验收 | 方案已记录，脚本已就绪，待月末执行 |
+| [service-host-remote-control.md](./service-host-remote-control.md) | 服务主机远程控制：Tailscale / FRP 跳板、关机重启、智能插座来电自启、WoL | 方案已记录，待迁机时按清单执行 |
 | [frp-home-deployment.md](./frp-home-deployment.md) | 服务器 frps + 家庭隧道 + 侧载 APK | 脚本已就绪；隧道「家里一头」迁机后改挂服务主机 |
 | [github-actions-acr-cicd-design.md](./github-actions-acr-cicd-design.md) | GitHub Actions + 阿里云 ACR CI/CD（ECS 全托管备选） | 已实施配置；与 FRP 方案二选一 |
 

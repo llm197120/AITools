@@ -171,6 +171,12 @@ export interface GlobConfig {
   isQiankunMicro: boolean;
   // 【JEECG作为乾坤子应用】乾坤子应用入口
   qiankunMicroAppEntry?: string;
+  // 备案域名（不含协议）
+  siteDomain?: string;
+  // ICP 备案号
+  icpNumber?: string;
+  // 工信部备案查询地址
+  icpQueryUrl?: string;
 }
 export interface GlobEnvConfig {
   // Site title
@@ -204,4 +210,10 @@ export interface GlobEnvConfig {
   VITE_GLOB_ONLINE_DOCUMENT_VERSION?: string;
   // 当前运行在什么平台
   VITE_GLOB_RUN_PLATFORM?: 'web' | 'electron';
+  // 备案域名（不含协议）
+  VITE_GLOB_SITE_DOMAIN?: string;
+  // ICP 备案号
+  VITE_GLOB_ICP_NUMBER?: string;
+  // 工信部备案查询地址
+  VITE_GLOB_ICP_QUERY_URL?: string;
 }

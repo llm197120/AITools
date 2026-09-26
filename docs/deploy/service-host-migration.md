@@ -2,7 +2,8 @@
 
 > **计划窗口：2026 年 9 月末** 把家庭 AI 小工具的**运行时**迁到另一台只装了系统的电脑。  
 > 本机（当前开发机）继续写代码、打 APK。公网入口仍是阿里云 FRP（`116.62.115.226`），只把隧道的「家里这一头」从本机换到服务主机。  
-> 脚本已就绪；本文是月末落地时的单一对照清单。相关迭代：路线图第 152～155 轮。
+> 脚本已就绪；本文是月末落地时的单一对照清单。相关迭代：路线图第 152～155 轮。  
+> **远程开关机 / 人在外远控**（Tailscale、智能插座、WoL、FRP 管理隧道）不写在本文，见 [service-host-remote-control.md](./service-host-remote-control.md)。
 
 ---
 
@@ -64,7 +65,7 @@ ssh-keygen -t ed25519 -C "homeai-dev"
 公钥在 `%USERPROFILE%\.ssh\id_ed25519.pub`，月末拷到主机。
 
 - [ ] 复制 `docs/deploy/host.env.example` 为 `docs/deploy/host.env`（已 gitignore），`HOST_IP` 先空着，主机入网后再填局域网 IP。
-- [ ] 确认服务主机：Windows 10/11 x64、能装 Docker Desktop（需虚拟化）、接电源长期开机、关掉睡眠；与本机同一局域网。
+- [ ] 确认服务主机：Windows 10/11 x64、能装 Docker Desktop（需虚拟化）、接电源长期开机、关掉睡眠；与本机同一局域网（人在外远控见 [service-host-remote-control.md](./service-host-remote-control.md)）。
 
 **不要在本机运行 `init-windows-host.ps1`。**
 
@@ -220,6 +221,7 @@ Get-Content -Raw .\jeecg-backup.sql | docker exec -i homeai-mysql mysql -uroot -
 - [ ] 本机 frpc **已停止**，只有主机一条隧道。
 - [ ] Office 两项本机地址已保存；抽测一次 PDF 转换或管理端预览（可选）。
 - [ ] 本机仍能 `pnpm pack:apk:local` / `publish-all.ps1 -App`。
+- [ ] 远控验收（插座来电自启、SSH 重启、可选 Tailscale/WoL）见 [service-host-remote-control.md](./service-host-remote-control.md) 第 9 节。
 
 失败时：本机重新 `start-all.ps1` + `JeecgBoot\deploy\frp\start-local.ps1`，主机 `stop-all.ps1` 并停主机 frpc，隧道切回本机（库已迁走则本机 API 是旧数据，只作应急入口）。
 
@@ -237,6 +239,7 @@ Get-Content -Raw .\jeecg-backup.sql | docker exec -i homeai-mysql mysql -uroot -
 | [check-host-local.ps1](./check-host-local.ps1) | 主机本机健康检查（SSH 会调它） |
 | [publish-all.ps1](./publish-all.ps1) / [start-all.ps1](./start-all.ps1) / [stop-all.ps1](./stop-all.ps1) | 单机发布与启停（主机本地或远程调用） |
 | [frp-home-deployment.md](./frp-home-deployment.md) | 云服务器 frps + 家庭隧道 |
+| [service-host-remote-control.md](./service-host-remote-control.md) | 人在外：远控、开关机、带外恢复 |
 
 ---
 
@@ -245,5 +248,5 @@ Get-Content -Raw .\jeecg-backup.sql | docker exec -i homeai-mysql mysql -uroot -
 - 不把本机开发环境改成 Docker 全栈。
 - 不把 Gotenberg / kkFileView 改成本机 Windows 服务。
 - 不在服务主机装 Android 出包链。
-- 不把 SSH 或数据库端口暴露到公网。
+- 不把 SSH 或数据库端口暴露到公网（远控走局域网 / Tailscale / 云主机本地转发，见远程控制文档）。
 - 不在本机执行 `init-windows-host.ps1`。

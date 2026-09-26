@@ -129,7 +129,21 @@ function Get-HomeaiLastAppVersionMeta {
         return $null
     }
     try {
-        return Get-Content -LiteralPath $metaPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $meta = Get-Content -LiteralPath $metaPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $code = $meta.versionCode
+        if ($null -eq $code -or [string]$code -eq '') {
+            $manifestTs = Join-Path $script:UniDir 'manifest.config.ts'
+            if (Test-Path -LiteralPath $manifestTs) {
+                $ts = Get-Content -LiteralPath $manifestTs -Raw -Encoding UTF8
+                if ($ts -match "versionCode:\s*'([^']+)'") {
+                    $parsed = 0
+                    if ([int]::TryParse($Matches[1], [ref]$parsed)) {
+                        $meta | Add-Member -NotePropertyName versionCode -NotePropertyValue $parsed -Force
+                    }
+                }
+            }
+        }
+        return $meta
     } catch {
         return $null
     }
@@ -265,7 +279,7 @@ Write-Host ''
 Write-Host '========== 发布结束 =========='
 if ($want.Frontend) {
     Write-Host ("本地管理端: http://127.0.0.1:{0}/" -f $cfg['HOME_NGINX_PORT'])
-    Write-Host ("公网入口:   http://{0}/" -f $cfg['SERVER_IP'])
+    Write-Host ("公网入口:   {0}/" -f $cfg['PUBLIC_BASE'])
 }
 if ($want.Backend) {
     Write-Host ("本地 API:   http://127.0.0.1:{0}/jeecg-boot/" -f $cfg['BACKEND_PORT'])
@@ -274,7 +288,7 @@ if ($want.DocsPreview) {
     Write-HomeaiDocsPreviewHint
 }
 if ($want.App) {
-    Write-Host ("下载页:     http://{0}/app/" -f $cfg['SERVER_IP'])
+    Write-Host ("下载页:     {0}" -f $cfg['DOWNLOAD_URL'])
     $endMeta = Get-HomeaiLastAppVersionMeta
     if ($appOk -and $endMeta) {
         Write-Host ("APP 版本号: {0}  (versionCode={1})" -f $endMeta.versionName, $endMeta.versionCode)

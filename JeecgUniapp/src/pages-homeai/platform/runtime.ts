@@ -72,6 +72,17 @@ function canPopUniPage(): boolean {
 
 let backButtonBound = false
 const hardwareBackHandlers: Array<() => boolean> = []
+/** Capacitor 硬件返回已处理完时，挡住 uni 同一次按键再 pop 一次 */
+let suppressUniBackUntil = 0
+
+function markHardwareBackHandled() {
+  suppressUniBackUntil = Date.now() + 400
+}
+
+/** 为 true 时 onBackPress 应拦截（硬件返回已 pop / 已关蒙层） */
+export function shouldSuppressUniBackPress(): boolean {
+  return Date.now() < suppressUniBackUntil
+}
 
 /** 返回 true 表示已消费返回键（如关掉图片蒙层），不再 navigateBack */
 export function registerHardwareBackHandler(handler: () => boolean): () => void {
@@ -192,7 +203,10 @@ export async function initStandaloneShell(): Promise<void> {
   try {
     const { App } = await import('@capacitor/app')
     await App.addListener('backButton', () => {
-      if (consumeHardwareBack()) return
+      if (consumeHardwareBack()) {
+        markHardwareBackHandled()
+        return
+      }
       if (canPopUniPage()) {
         try {
           uni.hideLoading()
@@ -200,6 +214,7 @@ export async function initStandaloneShell(): Promise<void> {
           // ignore
         }
         uni.navigateBack({})
+        markHardwareBackHandled()
         return
       }
       // 栈底仍调 exitApp：Capacitor 一旦挂了 backButton 监听就不会走系统默认 finish

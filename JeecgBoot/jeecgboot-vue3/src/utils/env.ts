@@ -47,6 +47,10 @@ export function getAppEnvConfig() {
     
     //在线文档编辑版本。可选属性：wps, onlyoffice
     VITE_GLOB_ONLINE_DOCUMENT_VERSION,
+
+    VITE_GLOB_SITE_DOMAIN,
+    VITE_GLOB_ICP_NUMBER,
+    VITE_GLOB_ICP_QUERY_URL,
   } = ENV;
 
   // if (!/^[a-zA-Z\_]*$/.test(VITE_GLOB_APP_SHORT_NAME)) {
@@ -74,7 +78,11 @@ export function getAppEnvConfig() {
     VITE_GLOB_QIANKUN_MICRO_APP_ENTRY,
 
     //在线文档编辑版本。可选属性：wps, onlyoffice
-    VITE_GLOB_ONLINE_DOCUMENT_VERSION
+    VITE_GLOB_ONLINE_DOCUMENT_VERSION,
+
+    VITE_GLOB_SITE_DOMAIN,
+    VITE_GLOB_ICP_NUMBER,
+    VITE_GLOB_ICP_QUERY_URL,
   };
 }
 

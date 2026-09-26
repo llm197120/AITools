@@ -2422,6 +2422,62 @@ alter_homeai_preview_pdf_url.sql
 
 ---
 
+### 第 156 轮：ICP 备案展示与域名配置（2026-09-16）
+
+> 域名 `liulm.top` 已备案（豫ICP备2026044697号-1）。配置写入管理端 / App 环境变量，管理端登录页与布局底部居中展示备案号，点击跳转工信部查询。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 管理端 | `.env` + `siteSetting.ts` | `VITE_GLOB_SITE_DOMAIN` / `VITE_GLOB_ICP_NUMBER` / `VITE_GLOB_ICP_QUERY_URL` |
+| 管理端 | `HomeaiIcpBeian.vue` | 登录页底部居中、布局 Footer 备案号链接 → https://beian.miit.gov.cn/ |
+| App | `env/.env.production` | API 改为 `http://liulm.top/jeecg-boot` |
+| 部署 | `nginx-server.conf` / `homeai-admin.prd.conf` | `server_name liulm.top www.liulm.top` |
+
+**无迁移 SQL。** DNS 需指向现网；HTTPS 待证书后再改 `https://`。
+
+---
+
+### 第 157 轮：资料图片预览返回无效（2026-09-16）
+
+> Capacitor 壳里预览页 `onBackPress` 一律 `return true`，导航栏返回和系统返回触发的 `navigateBack` 都被吞掉，看完图片无法回到资料列表。改为仅关闭全屏看图层时拦截，硬件返回处理后再挡重复 pop。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| APP | `runtime.ts` | `shouldSuppressUniBackPress`：硬件返回处理后再短时拦截 uni 二次 pop |
+| APP | `storage/preview.vue` | `onBackPress` 不再无条件拦截 |
+
+**无迁移 SQL。** 需热更新或重打包后生效。
+
+---
+
+### 第 158 轮：管理端登录页去 Jeecg 品牌（2026-09-16）
+
+> 登录页左侧「Jeecg Boot」广告图与左上角 Jeecg Logo 改为「家庭AI小工具」文案。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 管理端 | `HomeaiLoginHero.vue` | 登录/注册/扫码/找回密码左侧标题与简介 |
+| 管理端 | `MiniLogin.vue` 等 | 去掉 `jeecg_logo.png` / `jeecg_ad_text.png` |
+| 管理端 | `home.less` | 左侧背景改为纯色渐变，不再用 Jeecg 插图 |
+
+**无迁移 SQL。** 管理端重新构建后生效。
+
+---
+
+### 第 159 轮：服务主机远程控制方案文档（2026-09-17）
+
+> 迁机后业务在非云 Windows 上跑。把「人在外远控 / 远程开关机 / 带外恢复」写成落地清单：业务仍走阿里云 FRP；运维走局域网 SSH、Tailscale 或云主机本地转发；开机保底为智能插座 + BIOS 来电自启，可选同网 WoL。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 文档 | `docs/deploy/service-host-remote-control.md` | 架构、P0～P2 步骤、FRP 管理隧道示例、验收与故障表 |
+| 文档 | `docs/deploy/README.md` 等 | 部署目录、迁机手册、FRP 手册交叉引用 |
+| 配置示例 | `host.env.example` | `HOST_IP` 可填局域网或 Tailscale |
+
+**无迁移 SQL。** 默认 `frpc.toml` 不加 SSH/RDP 代理；安全组不放行 3389。待 9 月末迁机时按清单执行。
+
+---
+
 ### 第 122 轮：发布脚本自动登记 APP 版本（2026-08-31）
 
 > `publish-all.ps1 -App` 此前只打包，登记版本需手动去管理端。新增 `-RegisterVersion` 一键闭环：打包后自动上传 APK + H5 zip 并更新后台版本号（enabled=1 即刻推送）。
