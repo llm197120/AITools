@@ -25,12 +25,17 @@ if (Get-Process -Name 'nginx' -ErrorAction SilentlyContinue) {
     Write-Host '[nginx] not running'
 }
 
-$frpc = Get-Process -Name 'frpc' -ErrorAction SilentlyContinue
-if ($frpc) {
-    Write-Host '[frpc] stop'
-    $frpc | Stop-Process -Force
+# 只停业务隧道（frpc.toml）。运维隧道 frpc-admin.toml 独立于「前端」生命周期，
+# 停止 Nginx/前端时不应连带关闭远程运维通道；不能按进程名 frpc 一刀切。
+$frpHome = Join-Path $homeRoot 'frp'
+$frpcToml = Join-Path $frpHome 'frpc.toml'
+$bizFrpc = Get-CimInstance Win32_Process -Filter "Name = 'frpc.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -and $_.CommandLine.Contains($frpcToml) }
+if ($bizFrpc) {
+    Write-Host '[frpc] stop business tunnel'
+    $bizFrpc | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 } else {
-    Write-Host '[frpc] not running'
+    Write-Host '[frpc] business tunnel not running'
 }
 
 Write-Host 'local nginx / frpc stopped (Java backend unchanged)'

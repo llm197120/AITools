@@ -2496,6 +2496,20 @@ alter_homeai_preview_pdf_url.sql
 
 ---
 
+### 第 160 轮：开机自启漏启业务隧道导致 APP 加载失败（2026-10-01）
+
+> 服务主机开机后 APP 打开「加载失败」。排查：本机 MySQL/Redis/8080/8088/nginx 均正常，但公网 `https://liulm.top/jeecg-boot/...` 返回 **502**。根因：开机时计划任务 `HomeAI-FRP-Admin` 先拉起**运维隧道** frpc（`frpc-admin.toml`），随后 `HomeAI-FRP` 执行的 `start-local.ps1` 仅按进程名 `frpc` 判断「已在运行」，把业务隧道误判为已启动而跳过；服务器 18080 无隧道注册，公网反代即 502。
+
+| 端 | 项 | 落地 |
+|----|----|------|
+| 脚本 | `JeecgBoot/deploy/frp/start-local.ps1` | 启动业务隧道前按命令行是否含 `frpc.toml` 判定专属进程，不再只看进程名，避免与 `frpc-admin.toml` 混淆 |
+| 脚本 | `JeecgBoot/deploy/frp/stop-local.ps1` | 停止时同样按 `frpc.toml` 判定，只停业务隧道，保留运维隧道 `frpc-admin.toml` |
+| 验证 | 公网探测 | 保留 admin 隧道时由修复脚本补启业务隧道，`https://liulm.top/jeecg-boot/sys/randomImage/homeai-probe` 由 502 → 200 |
+
+**无迁移 SQL。** 已手动补启业务隧道恢复服务；后续开机由修复后的 `start-local.ps1` 自动拉起。另注：主机 `AutoAdminLogon=0`，三个 HomeAI 计划任务均为「登录时触发（Interactive）」，重启后若无人登录则不会自动拉起；新增 `docs/deploy/enable-autologon.ps1`（管理员运行、交互输入密码）用于开启自动登录，重启后即可无人值守拉起全部服务。
+
+---
+
 ## 二、数据库迁移清单（已有库按序执行）
 
 **权威顺序：** [`sql/alter-order.txt`](../../JeecgBoot/jeecg-boot/jeecg-boot-module/jeecg-boot-module-homeai/sql/alter-order.txt)。新库只跑 `init_homeai_*.sql`；已有库按该清单补跑。执行后可用 `smoke_homeai_schema.sql` 检查关键列。`sql/legacy/` 不自动执行。
