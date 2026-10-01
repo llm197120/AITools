@@ -2509,7 +2509,7 @@ alter_homeai_preview_pdf_url.sql
 | 文档 | `docs/deploy/startup-verify.md` | 开机自启验证清单（重启前后检查项 + 故障对照表） |
 | 验证 | 公网探测 | 保留 admin 隧道时由修复脚本补启业务隧道，`https://liulm.top/jeecg-boot/sys/randomImage/homeai-probe` 由 502 → 200 |
 
-**无迁移 SQL。** 已手动补启业务隧道恢复服务；后续开机由修复后的 `start-local.ps1` 自动拉起。另注：主机 `AutoAdminLogon=0`，三个 HomeAI 计划任务均为「登录时触发（Interactive）」，重启后若无人登录则不会自动拉起；新增 `docs/deploy/enable-autologon.ps1`（管理员运行、交互输入密码）用于开启自动登录，重启后即可无人值守拉起全部服务；验证步骤见 `docs/deploy/startup-verify.md`。
+**无迁移 SQL。** 已手动补启业务隧道恢复服务；后续开机由修复后的 `start-local.ps1` 自动拉起。主机 `AutoAdminLogon=0`，故用 `docs/deploy/enable-boot-tasks.ps1` 把三个任务改为「开机触发 + S4U 无人会话」（无需密码）；2026-10-01 实测重启：无人登录下三任务于开机 +2 分钟自动运行，后端 / nginx / 业务 + 运维隧道全部就绪、本机与公网探测均 200，App 可用。体检脚本对 S4U 进程读不到命令行的情况增加「按该隧道日志是否本次开机后写过」回退，避免 frpc 隧道误报；验证步骤见 `docs/deploy/startup-verify.md`。
 
 ---
 

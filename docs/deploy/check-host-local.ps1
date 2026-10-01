@@ -30,15 +30,23 @@ Write-HomeaiCheckLine -Ok (Test-HomeaiTcpPort -Port 8012) -Label 'kkFileView :80
 $nginx = Get-Process -Name nginx -ErrorAction SilentlyContinue
 Write-HomeaiCheckLine -Ok ([bool]$nginx) -Label '进程 nginx'
 
-# frpc 有业务 / 运维两条隧道，进程名都是 frpc.exe，必须按命令行区分：
-# 业务隧道 frpc.toml 缺失会直接导致公网 502、App 加载失败（关键项，记 FAIL）；
-# 运维隧道 frpc-admin.toml 为备用通道，缺失记 WARN 即可。
+# frpc 有业务 / 运维两条隧道，进程名都是 frpc.exe。优先按命令行区分；
+# 但无人会话（S4U / 计划任务）启动的进程，非管理员读不到命令行，
+# 因此回退为「该隧道日志是否在本次开机后写过」判定（无需提权）。
 $frpHome = Join-Path (Get-HomeaiHomeRoot) 'frp'
 $frpcProcs = Get-CimInstance Win32_Process -Filter "Name = 'frpc.exe'" -ErrorAction SilentlyContinue
 $bizToml = Join-Path $frpHome 'frpc.toml'
 $adminToml = Join-Path $frpHome 'frpc-admin.toml'
-$bizRunning = @($frpcProcs | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($bizToml) }).Count -gt 0
-$adminRunning = @($frpcProcs | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($adminToml) }).Count -gt 0
+$bootTime = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+
+function Test-HomeaiFrpcTunnel {
+    param([string]$Toml, [string]$LogFile)
+    if (@($frpcProcs | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($Toml) }).Count -gt 0) { return $true }
+    if ((Test-Path -LiteralPath $LogFile) -and ((Get-Item -LiteralPath $LogFile).LastWriteTime -ge $bootTime)) { return $true }
+    return $false
+}
+$bizRunning = Test-HomeaiFrpcTunnel -Toml $bizToml -LogFile (Join-Path $frpHome 'frpc.log')
+$adminRunning = Test-HomeaiFrpcTunnel -Toml $adminToml -LogFile (Join-Path $frpHome 'frpc-admin.log')
 Write-HomeaiCheckLine -Ok $bizRunning -Label 'frpc 业务隧道 (frpc.toml -> 18080)'
 Write-HomeaiCheckLine -Ok $adminRunning -Label 'frpc 运维隧道 (frpc-admin.toml)' -Optional
 
