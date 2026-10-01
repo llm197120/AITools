@@ -2505,6 +2505,7 @@ alter_homeai_preview_pdf_url.sql
 | 脚本 | `JeecgBoot/deploy/frp/start-local.ps1` | 启动业务隧道前按命令行是否含 `frpc.toml` 判定专属进程，不再只看进程名，避免与 `frpc-admin.toml` 混淆 |
 | 脚本 | `JeecgBoot/deploy/frp/stop-local.ps1` | 停止时同样按 `frpc.toml` 判定，只停业务隧道，保留运维隧道 `frpc-admin.toml` |
 | 脚本 | `docs/deploy/check-host-local.ps1` | 体检按 `frpc.toml` 区分业务/运维隧道，新增公网探测 |
+| 脚本 | `docs/deploy/enable-boot-tasks.ps1` | 计划任务改「开机触发 + S4U 无人会话」实现无人值守自启（无需密码；本机 JAVA_HOME/Maven 在系统级故 S4U 可用） |
 | 文档 | `docs/deploy/startup-verify.md` | 开机自启验证清单（重启前后检查项 + 故障对照表） |
 | 验证 | 公网探测 | 保留 admin 隧道时由修复脚本补启业务隧道，`https://liulm.top/jeecg-boot/sys/randomImage/homeai-probe` 由 502 → 200 |
 
