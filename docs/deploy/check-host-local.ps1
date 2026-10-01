@@ -20,16 +20,27 @@ Write-Host ("时间 {0}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
 Write-HomeaiCheckLine -Ok (Test-HomeaiTcpPort -Port 3306) -Label 'MySQL :3306'
 Write-HomeaiCheckLine -Ok (Test-HomeaiTcpPort -Port 6379) -Label 'Redis :6379'
 Write-HomeaiCheckLine -Ok (Test-HomeaiTcpPort -Port 8080) -Label 'JeecgBoot :8080'
+$cfg = Get-HomeaiFrpConfigSafe
 $nginxPort = 8088
-try { $nginxPort = [int](Get-HomeaiFrpConfigSafe)['HOME_NGINX_PORT'] } catch { }
+try { $nginxPort = [int]$cfg['HOME_NGINX_PORT'] } catch { }
 Write-HomeaiCheckLine -Ok (Test-HomeaiTcpPort -Port $nginxPort) -Label ("Nginx :{0}" -f $nginxPort)
 Write-HomeaiCheckLine -Ok (Test-HomeaiTcpPort -Port 3000) -Label 'Gotenberg :3000' -Optional
 Write-HomeaiCheckLine -Ok (Test-HomeaiTcpPort -Port 8012) -Label 'kkFileView :8012' -Optional
 
 $nginx = Get-Process -Name nginx -ErrorAction SilentlyContinue
-$frpc = Get-Process -Name frpc -ErrorAction SilentlyContinue
 Write-HomeaiCheckLine -Ok ([bool]$nginx) -Label '进程 nginx'
-Write-HomeaiCheckLine -Ok ([bool]$frpc) -Label '进程 frpc' -Optional
+
+# frpc 有业务 / 运维两条隧道，进程名都是 frpc.exe，必须按命令行区分：
+# 业务隧道 frpc.toml 缺失会直接导致公网 502、App 加载失败（关键项，记 FAIL）；
+# 运维隧道 frpc-admin.toml 为备用通道，缺失记 WARN 即可。
+$frpHome = Join-Path (Get-HomeaiHomeRoot) 'frp'
+$frpcProcs = Get-CimInstance Win32_Process -Filter "Name = 'frpc.exe'" -ErrorAction SilentlyContinue
+$bizToml = Join-Path $frpHome 'frpc.toml'
+$adminToml = Join-Path $frpHome 'frpc-admin.toml'
+$bizRunning = @($frpcProcs | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($bizToml) }).Count -gt 0
+$adminRunning = @($frpcProcs | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($adminToml) }).Count -gt 0
+Write-HomeaiCheckLine -Ok $bizRunning -Label 'frpc 业务隧道 (frpc.toml -> 18080)'
+Write-HomeaiCheckLine -Ok $adminRunning -Label 'frpc 运维隧道 (frpc-admin.toml)' -Optional
 
 $probe = "http://127.0.0.1:${nginxPort}/jeecg-boot/sys/randomImage/homeai-probe"
 try {
@@ -37,6 +48,18 @@ try {
     Write-HomeaiCheckLine -Ok ($resp.StatusCode -eq 200) -Label ("本机探测 {0} -> {1}" -f $probe, $resp.StatusCode)
 } catch {
     Write-HomeaiCheckLine -Ok $false -Label ("本机探测 {0} ({1})" -f $probe, $_.Exception.Message)
+}
+
+# 公网探测（App 实际走的路）：连不上只记 WARN，避免外网波动误判本机故障
+$public = [string]$cfg['PUBLIC_BASE']
+if ($public) {
+    $pubProbe = ($public.TrimEnd('/')) + '/jeecg-boot/sys/randomImage/homeai-probe'
+    try {
+        $pubResp = Invoke-WebRequest -Uri $pubProbe -UseBasicParsing -TimeoutSec 10
+        Write-HomeaiCheckLine -Ok ($pubResp.StatusCode -eq 200) -Label ("公网探测 {0} -> {1}" -f $pubProbe, $pubResp.StatusCode) -Optional
+    } catch {
+        Write-HomeaiCheckLine -Ok $false -Label ("公网探测 {0} ({1})" -f $pubProbe, $_.Exception.Message) -Optional
+    }
 }
 
 if (Get-Command docker -ErrorAction SilentlyContinue) {

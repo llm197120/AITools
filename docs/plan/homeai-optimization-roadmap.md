@@ -2504,9 +2504,11 @@ alter_homeai_preview_pdf_url.sql
 |----|----|------|
 | 脚本 | `JeecgBoot/deploy/frp/start-local.ps1` | 启动业务隧道前按命令行是否含 `frpc.toml` 判定专属进程，不再只看进程名，避免与 `frpc-admin.toml` 混淆 |
 | 脚本 | `JeecgBoot/deploy/frp/stop-local.ps1` | 停止时同样按 `frpc.toml` 判定，只停业务隧道，保留运维隧道 `frpc-admin.toml` |
+| 脚本 | `docs/deploy/check-host-local.ps1` | 体检按 `frpc.toml` 区分业务/运维隧道，新增公网探测 |
+| 文档 | `docs/deploy/startup-verify.md` | 开机自启验证清单（重启前后检查项 + 故障对照表） |
 | 验证 | 公网探测 | 保留 admin 隧道时由修复脚本补启业务隧道，`https://liulm.top/jeecg-boot/sys/randomImage/homeai-probe` 由 502 → 200 |
 
-**无迁移 SQL。** 已手动补启业务隧道恢复服务；后续开机由修复后的 `start-local.ps1` 自动拉起。另注：主机 `AutoAdminLogon=0`，三个 HomeAI 计划任务均为「登录时触发（Interactive）」，重启后若无人登录则不会自动拉起；新增 `docs/deploy/enable-autologon.ps1`（管理员运行、交互输入密码）用于开启自动登录，重启后即可无人值守拉起全部服务。
+**无迁移 SQL。** 已手动补启业务隧道恢复服务；后续开机由修复后的 `start-local.ps1` 自动拉起。另注：主机 `AutoAdminLogon=0`，三个 HomeAI 计划任务均为「登录时触发（Interactive）」，重启后若无人登录则不会自动拉起；新增 `docs/deploy/enable-autologon.ps1`（管理员运行、交互输入密码）用于开启自动登录，重启后即可无人值守拉起全部服务；验证步骤见 `docs/deploy/startup-verify.md`。
 
 ---
 

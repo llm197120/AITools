@@ -68,6 +68,8 @@ cd "C:\Users\57089\Desktop\AI project\AITools\docs\deploy"
 | [service-host-migration.md](./service-host-migration.md) | **9 月末迁机**：本机开发 + 另一台 Windows 跑服务；初始化、远程发布、导库、验收 | 方案已记录，脚本已就绪，待月末执行 |
 | [service-host-remote-control.md](./service-host-remote-control.md) | 服务主机远程控制：Tailscale / FRP 跳板、关机重启、智能插座来电自启、WoL | 方案已记录，待迁机时按清单执行 |
 | [frp-home-deployment.md](./frp-home-deployment.md) | 服务器 frps + 家庭隧道 + 侧载 APK | 脚本已就绪；隧道「家里一头」迁机后改挂服务主机 |
+| [startup-verify.md](./startup-verify.md) | 开机自启验证清单：重启前后检查项、故障对照表 | 已就绪 |
+| [enable-autologon.ps1](./enable-autologon.ps1) | 开启 / 关闭 Windows 自动登录（无人值守自启） | 已就绪 |
 | [github-actions-acr-cicd-design.md](./github-actions-acr-cicd-design.md) | GitHub Actions + 阿里云 ACR CI/CD（ECS 全托管备选） | 已实施配置；与 FRP 方案二选一 |
 
 ## 当前部署要点
